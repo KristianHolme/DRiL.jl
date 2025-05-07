@@ -1,19 +1,23 @@
+__precompile__(false) #disable precompilation for this module
 module DRiL
 
 using Random
 using Statistics
 using LinearAlgebra
-
+using Base.Threads
 include("basic_types.jl")
-export AbstractEnv, AbstractAgent, AbstractBuffer, AbstractSpace
+export AbstractEnv, AbstractAgent, AbstractBuffer
 export reset!, act!, observe!, terminated, truncated, action_space, observation_space, get_info
 
 include("spaces.jl") 
-export AbstractBox, UniformBox
+export AbstractSpace, AbstractBox, UniformBox
 
 include("buffers.jl")
-export Trajectory
+export Trajectory, RolloutBuffer
 
 include("environments.jl")
-# include("agents.jl")
+export MultiThreadedParallelEnv
+include("policies.jl")
+export ActorCriticPolicy, AbstractPolicy
+include("agents.jl")
 end

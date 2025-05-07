@@ -1,3 +1,4 @@
+abstract type AbstractSpace end
 abstract type AbstractBox <: AbstractSpace end
 
 struct UniformBox <: AbstractBox
