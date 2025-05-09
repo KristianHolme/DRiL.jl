@@ -64,14 +64,14 @@ Base.length(trajectory::Trajectory) = length(trajectory.rewards)
 
 
 
-function collect_trajectories(policy::AbstractPolicy, env::AbstractParallellEnv, n_steps::Int)
+function collect_trajectories(agent::AbstractAgent, env::AbstractParallellEnv, n_steps::Int)
     trajectories = Trajectory[]
     observation_space = env.observation_space
     action_space = env.action_space
     current_trajectories = [Trajectory(observation_space, action_space) for _ in 1:n_envs]
     for i in 1:n_steps
         observations = observe(env)
-        actions, logprobs, _, values = get_action_and_value(policy, observations)
+        actions, values, logprobs = get_action_and_values(agent, observations)
         rewards, terminateds, truncateds, infos = step!(env, actions)
         for j in 1:n_envs
             push!(current_trajectories[j].observations, observations[j])

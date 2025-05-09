@@ -62,7 +62,6 @@ function get_info(env::AbstractEnv) end
 
 abstract type AbstractAgent end
 
-function get_action_and_value(agent::AbstractAgent, obs::AbstractArray) end
 
 abstract type AbstractBuffer end
 

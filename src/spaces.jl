@@ -8,4 +8,6 @@ struct UniformBox <: AbstractBox
     shape::Tuple
 end
 
+Base.ndims(space::UniformBox) = length(space.shape)
+
     
