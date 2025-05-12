@@ -64,53 +64,62 @@ Base.length(trajectory::Trajectory) = length(trajectory.rewards)
 
 
 
-function collect_trajectories(agent::AbstractAgent, env::AbstractParallellEnv, n_steps::Int)
+function collect_trajectories(agent::ActorCriticAgent, env::AbstractParallellEnv, n_steps::Int, gamma::AbstractFloat, progress_meter::Union{Progress, Nothing}=nothing)
     trajectories = Trajectory[]
-    observation_space = env.observation_space
-    action_space = env.action_space
-    current_trajectories = [Trajectory(observation_space, action_space) for _ in 1:n_envs]
+    obs_space = observation_space(env)
+    act_space = action_space(env)
+    n_envs = env.n_envs
+    current_trajectories = [Trajectory(obs_space, act_space) for _ in 1:n_envs]
     for i in 1:n_steps
         observations = observe(env)
         actions, values, logprobs = get_action_and_values(agent, observations)
         rewards, terminateds, truncateds, infos = step!(env, actions)
+        @show terminateds
+        @show truncateds
         for j in 1:n_envs
-            push!(current_trajectories[j].observations, observations[j])
-            push!(current_trajectories[j].actions, actions[j])
+            push!(current_trajectories[j].observations, eachslice(observations, dims=length(obs_space.shape)+1)[j])
+            push!(current_trajectories[j].actions, eachslice(actions, dims=length(act_space.shape)+1)[j])
             push!(current_trajectories[j].rewards, rewards[j])
             push!(current_trajectories[j].logprobs, logprobs[j])
             push!(current_trajectories[j].values, values[j])
-            if terminateds[j] || truncateds[j]
+            
+            if terminateds[j] || truncateds[j] || i == n_steps
                current_trajectories[j].terminated = terminateds[j]
                current_trajectories[j].truncated = truncateds[j]
 
-                if truncateds[j] haskey(infos[j], "terminal_observation")
+                if truncateds[j] && haskey(infos[j], "terminal_observation")
                     last_observation = infos[j]["terminal_observation"]
                     #ignore derivatives here? maybe not necessary
-                    terminal_value = predict_values(policy, last_observation)
-                    current_trajectories[j].rewards[end] += terminal_value*policy.gamma
+                    terminal_value = predict_values(agent, last_observation)[1]
+                    current_trajectories[j].rewards[end] += terminal_value*gamma
                 end
                 push!(trajectories, current_trajectories[j])
-                current_trajectories[j] = Trajectory(observation_space, action_space)
+                current_trajectories[j] = Trajectory(obs_space, act_space)
             end
         end
+        !isnothing(progress_meter) && next!(progress_meter, step=env.n_envs)
     end
     return trajectories
 end
 
-function collect_rollouts!(rollout_buffer::RolloutBuffer, policy::AbstractPolicy, env::AbstractEnv)
-    observation_space = env.observation_space
-    action_space = env.action_space
+function collect_rollouts!(rollout_buffer::RolloutBuffer, agent::ActorCriticAgent, env::AbstractEnv, progress_meter::Union{Progress, Nothing}=nothing)
+    obs_space = observation_space(env)
+    act_space = action_space(env)
 
     reset!(rollout_buffer)
 
-    trajectories = collect_trajectories(policy, env, rollout_buffer.n_steps)
+    t_start = time()
+    trajectories = collect_trajectories(agent, env, rollout_buffer.n_steps, rollout_buffer.gamma, progress_meter)
+    t_collect = time() - t_start
+    fps = sum(length.(trajectories)) / t_collect
+
     traj_lengths = length.(trajectories)
     positions = cumsum([1; traj_lengths])
     for (i, traj) in enumerate(trajectories)
         #transfer data to the Rolloutbuffer 
         traj_inds = positions[i]:positions[i+1]-1
-        selectdim(rollout_buffer.observations, length(observation_space.shape)+1, traj_inds) .= traj.observations
-        selectdim(rollout_buffer.actions, length(action_space.shape)+1, traj_inds) .= traj.actions
+        selectdim(rollout_buffer.observations, length(obs_space.shape)+1, traj_inds) .= stack(traj.observations)
+        selectdim(rollout_buffer.actions, length(act_space.shape)+1, traj_inds) .= stack(traj.actions)
         rollout_buffer.rewards[traj_inds] .= traj.rewards
         rollout_buffer.logprobs[traj_inds] .= traj.logprobs
         rollout_buffer.values[traj_inds] .= traj.values
@@ -119,7 +128,7 @@ function collect_rollouts!(rollout_buffer::RolloutBuffer, policy::AbstractPolicy
                             traj, rollout_buffer.gamma, rollout_buffer.gae_lambda)
         rollout_buffer.returns[traj_inds] .= rollout_buffer.advantages[traj_inds] .+ rollout_buffer.values[traj_inds]
     end
-    nothing
+    return fps
 end
 
 function compute_advantages!(advantages::AbstractArray, traj::Trajectory, gamma::AbstractFloat, gae_lambda::AbstractFloat)

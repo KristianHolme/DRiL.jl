@@ -1,11 +1,13 @@
 __precompile__(false) #disable precompilation for this module
 module DRiL
 
+using Accessors
 using Base.Threads
 using Distributions
 using LinearAlgebra
 using Lux
 using Optimisers
+using ProgressMeter
 using Random
 using Statistics
 
@@ -19,10 +21,17 @@ export AbstractSpace, AbstractBox, UniformBox
 include("policies.jl")
 export ActorCriticPolicy, AbstractPolicy
 
+include("agents.jl")
+export ActorCriticAgent
+
+
 include("buffers.jl")
 export Trajectory, RolloutBuffer
 
 include("environments.jl")
-export MultiThreadedParallelEnv
-include("agents.jl")
+export MultiThreadedParallelEnv, ScalingWrapperEnv
+
+include("algorithms.jl")
+export learn!, PPO
+
 end
