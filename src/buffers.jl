@@ -74,8 +74,8 @@ function collect_trajectories(agent::ActorCriticAgent, env::AbstractParallellEnv
         observations = observe(env)
         actions, values, logprobs = get_action_and_values(agent, observations)
         rewards, terminateds, truncateds, infos = step!(env, actions)
-        @show terminateds
-        @show truncateds
+        # @show terminateds
+        # @show truncateds
         for j in 1:n_envs
             push!(current_trajectories[j].observations, eachslice(observations, dims=length(obs_space.shape)+1)[j])
             push!(current_trajectories[j].actions, eachslice(actions, dims=length(act_space.shape)+1)[j])
@@ -124,7 +124,7 @@ function collect_rollouts!(rollout_buffer::RolloutBuffer, agent::ActorCriticAgen
         rollout_buffer.logprobs[traj_inds] .= traj.logprobs
         rollout_buffer.values[traj_inds] .= traj.values
         #compute advantages and returns
-        compute_advantages!(rollout_buffer.advantages[traj_inds],
+        compute_advantages!(@view(rollout_buffer.advantages[traj_inds]),
                             traj, rollout_buffer.gamma, rollout_buffer.gae_lambda)
         rollout_buffer.returns[traj_inds] .= rollout_buffer.advantages[traj_inds] .+ rollout_buffer.values[traj_inds]
     end

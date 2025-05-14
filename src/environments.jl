@@ -55,6 +55,7 @@ function get_info(env::MultiThreadedParallelEnv{E}) where E<:AbstractEnv
 end
 
 function step!(env::MultiThreadedParallelEnv{E}, action) where E<:AbstractEnv
+    # @show action
     type  = observation_space(env).type
     rewards = Vector{type}(undef, length(env.envs))
     terminateds = Vector{Bool}(undef, length(env.envs))
@@ -63,9 +64,11 @@ function step!(env::MultiThreadedParallelEnv{E}, action) where E<:AbstractEnv
     action_dims = length(action_space(env).shape)
     @assert size(action) == (action_space(env).shape..., length(env.envs)) "Action must be of shape $((action_space(env).shape..., length(env.envs)))"
     @threads for i in 1:length(env.envs)
-        @info "Stepping env $i"
-        rewards[i] = act!(env.envs[i], selectdim(action, action_dims+1, i))
-        @info "Reward: $rewards[i]"
+        # @info "Stepping env $i"
+        local_action = selectdim(action, action_dims+1, i)
+        # @show local_action i
+        rewards[i] = act!(env.envs[i], local_action)
+        # @info "Reward: $rewards[i]"
         terminateds[i] = terminated(env.envs[i])
         truncateds[i] = truncated(env.envs[i])
         infos[i] = get_info(env.envs[i])
@@ -101,12 +104,12 @@ function ScalingWrapperEnv(
     original_act_space::UniformBox
 ) where {E<:AbstractEnv}
     # Create new observation space with bounds [-1, 1]
-    scaled_obs_space = @set original_obs_space.lower = -1
-    @reset scaled_obs_space.upper = 1
+    scaled_obs_space = @set original_obs_space.low = -1
+    scaled_obs_space = @set scaled_obs_space.high = 1
     
     # Create new action space with bounds [-1, 1]
-    scaled_act_space = @set original_act_space.lower = -1
-    @reset scaled_act_space.upper = 1
+    scaled_act_space = @set original_act_space.low = -1
+    scaled_act_space = @set scaled_act_space.high = 1
     
     return ScalingWrapperEnv{E, UniformBox, UniformBox}(env, scaled_obs_space, scaled_act_space, original_obs_space, original_act_space)
 end
@@ -129,7 +132,7 @@ function observe(env::ScalingWrapperEnv{E, UniformBox, UniformBox}) where E
     orig_space = observation_space(env.env)
     
     # Scale observation from original space to [-1, 1]
-    scaled_obs = 2 .* (orig_obs .- orig_space.lower) ./ (orig_space.upper .- orig_space.lower) .- 1
+    scaled_obs = 2 .* (orig_obs .- orig_space.low) ./ (orig_space.high .- orig_space.low) .- 1
     return scaled_obs
 end
 
@@ -137,8 +140,7 @@ function act!(env::ScalingWrapperEnv{E, UniformBox, UniformBox}, action) where E
     orig_space = action_space(env.env)
     
     # Scale action from [-1, 1] to original space
-    orig_action = (action .+ 1.0) ./ 2.0 .* (orig_space.upper .- orig_space.lower) .+ orig_space.lower
-    
+    orig_action = (action .+ 1) ./ 2 .* (orig_space.high .- orig_space.low) .+ orig_space.low
     return act!(env.env, orig_action)
 end
 
