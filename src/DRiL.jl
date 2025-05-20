@@ -31,7 +31,7 @@ export ActorCriticAgent, predict_actions, predict_values
 include("buffers.jl")
 export Trajectory, RolloutBuffer
 
-include("environments.jl")
+include("environment_tools.jl")
 export MultiThreadedParallelEnv, ScalingWrapperEnv
 
 include("algorithms.jl")
