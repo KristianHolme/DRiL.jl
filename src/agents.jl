@@ -36,7 +36,7 @@ struct ActorCriticAgent
     learning_rate::Float32
     optimizer_type::Type{<:Optimisers.AbstractRule}
     stats_window::Int
-    logger::Union{Nothing, TensorBoardLogger.TBLogger}
+    logger::Union{Nothing,TensorBoardLogger.TBLogger}
     verbose::Int
     rng::AbstractRNG
     stats::AgentStats
@@ -47,16 +47,16 @@ add_gradient_update!(agent::ActorCriticAgent, updates::Int=1) = add_gradient_upd
 steps_taken(agent::ActorCriticAgent) = steps_taken(agent.stats)
 gradient_updates(agent::ActorCriticAgent) = gradient_updates(agent.stats)
 
-function ActorCriticAgent(policy::ActorCriticPolicy; 
-        n_steps::Int=2048, 
-        batch_size::Int=64, 
-        epochs::Int=10,
-        learning_rate::Float32=3f-4,
-        optimizer_type::Type{<:Optimisers.AbstractRule}=Optimisers.Adam,
-        stats_window::Int=100,#TODO not used
-        verbose::Int=1,
-        log_dir::Union{Nothing, String}=nothing,
-        rng::AbstractRNG=Random.default_rng())
+function ActorCriticAgent(policy::ActorCriticPolicy;
+    n_steps::Int=2048,
+    batch_size::Int=64,
+    epochs::Int=10,
+    learning_rate::Float32=3f-4,
+    optimizer_type::Type{<:Optimisers.AbstractRule}=Optimisers.Adam,
+    stats_window::Int=100,#TODO not used
+    verbose::Int=1,
+    log_dir::Union{Nothing,String}=nothing,
+    rng::AbstractRNG=Random.default_rng())
 
 
     if optimizer_type == Optimisers.Adam
@@ -74,8 +74,8 @@ function ActorCriticAgent(policy::ActorCriticPolicy;
     end
     train_state = Lux.Training.TrainState(policy, ps, st, optimizer)
     return ActorCriticAgent(policy, train_state, n_steps, batch_size, epochs,
-                            learning_rate, optimizer_type, stats_window,
-                            logger, verbose, rng, AgentStats(0, 0))
+        learning_rate, optimizer_type, stats_window,
+        logger, verbose, rng, AgentStats(0, 0))
 end
 
 function get_action_and_values(agent::ActorCriticAgent, observations::AbstractArray)
@@ -94,7 +94,7 @@ function predict_values(agent::ActorCriticAgent, observations::AbstractArray)
     st = agent.train_state.states
     critic_st = st.critic_head
     values, critic_st = policy.critic_head(observations, ps.critic_head, critic_st)
-    st = merge(st, (;critic_head= critic_st))
+    st = merge(st, (; critic_head=critic_st))
     @reset agent.train_state.states = st
     return values
 end

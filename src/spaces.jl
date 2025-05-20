@@ -10,4 +10,3 @@ end
 
 Base.ndims(space::UniformBox) = length(space.shape)
 
-    

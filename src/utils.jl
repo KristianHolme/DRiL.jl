@@ -1,9 +1,9 @@
-function collect_trajectory(agent::ActorCriticAgent, env::AbstractEnv; max_steps::Union{Int, Nothing}=nothing)
+function collect_trajectory(agent::ActorCriticAgent, env::AbstractEnv; max_steps::Union{Int,Nothing}=nothing)
     reset!(env)
     observations = []
     actions = []
     rewards = []
-    while !( terminated(env) || truncated(env))
+    while !(terminated(env) || truncated(env))
         observation = observe(env)
         push!(observations, observation)
         observation = reshape(observation, size(observation)..., 1)

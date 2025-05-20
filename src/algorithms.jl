@@ -1,19 +1,19 @@
 abstract type AbstractAlgorithm end
 
 
-@kwdef struct PPO{T<: AbstractFloat} <: AbstractAlgorithm 
+@kwdef struct PPO{T<:AbstractFloat} <: AbstractAlgorithm
     gamma::T = 0.99f0
     gae_lambda::T = 0.95f0
     clip_range::T = 0.2f0
-    clip_range_vf::Union{T, Nothing} = nothing
+    clip_range_vf::Union{T,Nothing} = nothing
     ent_coef::T = 0.0f0
     vf_coef::T = 0.5f0
     max_grad_norm::T = 0.5f0
-    target_kl::Union{T, Nothing} = nothing
+    target_kl::Union{T,Nothing} = nothing
     normalize_advantage::Bool = true
 end
-function PPO(;kwargs...)
-    return PPO{Float32}(;kwargs...)
+function PPO(; kwargs...)
+    return PPO{Float32}(; kwargs...)
 end
 
 function learn!(agent::ActorCriticAgent, env::AbstractEnv, alg::PPO{T}; max_steps::Int, ad_type::Lux.Training.AbstractADType=AutoZygote()) where T
@@ -25,7 +25,9 @@ function learn!(agent::ActorCriticAgent, env::AbstractEnv, alg::PPO{T}; max_step
     total_steps = iterations * n_steps * n_envs
 
     @info "Training with total_steps: $total_steps, iterations: $iterations, n_steps: $n_steps, n_envs: $n_envs"
-    progress_meter = Progress(total_steps, desc="Training...", showspeed=true)
+    progress_meter = Progress(total_steps, desc="Training...",
+        showspeed=true, enabled=agent.verbose > 0
+    )
 
     train_state = agent.train_state
 
@@ -46,10 +48,10 @@ function learn!(agent::ActorCriticAgent, env::AbstractEnv, alg::PPO{T}; max_step
         add_step!(agent, n_steps * n_envs)
         set_step!(agent.logger, steps_taken(agent))
         log_value(agent.logger, "env/fps", fps)
-        data_loader = DataLoader((roll_buffer.observations, roll_buffer.actions, 
-                                roll_buffer.advantages, roll_buffer.returns, 
-                                roll_buffer.logprobs, roll_buffer.values), 
-                                batchsize=agent.batch_size, shuffle=true, parallel=true)
+        data_loader = DataLoader((roll_buffer.observations, roll_buffer.actions,
+                roll_buffer.advantages, roll_buffer.returns,
+                roll_buffer.logprobs, roll_buffer.values),
+            batchsize=agent.batch_size, shuffle=true, parallel=true)
         continue_training = true
         entropy_losses = Float32[]
         entropy = Float32[]
@@ -63,13 +65,13 @@ function learn!(agent::ActorCriticAgent, env::AbstractEnv, alg::PPO{T}; max_step
             for (i_batch, batch_data) in enumerate(data_loader)
                 alg_loss = (model, ps, st, data) -> loss(alg, model, ps, st, data)
                 grads, loss_val, stats, train_state = Lux.Training.compute_gradients(ad_type, alg_loss, batch_data, train_state)
-                
+
                 if epoch == 1 && i_batch == 1
                     mean_ratio = stats["ratio"]
                     @assert mean_ratio ≈ one(mean_ratio) "ratios is not 1.0, iter $i, epoch $epoch, batch $i_batch, $mean_ratio"
                 end
                 @assert !any(isnan, grads.log_std) "log_std gradient is nan, iter $i, epoch $epoch, batch $i_batch"
-                
+
                 # Calculate and store gradient norm for the batch
                 flat_grads, restruct_func = Optimisers.destructure(grads)
                 current_grad_norm = norm(flat_grads)
@@ -81,7 +83,7 @@ function learn!(agent::ActorCriticAgent, env::AbstractEnv, alg::PPO{T}; max_step
                 end
                 # @info grads
                 # KL divergence check
-                if !isnothing(alg.target_kl) && stats["approx_kl_div"] > T(1.5) * alg.target_kl 
+                if !isnothing(alg.target_kl) && stats["approx_kl_div"] > T(1.5) * alg.target_kl
                     continue_training = false
                     break
                 end
@@ -177,20 +179,20 @@ function loss(alg::PPO{T}, policy::ActorCriticPolicy, ps, st, batch_data) where 
     values = !isnothing(alg.clip_range_vf) ? clip_range(old_values, values, alg.clip_range_vf) : values
 
     r = exp.(log_probs - old_logprobs)
-    ratio_clipped = clamp.(r, 1-alg.clip_range, 1+alg.clip_range)
+    ratio_clipped = clamp.(r, 1 - alg.clip_range, 1 + alg.clip_range)
     p_loss = -mean(advantages .* min.(r, ratio_clipped))
     ent_loss = -mean(entropy)
 
     # @info "values: $values"
     # @info "returns: $returns"
-    v_loss = mean((values .- returns).^2)
+    v_loss = mean((values .- returns) .^ 2)
     loss = p_loss + alg.ent_coef * ent_loss + alg.vf_coef * v_loss
-    
+
     # Calculate statistics
     clip_fraction = mean(r .!= ratio_clipped)
     #approx kl div
     log_ratio = log_probs - old_logprobs
-    approx_kl_div = mean(exp.(log_ratio) .- 1 .- log_ratio)    
+    approx_kl_div = mean(exp.(log_ratio) .- 1 .- log_ratio)
 
     stats = Dict(
         "policy_loss" => p_loss,
@@ -205,4 +207,3 @@ function loss(alg::PPO{T}, policy::ActorCriticPolicy, ps, st, batch_data) where 
     return loss, st, stats
 end
 
-   

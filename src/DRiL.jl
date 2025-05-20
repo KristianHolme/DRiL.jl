@@ -18,7 +18,7 @@ include("basic_types.jl")
 export AbstractEnv, AbstractAgent, AbstractBuffer
 export reset!, act!, observe, terminated, truncated, action_space, observation_space, get_info
 
-include("spaces.jl") 
+include("spaces.jl")
 export AbstractSpace, AbstractBox, UniformBox
 
 include("policies.jl")
