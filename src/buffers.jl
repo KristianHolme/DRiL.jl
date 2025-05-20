@@ -40,42 +40,48 @@ function reset!(rollout_buffer::RolloutBuffer)
     nothing
 end
 
-mutable struct Trajectory
-    observations::Vector{AbstractArray}
-    actions::Vector{AbstractArray}
-    rewards::Vector{Number}
-    logprobs::Vector{Number}
-    values::Vector{Number}
+mutable struct Trajectory{T <: AbstractFloat}
+    observations::Vector{AbstractArray{T}}
+    actions::Vector{AbstractArray{T}}
+    rewards::Vector{T}
+    logprobs::Vector{T}
+    values::Vector{T}
     terminated::Bool
     truncated::Bool
+    bootstrap_value::Union{Nothing, T}  # Value of the next state for truncated episodes
     function Trajectory(observation_space::UniformBox, action_space::UniformBox)
-        observations = Vector{Array{observation_space.type, length(observation_space.shape)}}[]
-        actions = Vector{Array{action_space.type, length(action_space.shape)}}[]
-        rewards = Vector{action_space.type}[]
-        logprobs = Vector{action_space.type}[]
-        values = Vector{action_space.type}[]
+        T = observation_space.type
+        @assert T == action_space.type "Observation and action spaces must have the same type"
+        observations = Vector{Array{T, length(observation_space.shape)}}[]
+        actions = Vector{Array{T, length(action_space.shape)}}[]
+        rewards = Vector{T}[]
+        logprobs = Vector{T}[]
+        values = Vector{T}[]
         terminated = false
         truncated = false
-        return new(observations, actions, rewards, logprobs, values, terminated, truncated)
+        bootstrap_value = nothing
+        return new{T}(observations, actions, rewards, logprobs, values, terminated, truncated, bootstrap_value)
     end
 end
 
 Base.length(trajectory::Trajectory) = length(trajectory.rewards)
+total_reward(trajectory::Trajectory) = sum(trajectory.rewards)
 
 
-
-function collect_trajectories(agent::ActorCriticAgent, env::AbstractParallellEnv, n_steps::Int, gamma::AbstractFloat, progress_meter::Union{Progress, Nothing}=nothing)
+function collect_trajectories(agent::ActorCriticAgent, env::AbstractParallellEnv, n_steps::Int, progress_meter::Union{Progress, Nothing}=nothing)
     trajectories = Trajectory[]
     obs_space = observation_space(env)
     act_space = action_space(env)
     n_envs = env.n_envs
     current_trajectories = [Trajectory(obs_space, act_space) for _ in 1:n_envs]
+    new_obs = observe(env)
     for i in 1:n_steps
-        observations = observe(env)
+        observations = new_obs
         actions, values, logprobs = get_action_and_values(agent, observations)
-        rewards, terminateds, truncateds, infos = step!(env, actions)
-        # @show terminateds
-        # @show truncateds
+        @info "actions: $actions, values: $values, logprobs: $logprobs"
+        processed_actions = process_action(actions, action_space(env))
+        rewards, terminateds, truncateds, infos = step!(env, processed_actions)
+        new_obs = observe(env)        
         for j in 1:n_envs
             push!(current_trajectories[j].observations, eachslice(observations, dims=length(obs_space.shape)+1)[j])
             push!(current_trajectories[j].actions, eachslice(actions, dims=length(act_space.shape)+1)[j])
@@ -84,15 +90,25 @@ function collect_trajectories(agent::ActorCriticAgent, env::AbstractParallellEnv
             push!(current_trajectories[j].values, values[j])
             
             if terminateds[j] || truncateds[j] || i == n_steps
-               current_trajectories[j].terminated = terminateds[j]
-               current_trajectories[j].truncated = truncateds[j]
+                current_trajectories[j].terminated = terminateds[j]
+                current_trajectories[j].truncated = truncateds[j]
 
+                # Handle bootstrapping for truncated episodes
                 if truncateds[j] && haskey(infos[j], "terminal_observation")
                     last_observation = infos[j]["terminal_observation"]
-                    #ignore derivatives here? maybe not necessary
                     terminal_value = predict_values(agent, last_observation)[1]
-                    current_trajectories[j].rewards[end] += terminal_value*gamma
+                    current_trajectories[j].bootstrap_value = terminal_value
                 end
+                
+                # Handle bootstrapping for rollout-limited trajectories (neither terminated nor truncated)
+                # We need to bootstrap with the value of the current observation
+                if !terminateds[j] && !truncateds[j] && i == n_steps
+                    # Get the next observation after last step (which is the current state)
+                    next_obs = selectdim(new_obs, ndims(new_obs), j)
+                    next_value = predict_values(agent, next_obs)[1]
+                    current_trajectories[j].bootstrap_value = next_value
+                end
+                
                 push!(trajectories, current_trajectories[j])
                 current_trajectories[j] = Trajectory(obs_space, act_space)
             end
@@ -109,9 +125,14 @@ function collect_rollouts!(rollout_buffer::RolloutBuffer, agent::ActorCriticAgen
     reset!(rollout_buffer)
 
     t_start = time()
-    trajectories = collect_trajectories(agent, env, rollout_buffer.n_steps, rollout_buffer.gamma, progress_meter)
+    trajectories = collect_trajectories(agent, env, rollout_buffer.n_steps, progress_meter)
     t_collect = time() - t_start
     fps = sum(length.(trajectories)) / t_collect
+    avg_ep_rew = mean(total_reward.(trajectories))
+    
+    if !isnothing(agent.logger)
+        log_value(agent.logger, "env/avg_ep_rew", avg_ep_rew)
+    end
 
     traj_lengths = length.(trajectories)
     positions = cumsum([1; traj_lengths])
@@ -132,11 +153,25 @@ function collect_rollouts!(rollout_buffer::RolloutBuffer, agent::ActorCriticAgen
 end
 
 function compute_advantages!(advantages::AbstractArray, traj::Trajectory, gamma::AbstractFloat, gae_lambda::AbstractFloat)
-    delta = traj.rewards[end] - traj.values[end]
+    n = length(traj.rewards)
+    
+    # For terminated episodes, no bootstrapping (bootstrap_value should be nothing)
+    # For truncated episodes or rollout-limited trajectories, bootstrap with the next state value
+    if traj.terminated || isnothing(traj.bootstrap_value)
+        # No bootstrapping for terminated episodes
+        delta = traj.rewards[end] - traj.values[end]
+    else
+        # Bootstrap for truncated or rollout-limited trajectories
+        delta = traj.rewards[end] + gamma * traj.bootstrap_value - traj.values[end]
+    end
+    
     advantages[end] = delta
-    for i in length(traj.rewards)-1:-1:1
+    
+    # Compute advantages for earlier steps using the standard GAE recursion
+    for i in (n-1):-1:1
         delta = traj.rewards[i] + gamma * traj.values[i+1] - traj.values[i]
         advantages[i] = delta + gamma * gae_lambda * advantages[i+1]
     end
+    
     nothing
 end

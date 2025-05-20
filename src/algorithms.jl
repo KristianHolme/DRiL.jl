@@ -30,6 +30,7 @@ function learn!(agent::ActorCriticAgent, env::AbstractEnv, alg::PPO{T}; max_step
     train_state = agent.train_state
 
     total_entropy_losses = Float32[]
+    total_entropy = Float32[]
     total_policy_losses = Float32[]
     total_value_losses = Float32[]
     total_approx_kl_divs = Float32[]
@@ -44,7 +45,7 @@ function learn!(agent::ActorCriticAgent, env::AbstractEnv, alg::PPO{T}; max_step
         push!(total_fps, fps)
         add_step!(agent, n_steps * n_envs)
         set_step!(agent.logger, steps_taken(agent))
-        log_value(agent.logger, "train/fps", fps)
+        log_value(agent.logger, "env/fps", fps)
         data_loader = DataLoader((roll_buffer.observations, roll_buffer.actions, 
                                 roll_buffer.advantages, roll_buffer.returns, 
                                 roll_buffer.logprobs, roll_buffer.values), 
@@ -62,14 +63,22 @@ function learn!(agent::ActorCriticAgent, env::AbstractEnv, alg::PPO{T}; max_step
             for (i_batch, batch_data) in enumerate(data_loader)
                 alg_loss = (model, ps, st, data) -> loss(alg, model, ps, st, data)
                 grads, loss_val, stats, train_state = Lux.Training.compute_gradients(ad_type, alg_loss, batch_data, train_state)
-
+                
+                if epoch == 1 && i_batch == 1
+                    mean_ratio = stats["ratio"]
+                    @assert mean_ratio ≈ one(mean_ratio) "ratios is not 1.0, iter $i, epoch $epoch, batch $i_batch, $mean_ratio"
+                end
                 @assert !any(isnan, grads.log_std) "log_std gradient is nan, iter $i, epoch $epoch, batch $i_batch"
                 
                 # Calculate and store gradient norm for the batch
-                flat_grads, _ = Optimisers.destructure(grads)
+                flat_grads, restruct_func = Optimisers.destructure(grads)
                 current_grad_norm = norm(flat_grads)
                 push!(grad_norms, current_grad_norm)
-
+                if !isnothing(alg.max_grad_norm) && current_grad_norm > alg.max_grad_norm
+                    flat_grads = flat_grads .* alg.max_grad_norm ./ current_grad_norm
+                    @assert norm(flat_grads) <= alg.max_grad_norm "gradient norm is greater than max_grad_norm, iter $i, epoch $epoch, batch $i_batch"
+                    grads = restruct_func(flat_grads)
+                end
                 # @info grads
                 # KL divergence check
                 if !isnothing(alg.target_kl) && stats["approx_kl_div"] > T(1.5) * alg.target_kl 
@@ -95,6 +104,7 @@ function learn!(agent::ActorCriticAgent, env::AbstractEnv, alg::PPO{T}; max_step
         explained_variance = 1 - var(roll_buffer.values .- roll_buffer.returns) / var(roll_buffer.returns)
         push!(total_explained_variances, explained_variance)
         push!(total_entropy_losses, mean(entropy_losses))
+        push!(total_entropy, mean(entropy))
         push!(total_policy_losses, mean(policy_losses))
         push!(total_value_losses, mean(value_losses))
         push!(total_approx_kl_divs, mean(approx_kl_divs))
@@ -105,25 +115,26 @@ function learn!(agent::ActorCriticAgent, env::AbstractEnv, alg::PPO{T}; max_step
             ProgressMeter.update!(progress_meter; showvalues=[
                 ("explained_variance", explained_variance),
                 ("entropy_loss", total_entropy_losses[i]),
+                ("entropy", total_entropy[i]),
                 ("policy_loss", total_policy_losses[i]),
                 ("value_loss", total_value_losses[i]),
                 ("approx_kl_div", total_approx_kl_divs[i]),
                 ("clip_fraction", total_clip_fractions[i]),
-                ("loss", mean(losses)),
+                ("loss", total_losses[i]),
                 ("fps", total_fps[i]),
-                ("grad_norm", mean(grad_norms))
+                ("grad_norm", total_grad_norms[i])
             ])
         end
         if !isnothing(agent.logger)
             log_value(agent.logger, "train/entropy_loss", total_entropy_losses[i])
+            log_value(agent.logger, "train/entropy", total_entropy[i])
             log_value(agent.logger, "train/explained_variance", explained_variance)
             log_value(agent.logger, "train/policy_loss", total_policy_losses[i])
             log_value(agent.logger, "train/value_loss", total_value_losses[i])
             log_value(agent.logger, "train/approx_kl_div", total_approx_kl_divs[i])
             log_value(agent.logger, "train/clip_fraction", total_clip_fractions[i])
-            log_value(agent.logger, "train/loss", mean(losses))
-            log_value(agent.logger, "train/grad_norm", mean(grad_norms))
-            log_value(agent.logger, "train/entropy", mean(entropy))
+            log_value(agent.logger, "train/loss", total_losses[i])
+            log_value(agent.logger, "train/grad_norm", total_grad_norms[i])
             if haskey(agent.train_state.parameters, :log_std)
                 log_value(agent.logger, "train/std", mean(exp.(agent.train_state.parameters[:log_std])))
             end
@@ -187,7 +198,8 @@ function loss(alg::PPO{T}, policy::ActorCriticPolicy, ps, st, batch_data) where 
         "entropy_loss" => ent_loss,
         "clip_fraction" => clip_fraction,
         "approx_kl_div" => approx_kl_div,
-        "entropy" => entropy,
+        "entropy" => mean(entropy),
+        "ratio" => mean(r)
     )
 
     return loss, st, stats

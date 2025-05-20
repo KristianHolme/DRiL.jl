@@ -34,7 +34,6 @@ struct ActorCriticAgent
     batch_size::Int
     epochs::Int
     learning_rate::Float32
-    max_grad_norm::Float32
     optimizer_type::Type{<:Optimisers.AbstractRule}
     stats_window::Int
     logger::Union{Nothing, TensorBoardLogger.TBLogger}
@@ -53,14 +52,18 @@ function ActorCriticAgent(policy::ActorCriticPolicy;
         batch_size::Int=64, 
         epochs::Int=10,
         learning_rate::Float32=3f-4,
-        max_grad_norm::Float32=0.5f0,
         optimizer_type::Type{<:Optimisers.AbstractRule}=Optimisers.Adam,
         stats_window::Int=100,#TODO not used
         verbose::Int=1,
         log_dir::Union{Nothing, String}=nothing,
         rng::AbstractRNG=Random.default_rng())
 
-    optimizer = OptimiserChain(ClipNorm(max_grad_norm), optimizer_type(learning_rate))
+
+    if optimizer_type == Optimisers.Adam
+        optimizer = optimizer_type(eta=learning_rate, epsilon=1f-5)
+    else
+        optimizer = optimizer_type(learning_rate)
+    end
     #TODO add maxgradnorm wrapper
     ps, st = Lux.setup(rng, policy)
     @show ps.log_std
@@ -71,7 +74,7 @@ function ActorCriticAgent(policy::ActorCriticPolicy;
     end
     train_state = Lux.Training.TrainState(policy, ps, st, optimizer)
     return ActorCriticAgent(policy, train_state, n_steps, batch_size, epochs,
-                            learning_rate, max_grad_norm, optimizer_type, stats_window,
+                            learning_rate, optimizer_type, stats_window,
                             logger, verbose, rng, AgentStats(0, 0))
 end
 
