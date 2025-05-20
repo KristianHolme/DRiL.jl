@@ -12,9 +12,10 @@ abstract type AbstractAlgorithm end
     target_kl::Union{T,Nothing} = nothing
     normalize_advantage::Bool = true
 end
-function PPO(; kwargs...)
-    return PPO{Float32}(; kwargs...)
-end
+
+# function PPO(; T::Type{<:AbstractFloat}=Float32, kwargs...)
+#     return PPO{T}(; kwargs...)
+# end
 
 function learn!(agent::ActorCriticAgent, env::AbstractEnv, alg::PPO{T}; max_steps::Int, ad_type::Lux.Training.AbstractADType=AutoZygote()) where T
     n_steps = agent.n_steps
@@ -46,8 +47,10 @@ function learn!(agent::ActorCriticAgent, env::AbstractEnv, alg::PPO{T}; max_step
         fps = collect_rollouts!(roll_buffer, agent, env, progress_meter)
         push!(total_fps, fps)
         add_step!(agent, n_steps * n_envs)
-        set_step!(agent.logger, steps_taken(agent))
-        log_value(agent.logger, "env/fps", fps)
+        if !isnothing(agent.logger)
+            set_step!(agent.logger, steps_taken(agent))
+            log_value(agent.logger, "env/fps", fps)
+        end
         data_loader = DataLoader((roll_buffer.observations, roll_buffer.actions,
                 roll_buffer.advantages, roll_buffer.returns,
                 roll_buffer.logprobs, roll_buffer.values),
