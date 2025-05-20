@@ -28,14 +28,15 @@ function ActorCriticPolicy(observation_space::UniformBox, action_space::UniformB
     feature_extractor = Lux.FlattenLayer()
     latent_dim = observation_space.shape |> prod
     bias_init = zeros32
+    hidden_init = (rng, out_dims, in_dims) -> orthogonal(rng, action_space.type, out_dims, in_dims; gain=sqrt(2))
     actor_init = (rng, out_dims, in_dims) -> orthogonal(rng, action_space.type, out_dims, in_dims; gain=0.01)
     value_init = (rng, out_dims, in_dims) -> orthogonal(rng, action_space.type, out_dims, in_dims; gain=1.0)
-    actor_head = Chain(Dense(latent_dim, hidden_dim, activation, init_weight= actor_init, init_bias= bias_init), 
-                       Dense(hidden_dim, hidden_dim, activation, init_weight= actor_init, init_bias= bias_init),
+    actor_head = Chain(Dense(latent_dim, hidden_dim, activation, init_weight= hidden_init, init_bias= bias_init), 
+                       Dense(hidden_dim, hidden_dim, activation, init_weight= hidden_init, init_bias= bias_init),
                        Dense(hidden_dim, action_space.shape |> prod, activation, init_weight= actor_init, init_bias= bias_init),
                        ReshapeLayer(action_space.shape))
-    critic_head = Chain(Dense(latent_dim, hidden_dim, activation, init_weight= value_init, init_bias= bias_init), 
-                       Dense(hidden_dim, hidden_dim, activation, init_weight= value_init, init_bias= bias_init),
+    critic_head = Chain(Dense(latent_dim, hidden_dim, activation, init_weight = hidden_init, init_bias= bias_init), 
+                       Dense(hidden_dim, hidden_dim, activation, init_weight = hidden_init, init_bias= bias_init),
                        Dense(hidden_dim, 1, init_weight= value_init, init_bias= bias_init))
     return ActorCriticPolicy(observation_space, action_space, feature_extractor, actor_head, critic_head, log_std_init)
 end
@@ -72,18 +73,16 @@ function get_distribution_type(policy::ActorCriticPolicy)
 end
 
 function (policy::ActorCriticPolicy)(obs::AbstractArray, ps, st; rng::AbstractRNG=Random.default_rng())
-    feats, feats_st = policy.feature_extractor(obs, ps.feature_extractor, st.feature_extractor)
-    action_mean, actor_st = policy.actor_head(feats, ps.actor_head, st.actor_head)
+    feats, st = extract_features(policy, obs, ps, st)
+    action_mean, st = get_action_mean_from_latent(policy, feats, ps, st)
     values, critic_st = policy.critic_head(feats, ps.critic_head, st.critic_head)
     std = exp.(ps.log_std)
     actions, log_probs = get_noisy_actions(policy, action_mean, std, rng; log_probs=true)
-    return actions, values, log_probs, merge(st, (;feature_extractor= feats_st, actor_head= actor_st, critic_head= critic_st))
-    @show actions, log_probs
+    return actions, values, log_probs, merge(st, (;critic_head= critic_st))
 end
 
 function extract_features(policy::ActorCriticPolicy, obs::AbstractArray, ps, st)
-    # Always ensure observation has the right dimensions by using reshape
-    # This avoids conditional code paths that confuse Enzyme
+    
     obs_space_shape = observation_space(policy).shape
     obs_shape = size(obs)
     # @info "obs_space_shape: $obs_space_shape"
@@ -157,10 +156,8 @@ function get_noisy_actions(policy::ActorCriticPolicy, action_means::AbstractArra
         # Flattened actions for log probability calculation
         flattened_actions = reshape(actions, :, size(actions)[end])
         log_probs = loglikelihood.(distributions, flattened_actions)
-        actions = process_action(actions, action_space(policy))
         return actions, log_probs
     else
-        actions = process_action(actions, action_space(policy))
         return actions
     end
 end
@@ -171,14 +168,15 @@ function predict(policy::ActorCriticPolicy, obs::AbstractArray, ps, st; determin
     
     if deterministic
         # Process actions: clip and ensure correct type
-        action_mean = process_action(action_mean, action_space(policy))
-        return action_mean, st
+        actions = action_mean
     else
         std = exp.(ps.log_std)
         @assert all(std .> 0) "std is not positive"
         actions = get_noisy_actions(policy, action_mean, std, rng; log_probs=false)
-        return actions, st
     end
+    #clip/squashing
+    actions = process_action(actions, action_space(policy))
+    return actions, st
 end
 
 function evaluate_actions(policy::ActorCriticPolicy, obs::AbstractArray, actions::AbstractArray, ps, st)
