@@ -4,6 +4,7 @@ module DRiL
 using Accessors
 using Base.Threads
 using ChainRulesCore
+using ComponentArrays
 using Distributions
 using LinearAlgebra
 using Lux
@@ -13,6 +14,8 @@ using ProgressMeter
 using Random
 using Statistics
 using TensorBoardLogger
+using FileIO
+using JLD2
 
 include("basic_types.jl")
 export AbstractEnv, AbstractAgent, AbstractBuffer
@@ -39,5 +42,8 @@ export learn!, PPO
 
 include("utils.jl")
 export collect_trajectory
+
+include("logging.jl")
+export get_hparams
 
 end
