@@ -42,7 +42,7 @@ function ActorCriticPolicy(observation_space::UniformBox, action_space::UniformB
 end
 
 function Lux.initialparameters(rng::AbstractRNG, policy::ActorCriticPolicy)
-    params = (feature_extractor=Lux.initialparameters(rng, policy.feature_extractor),
+    params = ComponentArray(feature_extractor=Lux.initialparameters(rng, policy.feature_extractor),
         actor_head=Lux.initialparameters(rng, policy.actor_head),
         critic_head=Lux.initialparameters(rng, policy.critic_head),
         log_std=policy.log_std_init * ones(typeof(policy.log_std_init), policy.action_space.shape))
