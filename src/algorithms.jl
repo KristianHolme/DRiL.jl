@@ -33,6 +33,7 @@ function learn!(agent::ActorCriticAgent, env::AbstractEnv, alg::PPO{T}; max_step
     train_state = agent.train_state
 
     total_entropy_losses = Float32[]
+    learning_rates = Float32[]
     total_entropy = Float32[]
     total_policy_losses = Float32[]
     total_value_losses = Float32[]
@@ -44,6 +45,10 @@ function learn!(agent::ActorCriticAgent, env::AbstractEnv, alg::PPO{T}; max_step
     total_grad_norms = Float32[]
 
     for i in 1:iterations
+        learning_rate = agent.learning_rate
+        Optimisers.adjust!(agent.train_state, learning_rate)
+        push!(learning_rates, learning_rate)
+
         fps = collect_rollouts!(roll_buffer, agent, env, progress_meter)
         push!(total_fps, fps)
         add_step!(agent, n_steps * n_envs)
@@ -73,16 +78,19 @@ function learn!(agent::ActorCriticAgent, env::AbstractEnv, alg::PPO{T}; max_step
                     mean_ratio = stats["ratio"]
                     @assert mean_ratio ≈ one(mean_ratio) "ratios is not 1.0, iter $i, epoch $epoch, batch $i_batch, $mean_ratio"
                 end
-                @assert !any(isnan, grads.log_std) "log_std gradient is nan, iter $i, epoch $epoch, batch $i_batch"
+                @assert !any(isnan, grads) "gradient contains nan, iter $i, epoch $epoch, batch $i_batch"
+                @assert !any(isinf, grads) "gradient not finite, iter $i, epoch $epoch, batch $i_batch"
 
-                # Calculate and store gradient norm for the batch
-                flat_grads, restruct_func = Optimisers.destructure(grads)
-                current_grad_norm = norm(flat_grads)
+                current_grad_norm = norm(grads)
                 push!(grad_norms, current_grad_norm)
+
                 if !isnothing(alg.max_grad_norm) && current_grad_norm > alg.max_grad_norm
-                    flat_grads = flat_grads .* alg.max_grad_norm ./ current_grad_norm
-                    @assert norm(flat_grads) <= alg.max_grad_norm "gradient norm is greater than max_grad_norm, iter $i, epoch $epoch, batch $i_batch"
-                    grads = restruct_func(flat_grads)
+                    grads = grads .* alg.max_grad_norm ./ current_grad_norm
+                    clipped_grads_norm = norm(grads)
+                    @assert clipped_grads_norm < alg.max_grad_norm ||
+                            clipped_grads_norm ≈ alg.max_grad_norm "gradient norm 
+                            ($(clipped_grads_norm)) is greater than
+                            max_grad_norm ($(alg.max_grad_norm)), iter $i, epoch $epoch, batch $i_batch"
                 end
                 # @info grads
                 # KL divergence check
@@ -127,7 +135,8 @@ function learn!(agent::ActorCriticAgent, env::AbstractEnv, alg::PPO{T}; max_step
                 ("clip_fraction", total_clip_fractions[i]),
                 ("loss", total_losses[i]),
                 ("fps", total_fps[i]),
-                ("grad_norm", total_grad_norms[i])
+                ("grad_norm", total_grad_norms[i]),
+                ("learning_rate", learning_rate)
             ])
         end
         if !isnothing(agent.logger)
@@ -140,11 +149,26 @@ function learn!(agent::ActorCriticAgent, env::AbstractEnv, alg::PPO{T}; max_step
             log_value(agent.logger, "train/clip_fraction", total_clip_fractions[i])
             log_value(agent.logger, "train/loss", total_losses[i])
             log_value(agent.logger, "train/grad_norm", total_grad_norms[i])
+            log_value(agent.logger, "train/learning_rate", learning_rate)
             if haskey(agent.train_state.parameters, :log_std)
                 log_value(agent.logger, "train/std", mean(exp.(agent.train_state.parameters[:log_std])))
             end
         end
     end
+    learn_stats = Dict(
+        "entropy_losses" => total_entropy_losses,
+        "entropy" => total_entropy,
+        "policy_losses" => total_policy_losses,
+        "value_losses" => total_value_losses,
+        "approx_kl_divs" => total_approx_kl_divs,
+        "clip_fractions" => total_clip_fractions,
+        "losses" => total_losses,
+        "explained_variances" => total_explained_variances,
+        "fps" => total_fps,
+        "grad_norms" => total_grad_norms,
+        "learning_rates" => learning_rates
+    )
+    return learn_stats
 end
 
 function normalize(advantages::Vector{T}) where T
