@@ -69,6 +69,7 @@ total_reward(trajectory::Trajectory) = sum(trajectory.rewards)
 
 
 function collect_trajectories(agent::ActorCriticAgent, env::AbstractParallellEnv, n_steps::Int, progress_meter::Union{Progress,Nothing}=nothing)
+    reset!(env, agent.rng)
     trajectories = Trajectory[]
     obs_space = observation_space(env)
     act_space = action_space(env)
@@ -78,7 +79,6 @@ function collect_trajectories(agent::ActorCriticAgent, env::AbstractParallellEnv
     for i in 1:n_steps
         observations = new_obs
         actions, values, logprobs = get_action_and_values(agent, observations)
-        @info "actions: $actions, values: $values, logprobs: $logprobs"
         processed_actions = process_action(actions, action_space(env))
         rewards, terminateds, truncateds, infos = step!(env, processed_actions)
         new_obs = observe(env)
@@ -88,7 +88,6 @@ function collect_trajectories(agent::ActorCriticAgent, env::AbstractParallellEnv
             push!(current_trajectories[j].rewards, rewards[j])
             push!(current_trajectories[j].logprobs, logprobs[j])
             push!(current_trajectories[j].values, values[j])
-
             if terminateds[j] || truncateds[j] || i == n_steps
                 current_trajectories[j].terminated = terminateds[j]
                 current_trajectories[j].truncated = truncateds[j]
@@ -119,6 +118,7 @@ function collect_trajectories(agent::ActorCriticAgent, env::AbstractParallellEnv
 end
 
 function collect_rollouts!(rollout_buffer::RolloutBuffer, agent::ActorCriticAgent, env::AbstractEnv, progress_meter::Union{Progress,Nothing}=nothing)
+    reset!(env, agent.rng)
     obs_space = observation_space(env)
     act_space = action_space(env)
 
