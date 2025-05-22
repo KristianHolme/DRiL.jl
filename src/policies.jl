@@ -18,19 +18,34 @@ struct ActorCriticPolicy <: AbstractActorCriticPolicy
     feature_extractor::AbstractLuxLayer
     actor_head::AbstractLuxLayer
     critic_head::AbstractLuxLayer
-    log_std_init::Union{AbstractFloat,Vector{AbstractFloat}}
+    log_std_init::Union{AbstractFloat,AbstractArray{AbstractFloat}}
 end
 
 observation_space(policy::ActorCriticPolicy) = policy.observation_space
 action_space(policy::ActorCriticPolicy) = policy.action_space
 
+abstract type AbstractWeightInitializer end
+
+struct OrthogonalInitializer <: AbstractWeightInitializer
+    type::Type{<:AbstractFloat}
+    gain::AbstractFloat
+end
+function (init::OrthogonalInitializer)(rng::AbstractRNG, out_dims::Int, in_dims::Int)
+    return orthogonal(rng, init.type, out_dims, in_dims; gain=init.gain)
+end
+
+
 function ActorCriticPolicy(observation_space::UniformBox, action_space::UniformBox; log_std_init=action_space.type(0), hidden_dim=64, activation=tanh)
     feature_extractor = Lux.FlattenLayer()
     latent_dim = observation_space.shape |> prod
     bias_init = zeros32
-    hidden_init = (rng, out_dims, in_dims) -> orthogonal(rng, action_space.type, out_dims, in_dims; gain=sqrt(2))
-    actor_init = (rng, out_dims, in_dims) -> orthogonal(rng, action_space.type, out_dims, in_dims; gain=0.01)
-    value_init = (rng, out_dims, in_dims) -> orthogonal(rng, action_space.type, out_dims, in_dims; gain=1.0)
+
+    hidden_init = OrthogonalInitializer(action_space.type, sqrt(2))
+    actor_init = OrthogonalInitializer(action_space.type, 0.01)
+    value_init = OrthogonalInitializer(action_space.type, 1.0)
+    # hidden_init = (rng, out_dims, in_dims) -> orthogonal(rng, action_space.type, out_dims, in_dims; gain=sqrt(2))
+    # actor_init = (rng, out_dims, in_dims) -> orthogonal(rng, action_space.type, out_dims, in_dims; gain=0.01)
+    # value_init = (rng, out_dims, in_dims) -> orthogonal(rng, action_space.type, out_dims, in_dims; gain=1.0)
     actor_head = Chain(Dense(latent_dim, hidden_dim, activation, init_weight=hidden_init, init_bias=bias_init),
         Dense(hidden_dim, hidden_dim, activation, init_weight=hidden_init, init_bias=bias_init),
         Dense(hidden_dim, action_space.shape |> prod, activation, init_weight=actor_init, init_bias=bias_init),
