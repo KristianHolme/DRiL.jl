@@ -34,7 +34,6 @@ function learn!(agent::ActorCriticAgent, env::AbstractEnv, alg::PPO{T}; max_step
 
     total_entropy_losses = Float32[]
     learning_rates = Float32[]
-    total_entropy = Float32[]
     total_policy_losses = Float32[]
     total_value_losses = Float32[]
     total_approx_kl_divs = Float32[]
@@ -117,7 +116,6 @@ function learn!(agent::ActorCriticAgent, env::AbstractEnv, alg::PPO{T}; max_step
         explained_variance = 1 - var(roll_buffer.values .- roll_buffer.returns) / var(roll_buffer.returns)
         push!(total_explained_variances, explained_variance)
         push!(total_entropy_losses, mean(entropy_losses))
-        push!(total_entropy, mean(entropy))
         push!(total_policy_losses, mean(policy_losses))
         push!(total_value_losses, mean(value_losses))
         push!(total_approx_kl_divs, mean(approx_kl_divs))
@@ -128,7 +126,6 @@ function learn!(agent::ActorCriticAgent, env::AbstractEnv, alg::PPO{T}; max_step
             ProgressMeter.update!(progress_meter; showvalues=[
                 ("explained_variance", explained_variance),
                 ("entropy_loss", total_entropy_losses[i]),
-                ("entropy", total_entropy[i]),
                 ("policy_loss", total_policy_losses[i]),
                 ("value_loss", total_value_losses[i]),
                 ("approx_kl_div", total_approx_kl_divs[i]),
@@ -141,7 +138,6 @@ function learn!(agent::ActorCriticAgent, env::AbstractEnv, alg::PPO{T}; max_step
         end
         if !isnothing(agent.logger)
             log_value(agent.logger, "train/entropy_loss", total_entropy_losses[i])
-            log_value(agent.logger, "train/entropy", total_entropy[i])
             log_value(agent.logger, "train/explained_variance", explained_variance)
             log_value(agent.logger, "train/policy_loss", total_policy_losses[i])
             log_value(agent.logger, "train/value_loss", total_value_losses[i])
@@ -157,7 +153,6 @@ function learn!(agent::ActorCriticAgent, env::AbstractEnv, alg::PPO{T}; max_step
     end
     learn_stats = Dict(
         "entropy_losses" => total_entropy_losses,
-        "entropy" => total_entropy,
         "policy_losses" => total_policy_losses,
         "value_losses" => total_value_losses,
         "approx_kl_divs" => total_approx_kl_divs,
