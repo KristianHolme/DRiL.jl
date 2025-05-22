@@ -127,11 +127,12 @@ function collect_rollouts!(rollout_buffer::RolloutBuffer, agent::ActorCriticAgen
     t_start = time()
     trajectories = collect_trajectories(agent, env, rollout_buffer.n_steps, progress_meter)
     t_collect = time() - t_start
-    fps = sum(length.(trajectories)) / t_collect
-    avg_ep_rew = mean(total_reward.(trajectories))
+    total_steps = sum(length.(trajectories))
+    fps = total_steps / t_collect
+    avg_step_rew = sum(total_reward.(trajectories)) / total_steps
 
     if !isnothing(agent.logger)
-        log_value(agent.logger, "env/avg_ep_rew", avg_ep_rew)
+        log_value(agent.logger, "env/avg_step_rew", avg_step_rew)
     end
 
     traj_lengths = length.(trajectories)
