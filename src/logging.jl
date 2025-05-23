@@ -18,12 +18,12 @@ end
 
 function get_hparams(alg::AbstractAlgorithm)
     @warn "get_hparams is not implemented for $(typeof(alg)). No hyperparameters will be logged."
-    return Dict()
+    return Dict{String,Any}()
 end
 
 function get_hparams(agent::AbstractAgent)
     @warn "get_hparams is not implemented for $(typeof(agent)). No hyperparameters will be logged."
-    return Dict()
+    return Dict{String,Any}()
 end
 
 function get_hparams(alg::PPO)
