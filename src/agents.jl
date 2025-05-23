@@ -29,7 +29,7 @@ Agent for Actor-Critic algorithms
         
 """
 struct ActorCriticAgent <: AbstractAgent
-    policy::ActorCriticPolicy
+    policy::AbstractActorCriticPolicy
     train_state::Lux.Training.TrainState
     n_steps::Int
     batch_size::Int
@@ -48,7 +48,7 @@ add_gradient_update!(agent::ActorCriticAgent, updates::Int=1) = add_gradient_upd
 steps_taken(agent::ActorCriticAgent) = steps_taken(agent.stats)
 gradient_updates(agent::ActorCriticAgent) = gradient_updates(agent.stats)
 
-function ActorCriticAgent(policy::ActorCriticPolicy;
+function ActorCriticAgent(policy::AbstractActorCriticPolicy;
     n_steps::Int=2048,
     batch_size::Int=64,
     epochs::Int=10,
@@ -86,9 +86,7 @@ function predict_values(agent::ActorCriticAgent, observations::AbstractArray)
     policy = agent.policy
     ps = agent.train_state.parameters
     st = agent.train_state.states
-    critic_st = st.critic_head
-    values, critic_st = policy.critic_head(observations, ps.critic_head, critic_st)
-    st = merge(st, (; critic_head=critic_st))
+    values, st = predict_values(policy, observations, ps, st)
     @reset agent.train_state.states = st
     return values
 end
