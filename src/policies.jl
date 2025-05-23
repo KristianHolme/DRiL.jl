@@ -3,6 +3,9 @@ abstract type AbstractPolicy <: Lux.AbstractLuxLayer end
 #predicts actions from observations, also returns st
 function predict(policy::AbstractPolicy, obs::AbstractArray, ps, st; deterministic::Bool=false) end
 
+#predicts values from observations, returns values and st
+function predict_values(policy::AbstractPolicy, obs::AbstractArray, ps, st) end
+
 #returns values, log_probs, entropy, st
 function evaluate_actions(policy::AbstractPolicy, obs::AbstractArray, actions::AbstractArray, ps, st) end
 
@@ -26,26 +29,23 @@ action_space(policy::ActorCriticPolicy) = policy.action_space
 
 abstract type AbstractWeightInitializer end
 
-struct OrthogonalInitializer <: AbstractWeightInitializer
-    type::Type{<:AbstractFloat}
-    gain::AbstractFloat
+struct OrthogonalInitializer{T<:AbstractFloat} <: AbstractWeightInitializer
+    gain::T
 end
-function (init::OrthogonalInitializer)(rng::AbstractRNG, out_dims::Int, in_dims::Int)
-    return orthogonal(rng, init.type, out_dims, in_dims; gain=init.gain)
+
+function (init::OrthogonalInitializer{T})(rng::AbstractRNG, out_dims::Int, in_dims::Int) where T
+    return orthogonal(rng, T, out_dims, in_dims; gain=init.gain)
 end
 
 
-function ActorCriticPolicy(observation_space::UniformBox, action_space::UniformBox; log_std_init=action_space.type(0), hidden_dim=64, activation=tanh)
+function ActorCriticPolicy(observation_space::UniformBox{T}, action_space::UniformBox{T}; log_std_init=T(0), hidden_dim=64, activation=tanh) where T
     feature_extractor = Lux.FlattenLayer()
     latent_dim = observation_space.shape |> prod
     bias_init = zeros32
 
-    hidden_init = OrthogonalInitializer(action_space.type, sqrt(2))
-    actor_init = OrthogonalInitializer(action_space.type, 0.01)
-    value_init = OrthogonalInitializer(action_space.type, 1.0)
-    # hidden_init = (rng, out_dims, in_dims) -> orthogonal(rng, action_space.type, out_dims, in_dims; gain=sqrt(2))
-    # actor_init = (rng, out_dims, in_dims) -> orthogonal(rng, action_space.type, out_dims, in_dims; gain=0.01)
-    # value_init = (rng, out_dims, in_dims) -> orthogonal(rng, action_space.type, out_dims, in_dims; gain=1.0)
+    hidden_init = OrthogonalInitializer{T}(sqrt(T(2)))
+    actor_init = OrthogonalInitializer{T}(T(0.01))
+    value_init = OrthogonalInitializer{T}(T(1.0))
     actor_head = Chain(Dense(latent_dim, hidden_dim, activation, init_weight=hidden_init, init_bias=bias_init),
         Dense(hidden_dim, hidden_dim, activation, init_weight=hidden_init, init_bias=bias_init),
         Dense(hidden_dim, action_space.shape |> prod, activation, init_weight=actor_init, init_bias=bias_init),
@@ -132,6 +132,36 @@ function get_distributions(distribution_type::Type{<:Distributions.Normal}, acti
     end
 end
 
+function get_distributions(distribution_type::Type{<:Distributions.MvNormal}, action_means::AbstractArray, std::AbstractArray, static_std::Bool)
+    @assert all(std .> 0) "std is not positive"
+
+    # For MvNormal, we need to handle batched observations
+    if ndims(action_means) == 1
+        # Single observation
+        if static_std
+            cov = Diagonal(fill(std[1]^2, length(action_means)))
+        else
+            cov = Diagonal(std .^ 2)
+        end
+        return Distributions.MvNormal(action_means, cov)
+    else
+        # Batched observations
+        batch_size = size(action_means, ndims(action_means))
+        distributions = Vector{Distributions.MvNormal}(undef, batch_size)
+
+        for i in 1:batch_size
+            mean_i = action_means[:, i]
+            if static_std
+                cov = Diagonal(fill(std[1]^2, length(mean_i)))
+            else
+                cov = Diagonal((std[:, i]) .^ 2)
+            end
+            distributions[i] = Distributions.MvNormal(mean_i, cov)
+        end
+        return distributions
+    end
+end
+
 function get_distributions(policy::ActorCriticPolicy, action_means::AbstractArray, std::AbstractArray)
     distribution_type = get_distribution_type(policy)
     static_std = !(size(std) == size(action_means))
@@ -141,11 +171,11 @@ function get_distributions(policy::ActorCriticPolicy, action_means::AbstractArra
 end
 
 # Helper function to process actions: ensure correct type and clipping
-function process_action(action::AbstractArray, action_space::UniformBox)
+function process_action(action::AbstractArray, action_space::UniformBox{T}) where T
     # First check if type conversion is needed
-    if eltype(action) != action_space.type
-        @warn "Action type mismatch: $(eltype(action)) != $(action_space.type)"
-        action = convert.(action_space.type, action)
+    if eltype(action) != T
+        @warn "Action type mismatch: $(eltype(action)) != $T"
+        action = convert.(T, action)
     end
     # Then clip to bounds
     action = clamp.(action, action_space.low, action_space.high)
@@ -156,7 +186,7 @@ function get_noisy_actions(policy::ActorCriticPolicy, action_means::AbstractArra
     # Use reparameterization trick: sample noise from standard normal, then scale and shift
     # This keeps the operation differentiable through the random sampling
     act_shape = size(action_means)
-    act_type = action_space(policy).type
+    act_type = eltype(action_space(policy))
     noise = @ignore_derivatives randn(rng, act_type, act_shape...)
 
     # Apply noise with std: action = mean + std * noise
@@ -208,4 +238,11 @@ function evaluate_actions(policy::ActorCriticPolicy, obs::AbstractArray, actions
     log_probs = loglikelihood.(distributions, flattened_actions)
     entropy = Distributions.entropy.(distributions)
     return values, log_probs, entropy, st
+end
+
+function predict_values(policy::ActorCriticPolicy, obs::AbstractArray, ps, st)
+    feats, st = extract_features(policy, obs, ps, st)
+    values, critic_st = policy.critic_head(feats, ps.critic_head, st.critic_head)
+    st = merge(st, (; critic_head=critic_st))
+    return values, st
 end
