@@ -17,16 +17,16 @@ struct MultiThreadedParallelEnv{E<:AbstractEnv} <: AbstractParallellEnv
     end
 end
 
-function reset!(env::MultiThreadedParallelEnv{E}, rng::AbstractRNG=Random.default_rng()) where E<:AbstractEnv
+function reset!(env::MultiThreadedParallelEnv{E}) where E<:AbstractEnv
     @threads for env in env.envs
-        reset!(env, rng)
+        reset!(env)
     end
     nothing
 end
 
 function observe(env::MultiThreadedParallelEnv{E}) where E<:AbstractEnv
     obs_space = observation_space(env)
-    type = obs_space.type
+    type = eltype(obs_space)
     observations = Array{type,length(obs_space.shape) + 1}(undef, (obs_space.shape..., length(env.envs)))
     @threads for i in 1:length(env.envs)
         selectdim(observations, length(obs_space.shape) + 1, i) .= observe(env.envs[i])
@@ -56,7 +56,7 @@ end
 
 function step!(env::MultiThreadedParallelEnv{E}, action) where E<:AbstractEnv
     # @show action
-    type = observation_space(env).type
+    type = eltype(observation_space(env))
     rewards = Vector{type}(undef, length(env.envs))
     terminateds = Vector{Bool}(undef, length(env.envs))
     truncateds = Vector{Bool}(undef, length(env.envs))
@@ -76,11 +76,13 @@ function step!(env::MultiThreadedParallelEnv{E}, action) where E<:AbstractEnv
             infos[i]["terminal_observation"] = observe(env.envs[i])
         end
         if terminateds[i] || truncateds[i]
-            DRiL.reset!(env.envs[i])
+            reset!(env.envs[i])
         end
     end
     return rewards, terminateds, truncateds, infos
 end
+
+number_of_envs(env::MultiThreadedParallelEnv) = env.n_envs
 
 struct ScalingWrapperEnv{E<:AbstractEnv,O<:AbstractSpace,A<:AbstractSpace} <: AbstractEnv
     env::E
@@ -98,18 +100,19 @@ function ScalingWrapperEnv(env::E) where {E<:AbstractEnv}
 end
 
 # Specific constructor for UniformBox spaces
-function ScalingWrapperEnv(
-    env::E,
+function ScalingWrapperEnv(env::E,
     original_obs_space::UniformBox,
     original_act_space::UniformBox
 ) where {E<:AbstractEnv}
     # Create new observation space with bounds [-1, 1]
-    scaled_obs_space = @set original_obs_space.low = -1
-    scaled_obs_space = @set scaled_obs_space.high = 1
+    T_obs = eltype(original_obs_space)
+    T_act = eltype(original_act_space)
+    scaled_obs_space = @set original_obs_space.low = T_obs(-1)
+    scaled_obs_space = @set scaled_obs_space.high = T_obs(1)
 
     # Create new action space with bounds [-1, 1]
-    scaled_act_space = @set original_act_space.low = -1
-    scaled_act_space = @set scaled_act_space.high = 1
+    scaled_act_space = @set original_act_space.low = T_act(-1)
+    scaled_act_space = @set scaled_act_space.high = T_act(1)
 
     return ScalingWrapperEnv{E,UniformBox,UniformBox}(env, scaled_obs_space, scaled_act_space, original_obs_space, original_act_space)
 end
@@ -122,8 +125,8 @@ function action_space(env::ScalingWrapperEnv)
     return env.action_space
 end
 
-function reset!(env::ScalingWrapperEnv, rng::AbstractRNG=Random.default_rng())
-    reset!(env.env, rng)
+function reset!(env::ScalingWrapperEnv)
+    reset!(env.env)
     nothing
 end
 
@@ -154,4 +157,43 @@ end
 
 function get_info(env::ScalingWrapperEnv)
     return get_info(env.env)
+end
+
+# Random.seed! extensions for environments
+"""
+    Random.seed!(env::AbstractEnv, seed::Integer)
+
+Seed an environment's internal RNG. Environments should have an `rng` field 
+that gets seeded for reproducible behavior.
+"""
+function Random.seed!(env::AbstractEnv, seed::Integer)
+    if hasfield(typeof(env), :rng)
+        Random.seed!(env.rng, seed)
+    else
+        @warn "Environment $(typeof(env)) does not have an rng field - seeding has no effect"
+    end
+    return env
+end
+
+"""
+    Random.seed!(env::AbstractParallellEnv, seed::Integer)
+
+Seed all sub-environments in a parallel environment with incremented seeds.
+Each sub-environment gets seeded with `seed + i - 1` where `i` is the environment index.
+"""
+function Random.seed!(env::AbstractParallellEnv, seed::Integer)
+    for (i, sub_env) in enumerate(env.envs)
+        Random.seed!(sub_env, seed + i - 1)
+    end
+    return env
+end
+
+"""
+    Random.seed!(env::ScalingWrapperEnv, seed::Integer)
+
+Seed a wrapped environment by forwarding the seed to the underlying environment.
+"""
+function Random.seed!(env::ScalingWrapperEnv, seed::Integer)
+    Random.seed!(env.env, seed)
+    return env
 end
