@@ -15,17 +15,15 @@ end
 Base.length(rb::RolloutBuffer) = rb.n_steps * rb.n_envs
 
 
-function RolloutBuffer(observation_space::AbstractBox, action_space::AbstractBox, gae_lambda::AbstractFloat, gamma::AbstractFloat, n_steps::Int, n_envs::Int)
-    @assert observation_space.type == action_space.type "Observation and action spaces must have the same type"
-    type = observation_space.type
+function RolloutBuffer(observation_space::UniformBox{T}, action_space::UniformBox{T}, gae_lambda::AbstractFloat, gamma::AbstractFloat, n_steps::Int, n_envs::Int) where T
     total_steps = n_steps * n_envs
-    observations = Array{type,length(observation_space.shape) + 1}(undef, observation_space.shape..., total_steps)
-    actions = Array{type,length(action_space.shape) + 1}(undef, action_space.shape..., total_steps)
-    rewards = Array{type,1}(undef, total_steps)
-    advantages = Array{type,1}(undef, total_steps)
-    returns = Array{type,1}(undef, total_steps)
-    logprobs = Array{type,1}(undef, total_steps)
-    values = Array{type,1}(undef, total_steps)
+    observations = Array{T,length(observation_space.shape) + 1}(undef, observation_space.shape..., total_steps)
+    actions = Array{T,length(action_space.shape) + 1}(undef, action_space.shape..., total_steps)
+    rewards = Array{T,1}(undef, total_steps)
+    advantages = Array{T,1}(undef, total_steps)
+    returns = Array{T,1}(undef, total_steps)
+    logprobs = Array{T,1}(undef, total_steps)
+    values = Array{T,1}(undef, total_steps)
     return RolloutBuffer(observations, actions, rewards, advantages, returns, logprobs, values, gae_lambda, gamma, n_steps, n_envs)
 end
 
@@ -49,9 +47,7 @@ mutable struct Trajectory{T<:AbstractFloat}
     terminated::Bool
     truncated::Bool
     bootstrap_value::Union{Nothing,T}  # Value of the next state for truncated episodes
-    function Trajectory(observation_space::UniformBox, action_space::UniformBox)
-        T = observation_space.type
-        @assert T == action_space.type "Observation and action spaces must have the same type"
+    function Trajectory(observation_space::UniformBox{T}, action_space::UniformBox{T}) where T
         observations = Vector{Array{T,length(observation_space.shape)}}[]
         actions = Vector{Array{T,length(action_space.shape)}}[]
         rewards = Vector{T}[]
@@ -69,7 +65,7 @@ total_reward(trajectory::Trajectory) = sum(trajectory.rewards)
 
 
 function collect_trajectories(agent::ActorCriticAgent, env::AbstractParallellEnv, n_steps::Int, progress_meter::Union{Progress,Nothing}=nothing)
-    reset!(env, agent.rng)
+    reset!(env)
     trajectories = Trajectory[]
     obs_space = observation_space(env)
     act_space = action_space(env)
@@ -118,7 +114,7 @@ function collect_trajectories(agent::ActorCriticAgent, env::AbstractParallellEnv
 end
 
 function collect_rollouts!(rollout_buffer::RolloutBuffer, agent::ActorCriticAgent, env::AbstractEnv, progress_meter::Union{Progress,Nothing}=nothing)
-    reset!(env, agent.rng)
+    reset!(env)
     obs_space = observation_space(env)
     act_space = action_space(env)
 
