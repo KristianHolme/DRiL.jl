@@ -5,11 +5,12 @@ abstract type AbstractParallellEnv <: AbstractEnv end
 reset!(env::AbstractEnv)
 - reset the environment to the initial state
 """
-function reset!(env::AbstractEnv, rng::AbstractRNG=Random.default_rng()) end
+function reset!(env::AbstractEnv) end
 
 """
 act!(env::AbstractEnv, action)
 - take an action in the environment, return reward
+-mandatory for single envs
 """
 function act!(env::AbstractEnv, action) end #for single envs    
 
@@ -59,9 +60,10 @@ get_info(env::AbstractEnv)
 """
 function get_info(env::AbstractEnv) end
 
+function number_of_envs(env::AbstractParallellEnv) end
+
 
 abstract type AbstractAgent end
-
 
 abstract type AbstractBuffer end
 
