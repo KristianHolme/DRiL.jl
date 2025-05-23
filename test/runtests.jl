@@ -1,38 +1,27 @@
 using DRiL
 using Test
-using Aqua
-using JET
+using TestItems
+using TestItemRunner
 
-@testitem "Code quality (Aqua.jl)" begin
+# Include the shared test setup module
+include("test_shared_setup.jl")
+
+# Quality assurance tests
+@testitem "Code quality (Aqua.jl)" tags = [:quality] begin
+    using Aqua
     Aqua.test_all(DRiL)
 end
 
-@testitem "Code linting (JET.jl)" begin
+@testitem "Code linting (JET.jl)" tags = [:quality] begin
+    using JET
     JET.test_package(DRiL; target_defined_modules=true)
 end
 
-@testitem "buffers.jl" begin
-    include("test_buffers.jl")
-end
+# Include all test files (they contain @testitem definitions)
+include("test_env_validation.jl")
+include("test_buffers.jl")
+include("test_gae.jl")
+include("test_spaces.jl")
 
-# @testitem "policies.jl" begin
-#     include("test_policies.jl")
-# end
-# @testitem "agents.jl" begin
-#     include("test_agents.jl")
-# end
-# @testitem "algorithms.jl" begin
-#     include("test_algorithms.jl")
-# end
-# @testitem "environments.jl" begin
-#     include("test_environments.jl")
-# end
-# @testitem "utils.jl" begin
-#     include("test_utils.jl")
-# end
-# @testitem "spaces.jl" begin
-#     include("test_spaces.jl")
-# end
-# @testitem "basic_types.jl" begin
-#     include("test_basic_types.jl")
-# end
+# Run all tests
+@run_package_tests

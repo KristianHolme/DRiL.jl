@@ -1,16 +1,19 @@
-using Test
-using DRiL
-using Pendulum
-@testset "buffers.jl" begin
+using TestItems
+
+@testitem "Buffer logprobs consistency" tags = [:buffers, :rollouts] setup = [SharedTestSetup] begin
+    using Pendulum
+    using Random
+
     # Test: logprobs are consistent after rollout
     pend_env() = PendulumEnv() |> ScalingWrapperEnv
     env = MultiThreadedParallelEnv([pend_env() for _ in 1:4])
-    policy = ActorCriticPolicy(observation_space(env), action_space(env))
+    policy = ActorCriticPolicy(DRiL.observation_space(env), DRiL.action_space(env))
     agent = ActorCriticAgent(policy; n_steps=8, batch_size=8, epochs=1, verbose=0)
     alg = PPO()
     n_steps = agent.n_steps
-    n_envs = 1
-    roll_buffer = RolloutBuffer(observation_space(env), action_space(env), alg.gae_lambda, alg.gamma, n_steps, n_envs)
+    n_envs = DRiL.number_of_envs(env)
+    roll_buffer = RolloutBuffer(DRiL.observation_space(env), DRiL.action_space(env), alg.gae_lambda, alg.gamma, n_steps, n_envs)
+
     for i in 1:10
         DRiL.collect_rollouts!(roll_buffer, agent, env)
         obs = roll_buffer.observations
@@ -18,7 +21,144 @@ using Pendulum
         logprobs = roll_buffer.logprobs
         ps = agent.train_state.parameters
         st = agent.train_state.states
-        _, new_logprobs, _, _ = evaluate_actions(policy, obs, act, ps, st)
+        _, new_logprobs, _, _ = DRiL.evaluate_actions(policy, obs, act, ps, st)
         @test isapprox(vec(logprobs), vec(new_logprobs); atol=1e-5, rtol=1e-5)
     end
+end
+
+@testitem "Buffer reset functionality" tags = [:buffers] setup = [SharedTestSetup] begin
+    using Random
+
+    # Test buffer reset clears all data
+    obs_space = UniformBox{Float32}(-1.0f0, 1.0f0, (2,))
+    act_space = UniformBox{Float32}(-1.0f0, 1.0f0, (1,))
+
+    roll_buffer = RolloutBuffer(obs_space, act_space, 0.95f0, 0.99f0, 8, 2)
+
+    # Fill buffer with some data
+    roll_buffer.observations .= 1.0f0
+    roll_buffer.actions .= 2.0f0
+    roll_buffer.rewards .= 3.0f0
+    roll_buffer.advantages .= 4.0f0
+    roll_buffer.returns .= 5.0f0
+    roll_buffer.logprobs .= 6.0f0
+    roll_buffer.values .= 7.0f0
+
+    # Reset buffer
+    DRiL.reset!(roll_buffer)
+
+    # Verify all arrays are zeroed
+    @test all(iszero, roll_buffer.observations)
+    @test all(iszero, roll_buffer.actions)
+    @test all(iszero, roll_buffer.rewards)
+    @test all(iszero, roll_buffer.advantages)
+    @test all(iszero, roll_buffer.returns)
+    @test all(iszero, roll_buffer.logprobs)
+    @test all(iszero, roll_buffer.values)
+end
+
+@testitem "Buffer trajectory bootstrap handling" tags = [:buffers, :bootstrap] setup = [SharedTestSetup] begin
+    using Random
+
+    # Test bootstrap value handling for truncated episodes
+    max_steps = 6
+    gamma = 0.9f0
+    gae_lambda = 0.8f0
+    constant_value = 0.7f0
+    bootstrap_value = 0.2f0
+
+    # Create a simple trajectory manually to test bootstrap handling
+    obs_space = UniformBox{Float32}(-1.0f0, 1.0f0, (2,))
+    act_space = UniformBox{Float32}(-1.0f0, 1.0f0, (2,))
+
+    # Create trajectory with known values
+    traj = Trajectory(obs_space, act_space)
+
+    # Add some dummy data
+    for i in 1:max_steps
+        push!(traj.observations, rand(Float32, 2))
+        push!(traj.actions, rand(Float32, 2))
+        push!(traj.rewards, i == max_steps ? 1.0f0 : 0.0f0)  # Reward only at end
+        push!(traj.logprobs, 0.0f0)
+        push!(traj.values, constant_value)
+    end
+
+    # Test terminated trajectory (no bootstrap)
+    traj.terminated = true
+    traj.truncated = false
+    traj.bootstrap_value = nothing
+
+    advantages_terminated = zeros(Float32, max_steps)
+    DRiL.compute_advantages!(advantages_terminated, traj, gamma, gae_lambda)
+
+    expected_terminated = SharedTestSetup.compute_expected_gae(
+        traj.rewards, traj.values, gamma, gae_lambda; is_terminated=true
+    )
+    @test isapprox(advantages_terminated, expected_terminated, atol=1e-4)
+
+    # Test truncated trajectory (with bootstrap)
+    traj.terminated = false
+    traj.truncated = true
+    traj.bootstrap_value = bootstrap_value
+
+    advantages_truncated = zeros(Float32, max_steps)
+    DRiL.compute_advantages!(advantages_truncated, traj, gamma, gae_lambda)
+
+    expected_truncated = SharedTestSetup.compute_expected_gae(
+        traj.rewards, traj.values, gamma, gae_lambda;
+        is_terminated=false, bootstrap_value=bootstrap_value
+    )
+    @test isapprox(advantages_truncated, expected_truncated, atol=1e-4)
+
+    # Verify that bootstrapped case gives different results
+    @test !isapprox(advantages_terminated, advantages_truncated, atol=1e-3)
+end
+
+@testitem "Buffer data integrity" tags = [:buffers, :integrity] setup = [SharedTestSetup] begin
+    using Random
+
+    # Test that buffer maintains data integrity during rollout collection
+    obs_space = UniformBox{Float32}(-1.0f0, 1.0f0, (2,))  # Match SimpleRewardEnv shape
+    act_space = UniformBox{Float32}(-1.0f0, 1.0f0, (2,))
+
+    n_steps = 16
+    n_envs = 2
+    gamma = 0.99f0
+    gae_lambda = 0.95f0
+
+    roll_buffer = RolloutBuffer(obs_space, act_space, gae_lambda, gamma, n_steps, n_envs)
+
+    # Create simple test environment
+    env = MultiThreadedParallelEnv([SharedTestSetup.SimpleRewardEnv(8) for _ in 1:n_envs])
+    env_obs_space = DRiL.observation_space(env)
+    @show typeof(env.envs[1])
+    env_act_space = DRiL.action_space(env)
+    @test env_obs_space == obs_space
+    @test env_act_space == act_space
+
+
+    policy = SharedTestSetup.ConstantValuePolicy(env_obs_space, env_act_space, 0.5f0)
+    agent = ActorCriticAgent(policy; n_steps=n_steps, batch_size=16, epochs=1, verbose=0)
+
+    # Collect rollouts
+    DRiL.collect_rollouts!(roll_buffer, agent, env)
+
+    # Verify buffer dimensions
+    @test size(roll_buffer.observations) == (obs_space.shape..., n_steps * n_envs)
+    @test size(roll_buffer.actions) == (act_space.shape..., n_steps * n_envs)
+    @test length(roll_buffer.rewards) == n_steps * n_envs
+    @test length(roll_buffer.advantages) == n_steps * n_envs
+    @test length(roll_buffer.returns) == n_steps * n_envs
+    @test length(roll_buffer.logprobs) == n_steps * n_envs
+    @test length(roll_buffer.values) == n_steps * n_envs
+
+    # Verify no NaN or Inf values
+    @test all(isfinite, roll_buffer.rewards)
+    @test all(isfinite, roll_buffer.advantages)
+    @test all(isfinite, roll_buffer.returns)
+    @test all(isfinite, roll_buffer.logprobs)
+    @test all(isfinite, roll_buffer.values)
+
+    # Verify returns = advantages + values relationship
+    @test isapprox(roll_buffer.returns, roll_buffer.advantages .+ roll_buffer.values, atol=1e-5)
 end
