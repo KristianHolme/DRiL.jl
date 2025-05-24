@@ -202,7 +202,7 @@ function loss(alg::PPO{T}, policy::ActorCriticPolicy, ps, st, batch_data) where 
 
     r = exp.(log_probs - old_logprobs)
     ratio_clipped = clamp.(r, 1 - alg.clip_range, 1 + alg.clip_range)
-    p_loss = -mean(advantages .* min.(r, ratio_clipped))
+    p_loss = -mean(min.(r .* advantages, ratio_clipped .* advantages))
     ent_loss = -mean(entropy)
 
     # @info "values: $values"
