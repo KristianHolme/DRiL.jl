@@ -1,7 +1,10 @@
 @testitem "GAE computation analytical verification" tags = [:gae, :analytical] setup = [SharedTestSetup] begin
     using Random
 
-    # Test GAE computation with known values for analytical verification
+    # Test GAE computation with known values for true analytical verification
+    # Manual calculation of GAE advantages for specific scenario:
+    # - 8 steps, rewards = [0,0,0,0,0,0,0,1], values = [0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5]
+    # - γ = 0.99, λ = 0.95, episode terminates
     max_steps = 8
     gamma = 0.99f0
     gae_lambda = 0.95f0
@@ -31,19 +34,43 @@
     # Values should be constant
     @test all(v -> isapprox(v, constant_value, atol=1e-5), values)
 
-    # Compute expected advantages analytically
-    expected_advantages = SharedTestSetup.compute_expected_gae(
-        rewards, values, gamma, gae_lambda; is_terminated=true
-    )
+    # Manually calculated GAE advantages using the formula:
+    # A_t = δ_t + (γλ)δ_{t+1} + (γλ)²δ_{t+2} + ...
+    # where δ_t = r_t + γV_{t+1} - V_t
+    # 
+    # For this scenario:
+    # δ_t = 0 + 0.99×0.5 - 0.5 = -0.005 for t=0...6
+    # δ_7 = 1 + 0.99×0 - 0.5 = 0.5 for final step (terminated)
+    # γλ = 0.99 × 0.95 = 0.9405
+
+    δ_7 = 1 + 0.99 * 0 - 0.5
+    δ_t = -0.005
+    γλ = 0.99 * 0.95
+    A_s1 = zeros(Float32, 8)
+
+    A_s1[end] = δ_7
+    for i in 7:-1:1
+        A_s1[i] = δ_t + γλ * A_s1[i+1]
+    end
+
+    A_s2 = zeros(Float32, 8)
+    A_s2[end] = δ_7
+    for ix in 1:7
+        i = ix-1
+        A_s2[ix] = δ_t * ((1-γλ^(6-i+1)) / (1-γλ)) + γλ^(6-i+1) * 0.5f0
+    end
+    @test isapprox(A_s1, A_s2, atol=1e-4)
+    
+    expected_advantages = (A_s1 .+ A_s2) ./2f0 
 
     @test isapprox(advantages, expected_advantages, atol=1e-4)
 
     # Verify returns = advantages + values
-    expected_returns = advantages .+ values
+    expected_returns = expected_advantages .+ constant_value
     @test isapprox(roll_buffer.returns, expected_returns, atol=1e-4)
 end
 
-@testitem "GAE computation with different parameters" tags = [:gae, :parametric] setup = [SharedTestSetup] begin
+@testitem "GAE computation cross-validation with different parameters" tags = [:gae, :parametric] setup = [SharedTestSetup] begin
     using Random
 
     # Test GAE with different gamma and lambda combinations
@@ -78,7 +105,7 @@ end
         # Verify constant values
         @test all(v -> isapprox(v, constant_value, atol=1e-5), values)
 
-        # Analytical verification
+        # Cross-validation with helper function
         expected_advantages = SharedTestSetup.compute_expected_gae(
             rewards, values, gamma, gae_lambda; is_terminated=true
         )
@@ -137,7 +164,7 @@ end
         episode_values = values[episode_start:episode_end]
         episode_advantages = advantages[episode_start:episode_end]
 
-        # Compute expected advantages analytically
+        # Cross-validation with helper function
         expected_advantages = SharedTestSetup.compute_expected_gae(
             episode_rewards, episode_values, gamma, gae_lambda; is_terminated=true
         )
