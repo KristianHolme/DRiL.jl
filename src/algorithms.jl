@@ -20,12 +20,15 @@ end
 function learn!(agent::ActorCriticAgent, env::AbstractEnv, alg::PPO{T}; max_steps::Int, ad_type::Lux.Training.AbstractADType=AutoZygote()) where T
     n_steps = agent.n_steps
     n_envs = env.n_envs
-    roll_buffer = RolloutBuffer(observation_space(env), action_space(env), alg.gae_lambda, alg.gamma, n_steps, n_envs)
+    roll_buffer = RolloutBuffer(observation_space(env), action_space(env), 
+        alg.gae_lambda, alg.gamma, n_steps, n_envs)
 
     iterations = max_steps ÷ (n_steps * n_envs)
     total_steps = iterations * n_steps * n_envs
 
-    @info "Training with total_steps: $total_steps, iterations: $iterations, n_steps: $n_steps, n_envs: $n_envs"
+    agent.verbose > 0 && @info "Training with total_steps: $total_steps, 
+        iterations: $iterations, n_steps: $n_steps, n_envs: $n_envs"
+    
     progress_meter = Progress(total_steps, desc="Training...",
         showspeed=true, enabled=agent.verbose > 0
     )
