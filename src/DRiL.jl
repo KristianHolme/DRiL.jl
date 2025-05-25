@@ -1,4 +1,3 @@
-__precompile__(false) #disable precompilation for this module
 module DRiL
 
 using Accessors
