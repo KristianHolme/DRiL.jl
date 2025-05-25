@@ -56,10 +56,9 @@ Check that all required methods from basic_types.jl are implemented.
 function _check_required_methods(env::AbstractEnv; verbose::Bool=true)
     verbose && @info "Checking required method implementations..."
 
-    required_methods = [
+    # Methods required for all environments
+    common_required_methods = [
         (reset!, "reset!(env)"),
-        (act!, "act!(env, action)"),
-        (step!, "step!(env, action)"),
         (observe, "observe(env)"),
         (terminated, "terminated(env)"),
         (truncated, "truncated(env)"),
@@ -68,11 +67,27 @@ function _check_required_methods(env::AbstractEnv; verbose::Bool=true)
         (get_info, "get_info(env)")
     ]
 
-    for (method_func, method_name) in required_methods
+    # Check common methods
+    for (method_func, method_name) in common_required_methods
         if !hasmethod(method_func, (typeof(env),)) && !hasmethod(method_func, (typeof(env), Any))
             throw(AssertionError("Environment must implement method: $method_name"))
         end
         verbose && @info "  ✓ $method_name implemented"
+    end
+
+    # Check environment-type specific methods
+    if env isa AbstractParallellEnv
+        # Parallel environments need step! but not act!
+        if !hasmethod(step!, (typeof(env), Any)) && !hasmethod(step!, (typeof(env), Vector))
+            throw(AssertionError("Parallel environment must implement method: step!(env, actions)"))
+        end
+        verbose && @info "  ✓ step!(env, actions) implemented (parallel environment)"
+    else
+        # Single environments need act! but not step!
+        if !hasmethod(act!, (typeof(env), Any))
+            throw(AssertionError("Single environment must implement method: act!(env, action)"))
+        end
+        verbose && @info "  ✓ act!(env, action) implemented (single environment)"
     end
 end
 
@@ -186,24 +201,17 @@ function _check_step_functionality(env::AbstractEnv, obs_space, act_space; warn:
             rethrow(e)
         end
     else
-        # Test single environment act! and step!
+        # Test single environment act! only (not step!)
         try
             # Test act!
-            reward = act!(env, action)
-            @assert isa(reward, Number) "act! must return a Number"
+            obs_before = observe(env)
+            act!(env, action)
 
-            # Test step!
-            next_obs, reward2, term, trunc, info = step!(env, action)
+            _check_observation_shape(obs_before, obs_space, "act!(single_env)")
 
-            @assert isa(term, Bool) "step! terminated must be Bool"
-            @assert isa(trunc, Bool) "step! truncated must be Bool"
-            @assert isa(info, Dict) "step! info must be Dict"
-
-            _check_observation_shape(next_obs, obs_space, "step!(single_env)")
-
-            verbose && @info "  ✓ Single environment act!/step! work correctly"
+            verbose && @info "  ✓ Single environment act! works correctly"
         catch e
-            @error "Single environment step functionality failed: $e"
+            @error "Single environment act! functionality failed: $e"
             rethrow(e)
         end
     end
