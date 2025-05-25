@@ -38,9 +38,9 @@ function reset!(rollout_buffer::RolloutBuffer)
     nothing
 end
 
-mutable struct Trajectory{T<:AbstractFloat}
-    observations::Vector{AbstractArray{T}}
-    actions::Vector{AbstractArray{T}}
+mutable struct Trajectory{T<:AbstractFloat, ObsDim, ActDim}
+    observations::Vector{Array{T,ObsDim}}
+    actions::Vector{Array{T,ActDim}}
     rewards::Vector{T}
     logprobs::Vector{T}
     values::Vector{T}
@@ -48,15 +48,17 @@ mutable struct Trajectory{T<:AbstractFloat}
     truncated::Bool
     bootstrap_value::Union{Nothing,T}  # Value of the next state for truncated episodes
     function Trajectory(observation_space::UniformBox{T}, action_space::UniformBox{T}) where T
-        observations = Vector{Array{T,length(observation_space.shape)}}[]
-        actions = Vector{Array{T,length(action_space.shape)}}[]
-        rewards = Vector{T}[]
-        logprobs = Vector{T}[]
-        values = Vector{T}[]
+        obs_dim = length(observation_space.shape)
+        act_dim = length(action_space.shape)
+        observations = Array{T,obs_dim}[]
+        actions = Array{T,act_dim}[]
+        rewards = T[]
+        logprobs = T[]
+        values = T[]
         terminated = false
         truncated = false
         bootstrap_value = nothing
-        return new{T}(observations, actions, rewards, logprobs, values, terminated, truncated, bootstrap_value)
+        return new{T,obs_dim,act_dim}(observations, actions, rewards, logprobs, values, terminated, truncated, bootstrap_value)
     end
 end
 
@@ -141,6 +143,7 @@ function collect_rollouts!(rollout_buffer::RolloutBuffer, agent::ActorCriticAgen
         rollout_buffer.rewards[traj_inds] .= traj.rewards
         rollout_buffer.logprobs[traj_inds] .= traj.logprobs
         rollout_buffer.values[traj_inds] .= traj.values
+        
         #compute advantages and returns
         compute_advantages!(@view(rollout_buffer.advantages[traj_inds]),
             traj, rollout_buffer.gamma, rollout_buffer.gae_lambda)
