@@ -1,13 +1,13 @@
-struct RolloutBuffer #spaces as parameters?
-    observations::AbstractArray
-    actions::AbstractArray
-    rewards::AbstractArray
-    advantages::AbstractArray
-    returns::AbstractArray
-    logprobs::AbstractArray
-    values::AbstractArray
-    gae_lambda::AbstractFloat
-    gamma::AbstractFloat
+struct RolloutBuffer{T<:AbstractFloat}
+    observations::AbstractArray{T}
+    actions::AbstractArray{T}
+    rewards::Vector{T}
+    advantages::Vector{T}
+    returns::Vector{T}
+    logprobs::Vector{T}
+    values::Vector{T}
+    gae_lambda::T
+    gamma::T
     n_steps::Int
     n_envs::Int
 end
@@ -15,16 +15,16 @@ end
 Base.length(rb::RolloutBuffer) = rb.n_steps * rb.n_envs
 
 
-function RolloutBuffer(observation_space::UniformBox{T}, action_space::UniformBox{T}, gae_lambda::AbstractFloat, gamma::AbstractFloat, n_steps::Int, n_envs::Int) where T
+function RolloutBuffer(observation_space::Box{T}, action_space::Box{T}, gae_lambda::T, gamma::T, n_steps::Int, n_envs::Int) where T<:AbstractFloat
     total_steps = n_steps * n_envs
     observations = Array{T,length(observation_space.shape) + 1}(undef, observation_space.shape..., total_steps)
     actions = Array{T,length(action_space.shape) + 1}(undef, action_space.shape..., total_steps)
-    rewards = Array{T,1}(undef, total_steps)
-    advantages = Array{T,1}(undef, total_steps)
-    returns = Array{T,1}(undef, total_steps)
-    logprobs = Array{T,1}(undef, total_steps)
-    values = Array{T,1}(undef, total_steps)
-    return RolloutBuffer(observations, actions, rewards, advantages, returns, logprobs, values, gae_lambda, gamma, n_steps, n_envs)
+    rewards = Vector{T}(undef, total_steps)
+    advantages = Vector{T}(undef, total_steps)
+    returns = Vector{T}(undef, total_steps)
+    logprobs = Vector{T}(undef, total_steps)
+    values = Vector{T}(undef, total_steps)
+    return RolloutBuffer{T}(observations, actions, rewards, advantages, returns, logprobs, values, gae_lambda, gamma, n_steps, n_envs)
 end
 
 function reset!(rollout_buffer::RolloutBuffer)
@@ -38,7 +38,7 @@ function reset!(rollout_buffer::RolloutBuffer)
     nothing
 end
 
-mutable struct Trajectory{T<:AbstractFloat, ObsDim, ActDim}
+mutable struct Trajectory{T<:AbstractFloat,ObsDim,ActDim}
     observations::Vector{Array{T,ObsDim}}
     actions::Vector{Array{T,ActDim}}
     rewards::Vector{T}
@@ -47,7 +47,7 @@ mutable struct Trajectory{T<:AbstractFloat, ObsDim, ActDim}
     terminated::Bool
     truncated::Bool
     bootstrap_value::Union{Nothing,T}  # Value of the next state for truncated episodes
-    function Trajectory(observation_space::UniformBox{T}, action_space::UniformBox{T}) where T
+    function Trajectory(observation_space::Box{T}, action_space::Box{T}) where T
         obs_dim = length(observation_space.shape)
         act_dim = length(action_space.shape)
         observations = Array{T,obs_dim}[]
@@ -66,18 +66,19 @@ Base.length(trajectory::Trajectory) = length(trajectory.rewards)
 total_reward(trajectory::Trajectory) = sum(trajectory.rewards)
 
 
-function collect_trajectories(agent::ActorCriticAgent, env::AbstractParallellEnv, n_steps::Int, progress_meter::Union{Progress,Nothing}=nothing)
+function collect_trajectories(agent::ActorCriticAgent, env::AbstractParallellEnv, n_steps::Int,
+    progress_meter::Union{Progress,Nothing}=nothing)
     reset!(env)
     trajectories = Trajectory[]
     obs_space = observation_space(env)
     act_space = action_space(env)
-    n_envs = env.n_envs
+    n_envs = number_of_envs(env)
     current_trajectories = [Trajectory(obs_space, act_space) for _ in 1:n_envs]
     new_obs = observe(env)
     for i in 1:n_steps
         observations = new_obs
         actions, values, logprobs = get_action_and_values(agent, observations)
-        processed_actions = process_action(actions, action_space(env))
+        processed_actions = process_action(actions, act_space)
         rewards, terminateds, truncateds, infos = step!(env, processed_actions)
         new_obs = observe(env)
         for j in 1:n_envs
@@ -110,7 +111,7 @@ function collect_trajectories(agent::ActorCriticAgent, env::AbstractParallellEnv
                 current_trajectories[j] = Trajectory(obs_space, act_space)
             end
         end
-        !isnothing(progress_meter) && next!(progress_meter, step=env.n_envs)
+        !isnothing(progress_meter) && next!(progress_meter, step=number_of_envs(env))
     end
     return trajectories
 end
@@ -127,11 +128,6 @@ function collect_rollouts!(rollout_buffer::RolloutBuffer, agent::ActorCriticAgen
     t_collect = time() - t_start
     total_steps = sum(length.(trajectories))
     fps = total_steps / t_collect
-    avg_step_rew = sum(total_reward.(trajectories)) / total_steps
-
-    if !isnothing(agent.logger)
-        log_value(agent.logger, "env/avg_step_rew", avg_step_rew)
-    end
 
     traj_lengths = length.(trajectories)
     positions = cumsum([1; traj_lengths])
@@ -143,7 +139,7 @@ function collect_rollouts!(rollout_buffer::RolloutBuffer, agent::ActorCriticAgen
         rollout_buffer.rewards[traj_inds] .= traj.rewards
         rollout_buffer.logprobs[traj_inds] .= traj.logprobs
         rollout_buffer.values[traj_inds] .= traj.values
-        
+
         #compute advantages and returns
         compute_advantages!(@view(rollout_buffer.advantages[traj_inds]),
             traj, rollout_buffer.gamma, rollout_buffer.gae_lambda)
