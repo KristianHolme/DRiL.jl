@@ -47,9 +47,6 @@ export learn!, PPO
 include("utils.jl")
 export collect_trajectory
 
-include("evaluation.jl")
-export evaluate_policy
-
 include("logging.jl")
 export get_hparams
 
