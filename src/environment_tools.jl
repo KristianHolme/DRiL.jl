@@ -1,8 +1,8 @@
 function unwrap_all(env::AbstractEnv)
-    is_wrapper = true
-    while is_wrapper
+    wrapped = true
+    while wrapped
         env = unwrap(env)
-        is_wrapper = is_wrapper(env)
+        wrapped = is_wrapper(env)
     end
     return env
 end
@@ -107,23 +107,21 @@ function ScalingWrapperEnv(env::E) where {E<:AbstractEnv}
     return ScalingWrapperEnv(env, orig_obs_space, orig_act_space)
 end
 
-# Specific constructor for UniformBox spaces
-function ScalingWrapperEnv(env::E,
-    original_obs_space::UniformBox,
-    original_act_space::UniformBox
-) where {E<:AbstractEnv}
+function ScalingWrapperEnv(env::E, original_obs_space::Box, original_act_space::Box) where {E<:AbstractEnv}
     # Create new observation space with bounds [-1, 1]
     T_obs = eltype(original_obs_space)
     T_act = eltype(original_act_space)
-    scaled_obs_space = @set original_obs_space.low = T_obs(-1)
-    scaled_obs_space = @set scaled_obs_space.high = T_obs(1)
+
+    scaled_obs_space = @set original_obs_space.low = -1*ones(T_obs, size(original_obs_space.low))
+    scaled_obs_space = @set scaled_obs_space.high = 1*ones(T_obs, size(original_obs_space.high))
 
     # Create new action space with bounds [-1, 1]
-    scaled_act_space = @set original_act_space.low = T_act(-1)
-    scaled_act_space = @set scaled_act_space.high = T_act(1)
+    scaled_act_space = @set original_act_space.low = -1*ones(T_act, size(original_act_space.low))
+    scaled_act_space = @set scaled_act_space.high = 1*ones(T_act, size(original_act_space.high))
 
-    return ScalingWrapperEnv{E,UniformBox,UniformBox}(env, scaled_obs_space, scaled_act_space, original_obs_space, original_act_space)
+    return ScalingWrapperEnv{E,Box,Box}(env, scaled_obs_space, scaled_act_space, original_obs_space, original_act_space)
 end
+#TODO:document/fix unwrap
 DRiL.unwrap(env::ScalingWrapperEnv) = env.env
 
 function observation_space(env::ScalingWrapperEnv)
@@ -139,16 +137,16 @@ function reset!(env::ScalingWrapperEnv)
     nothing
 end
 
-function observe(env::ScalingWrapperEnv{E,UniformBox,UniformBox}) where E
+function observe(env::ScalingWrapperEnv{E,Box,Box}) where E
     orig_obs = observe(env.env)
     orig_space = observation_space(env.env)
-
+    
     # Scale observation from original space to [-1, 1]
     scaled_obs = 2 .* (orig_obs .- orig_space.low) ./ (orig_space.high .- orig_space.low) .- 1
     return scaled_obs
 end
 
-function act!(env::ScalingWrapperEnv{E,UniformBox,UniformBox}, action) where E
+function act!(env::ScalingWrapperEnv{E,Box,Box}, action) where E
     orig_space = action_space(env.env)
 
     # Scale action from [-1, 1] to original space
