@@ -17,9 +17,9 @@ end
 #     return PPO{T}(; kwargs...)
 # end
 
-function learn!(agent::ActorCriticAgent, env::AbstractEnv, alg::PPO{T}; max_steps::Int, ad_type::Lux.Training.AbstractADType=AutoZygote()) where T
+function learn!(agent::ActorCriticAgent, env::AbstractParallellEnv, alg::PPO{T}; max_steps::Int, ad_type::Lux.Training.AbstractADType=AutoZygote()) where T
     n_steps = agent.n_steps
-    n_envs = env.n_envs
+    n_envs = number_of_envs(env)
     roll_buffer = RolloutBuffer(observation_space(env), action_space(env),
         alg.gae_lambda, alg.gamma, n_steps, n_envs)
 
@@ -57,6 +57,7 @@ function learn!(agent::ActorCriticAgent, env::AbstractEnv, alg::PPO{T}; max_step
         if !isnothing(agent.logger)
             set_step!(agent.logger, steps_taken(agent))
             log_value(agent.logger, "env/fps", fps)
+            log_stats(env, agent.logger)
         end
         data_loader = DataLoader((roll_buffer.observations, roll_buffer.actions,
                 roll_buffer.advantages, roll_buffer.returns,
