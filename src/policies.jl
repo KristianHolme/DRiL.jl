@@ -38,9 +38,10 @@ function (init::OrthogonalInitializer{T})(rng::AbstractRNG, out_dims::Int, in_di
 end
 
 
-function ActorCriticPolicy(observation_space::UniformBox{T}, action_space::UniformBox{T}; log_std_init=T(0), hidden_dim=64, activation=tanh) where T
+function ActorCriticPolicy(observation_space::Box{T}, action_space::Box{T}; log_std_init=T(0), hidden_dim=64, activation=tanh) where T
     feature_extractor = Lux.FlattenLayer()
     latent_dim = observation_space.shape |> prod
+    #TODO: make this bias init work for different types
     bias_init = zeros32
 
     hidden_init = OrthogonalInitializer{T}(sqrt(T(2)))
@@ -170,17 +171,7 @@ function get_distributions(policy::ActorCriticPolicy, action_means::AbstractArra
     return distributions
 end
 
-# Helper function to process actions: ensure correct type and clipping
-function process_action(action::AbstractArray, action_space::UniformBox{T}) where T
-    # First check if type conversion is needed
-    if eltype(action) != T
-        @warn "Action type mismatch: $(eltype(action)) != $T"
-        action = convert.(T, action)
-    end
-    # Then clip to bounds
-    action = clamp.(action, action_space.low, action_space.high)
-    return action
-end
+
 
 function get_noisy_actions(policy::ActorCriticPolicy, action_means::AbstractArray, std::AbstractArray, rng::AbstractRNG; log_probs::Bool=false)
     # Use reparameterization trick: sample noise from standard normal, then scale and shift
