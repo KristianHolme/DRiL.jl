@@ -11,13 +11,15 @@ struct Box{T<:Number} <: AbstractBox
     low::Array{T}
     high::Array{T}
     shape::Tuple{Vararg{Int}}
-
-    function Box{T}(low::Array{T}, high::Array{T}) where T<:Number
-        @assert size(low) == size(high) "Low and high arrays must have the same shape"
-        @assert all(low .<= high) "All low values must be <= corresponding high values"
-        shape = size(low)
-        return new{T}(low, high, shape)
-    end
+end
+function Box{T}(low::Array{T}, high::Array{T}) where T<:Number
+    @assert size(low) == size(high) "Low and high arrays must have the same shape"
+    @assert all(low .<= high) "All low values must be <= corresponding high values"
+    shape = size(low)
+    return Box{T}(low, high, shape)
+end
+function Box(low::T, high::T, shape::Tuple{Vararg{Int}}) where T<:Number
+    return Box{T}(low*ones(T, shape), high*ones(T, shape), shape)
 end
 
 # Convenience constructors
@@ -29,6 +31,7 @@ Base.eltype(::UniformBox{T}) where T = T
 Base.ndims(space::Box) = length(space.shape)
 Base.eltype(::Box{T}) where T = T
 
+#TODO fix comparison of spaces
 function Base.isequal(box1::Box{T1}, box2::Box{T2}) where {T1,T2}
     T1 == T2 && box1.low == box2.low && box1.high == box2.high && box1.shape == box2.shape
 end
