@@ -188,10 +188,10 @@ function _check_step_functionality(env::AbstractEnv, obs_space, act_space; warn:
         try
             next_obs, rewards, terminateds, truncateds, infos = step!(env, [action])
 
-            @assert length(rewards) == env.n_envs "rewards length must match n_envs"
-            @assert length(terminateds) == env.n_envs "terminateds length must match n_envs"
-            @assert length(truncateds) == env.n_envs "truncateds length must match n_envs"
-            @assert length(infos) == env.n_envs "infos length must match n_envs"
+            @assert length(rewards) == number_of_envs(env) "rewards length must match n_envs"
+            @assert length(terminateds) == number_of_envs(env) "terminateds length must match n_envs"
+            @assert length(truncateds) == number_of_envs(env) "truncateds length must match n_envs"
+            @assert length(infos) == number_of_envs(env) "infos length must match n_envs"
 
             _check_observation_shape(next_obs, obs_space, "step!(parallel_env)")
 
