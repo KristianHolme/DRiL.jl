@@ -7,9 +7,9 @@ function is_monitored(env::AbstractParallellEnv)
     return monitored
 end
 
-
+#TODO:update docstring
 """
-    evaluate_policy(agent, env; kwargs...)
+    evaluate_agent(agent, env; kwargs...)
 
 Evaluate a policy/agent for a specified number of episodes and return performance statistics.
 
@@ -40,14 +40,14 @@ Evaluate a policy/agent for a specified number of episodes and return performanc
 # Examples
 ```julia
 # Basic evaluation
-mean_reward, std_reward = evaluate_policy(agent, env; n_eval_episodes=20)
+mean_reward, std_reward = evaluate_agent(agent, env; n_eval_episodes=20)
 
 # Get individual episode data
-episode_rewards, episode_lengths = evaluate_policy(agent, env; 
+episode_rewards, episode_lengths = evaluate_agent(agent, env; 
     return_episode_rewards=true, deterministic=false)
 
 # Evaluation with threshold check
-mean_reward, std_reward = evaluate_policy(agent, env; 
+mean_reward, std_reward = evaluate_agent(agent, env; 
     reward_threshold=100.0, n_eval_episodes=50)
 ```
 """
