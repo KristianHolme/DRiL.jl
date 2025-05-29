@@ -5,8 +5,10 @@ using Accessors
 using Base.Threads
 using ChainRulesCore
 using ComponentArrays
+using DataStructures
 using Distributions
 using LinearAlgebra
+using Logging
 using Lux
 using MLUtils
 using Optimisers
@@ -22,7 +24,7 @@ export AbstractEnv, AbstractAgent, AbstractBuffer
 export reset!, act!, observe, terminated, truncated, action_space, observation_space, get_info, number_of_envs
 
 include("spaces.jl")
-export AbstractSpace, AbstractBox, UniformBox
+export AbstractSpace, AbstractBox, UniformBox, Box
 
 include("policies.jl")
 export AbstractActorCriticPolicy, ActorCriticPolicy, AbstractPolicy, AbstractWeightInitializer, OrthogonalInitializer
@@ -34,7 +36,10 @@ include("buffers.jl")
 export Trajectory, RolloutBuffer
 
 include("environment_tools.jl")
-export MultiThreadedParallelEnv, ScalingWrapperEnv
+export MultiThreadedParallelEnv, ScalingWrapperEnv, NormalizeWrapperEnv, RunningMeanStd
+export save_normalization_stats, load_normalization_stats!, set_training!, is_training
+export get_original_obs, get_original_rewards, normalize_obs, normalize_reward, unnormalize_obs, unnormalize_reward
+export MonitorWrapperEnv, EpisodeStats, is_wrapper, unwrap, unwrap_all
 
 include("algorithms.jl")
 export learn!, PPO
@@ -42,10 +47,16 @@ export learn!, PPO
 include("utils.jl")
 export collect_trajectory
 
+include("evaluation.jl")
+export evaluate_policy
+
 include("logging.jl")
 export get_hparams
 
 include("env_checker.jl")
 export check_env
+
+include("evaluation.jl")
+export evaluate_agent
 
 end

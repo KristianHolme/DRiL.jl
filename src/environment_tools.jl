@@ -1,3 +1,12 @@
+function unwrap_all(env::AbstractEnv)
+    is_wrapper = true
+    while is_wrapper
+        env = unwrap(env)
+        is_wrapper = is_wrapper(env)
+    end
+    return env
+end
+
 function observation_space(env::AbstractParallellEnv)
     return observation_space(env.envs[1])
 end
@@ -8,12 +17,11 @@ end
 
 struct MultiThreadedParallelEnv{E<:AbstractEnv} <: AbstractParallellEnv
     envs::Vector{E}
-    n_envs::Int
     function MultiThreadedParallelEnv(envs::Vector{E}) where E<:AbstractEnv
         @assert all(env -> typeof(env) == E, envs) "All environments must be of the same type"
-        @assert all(env -> observation_space(env) == observation_space(envs[1]), envs) "All environments must have the same observation space"
-        @assert all(env -> action_space(env) == action_space(envs[1]), envs) "All environments must have the same action space"
-        return new{E}(envs, length(envs))
+        @assert all(env -> isequal(observation_space(env), observation_space(envs[1])), envs) "All environments must have the same observation space"
+        @assert all(env -> isequal(action_space(env), action_space(envs[1])), envs) "All environments must have the same action space"
+        return new{E}(envs)
     end
 end
 
@@ -82,9 +90,9 @@ function step!(env::MultiThreadedParallelEnv{E}, action) where E<:AbstractEnv
     return rewards, terminateds, truncateds, infos
 end
 
-number_of_envs(env::MultiThreadedParallelEnv) = env.n_envs
+number_of_envs(env::MultiThreadedParallelEnv) = length(env.envs)
 
-struct ScalingWrapperEnv{E<:AbstractEnv,O<:AbstractSpace,A<:AbstractSpace} <: AbstractEnv
+struct ScalingWrapperEnv{E<:AbstractEnv,O<:AbstractSpace,A<:AbstractSpace} <: AbstractEnvWrapper{E}
     env::E
     observation_space::O
     action_space::A
@@ -116,6 +124,7 @@ function ScalingWrapperEnv(env::E,
 
     return ScalingWrapperEnv{E,UniformBox,UniformBox}(env, scaled_obs_space, scaled_act_space, original_obs_space, original_act_space)
 end
+DRiL.unwrap(env::ScalingWrapperEnv) = env.env
 
 function observation_space(env::ScalingWrapperEnv)
     return env.observation_space
@@ -196,4 +205,346 @@ Seed a wrapped environment by forwarding the seed to the underlying environment.
 function Random.seed!(env::ScalingWrapperEnv, seed::Integer)
     Random.seed!(env.env, seed)
     return env
+end
+
+# Running mean and standard deviation tracker for normalization
+"""
+    RunningMeanStd{T}
+
+Tracks running mean and standard deviation using Welford's online algorithm.
+Similar to stable-baselines3's RunningMeanStd but optimized for Julia.
+"""
+mutable struct RunningMeanStd{T<:AbstractFloat}
+    mean::Array{T}
+    var::Array{T}
+    count::Int
+
+    function RunningMeanStd{T}(shape::Tuple{Vararg{Int}}) where {T<:AbstractFloat}
+        return new{T}(zeros(T, shape), ones(T, shape), 0)
+    end
+end
+
+RunningMeanStd(shape::Tuple{Vararg{Int}}) = RunningMeanStd{Float32}(shape)
+RunningMeanStd(::Type{T}, shape::Tuple{Vararg{Int}}) where {T<:AbstractFloat} = RunningMeanStd{T}(shape)
+
+function update!(rms::RunningMeanStd{T}, batch::AbstractArray{T}) where {T}
+    batch_mean = mean(batch, dims=ndims(batch))
+    batch_var = var(batch, dims=ndims(batch), corrected=false)
+    batch_count = size(batch, ndims(batch))
+    update_from_moments!(rms, batch_mean, batch_var, batch_count)
+end
+
+function update_from_moments!(rms::RunningMeanStd{T}, batch_mean::AbstractArray{T},
+    batch_var::AbstractArray{T}, batch_count::Int) where {T}
+    if rms.count == 0
+        rms.mean .= dropdims(batch_mean, dims=ndims(batch_mean))
+        rms.var .= dropdims(batch_var, dims=ndims(batch_var))
+        rms.count = batch_count
+    else
+        delta = dropdims(batch_mean, dims=ndims(batch_mean)) .- rms.mean
+        total_count = rms.count + batch_count
+
+        new_mean = rms.mean .+ delta .* batch_count ./ total_count
+        m_a = rms.var .* rms.count
+        m_b = dropdims(batch_var, dims=ndims(batch_var)) .* batch_count
+        M2 = m_a .+ m_b .+ delta .^ 2 .* rms.count .* batch_count ./ total_count
+        new_var = M2 ./ total_count
+
+        rms.mean .= new_mean
+        rms.var .= new_var
+        rms.count = total_count
+    end
+end
+
+struct NormalizeWrapperEnv{E<:AbstractParallellEnv,T<:AbstractFloat} <: AbstractParallellEnvWrapper{E}
+    env::E
+    obs_rms::RunningMeanStd{T}
+    ret_rms::RunningMeanStd{T}
+    returns::Vector{T}
+
+    # Configuration
+    training::Bool
+    norm_obs::Bool
+    norm_reward::Bool
+    clip_obs::T
+    clip_reward::T
+    gamma::T
+    epsilon::T
+
+    # Cache for original observations/rewards
+    old_obs::Array{T}
+    old_rewards::Vector{T}
+
+    function NormalizeWrapperEnv{E,T}(
+        env::E;
+        training::Bool=true,
+        norm_obs::Bool=true,
+        norm_reward::Bool=true,
+        clip_obs::T=T(10.0),
+        clip_reward::T=T(10.0),
+        gamma::T=T(0.99),
+        epsilon::T=T(1e-8)
+    ) where {E<:AbstractParallellEnv,T<:AbstractFloat}
+
+        obs_space = observation_space(env)
+        n_envs = number_of_envs(env)
+
+        # Initialize running statistics
+        obs_rms = RunningMeanStd(T, obs_space.shape)
+        ret_rms = RunningMeanStd(T, ())
+        returns = zeros(T, n_envs)
+
+        # Initialize cache arrays
+        old_obs = Array{T}(undef, obs_space.shape..., n_envs)
+        old_rewards = Vector{T}(undef, n_envs)
+
+        return new{E,T}(env, obs_rms, ret_rms, returns, training, norm_obs, norm_reward,
+            clip_obs, clip_reward, gamma, epsilon, old_obs, old_rewards)
+    end
+end
+DRiL.unwrap(env::NormalizeWrapperEnv) = env.env
+
+# Convenience constructor
+function NormalizeWrapperEnv(env::E; kwargs...) where {E<:AbstractParallellEnv}
+    return NormalizeWrapperEnv{E,Float32}(env; kwargs...)
+end
+
+# Forward basic properties
+observation_space(env::NormalizeWrapperEnv) = observation_space(env.env)
+action_space(env::NormalizeWrapperEnv) = action_space(env.env)
+number_of_envs(env::NormalizeWrapperEnv) = number_of_envs(env.env)
+
+function reset!(env::NormalizeWrapperEnv{E,T}) where {E,T}
+    reset!(env.env)
+    obs = observe(env.env)
+    env.old_obs .= obs
+    env.returns .= zero(T)
+
+    # Update observation statistics if in training mode
+    if env.training && env.norm_obs
+        update!(env.obs_rms, obs)
+    end
+
+    return normalize_obs(env, obs)
+end
+
+function observe(env::NormalizeWrapperEnv{E,T}) where {E,T}
+    obs = observe(env.env)
+    env.old_obs .= obs
+    return normalize_obs(env, obs)
+end
+
+function step!(env::NormalizeWrapperEnv{E,T}, action) where {E,T}
+    rewards, terminateds, truncateds, infos = step!(env.env, action)
+    obs = observe(env.env)
+
+    env.old_obs .= obs
+    env.old_rewards .= rewards
+
+    # Update observation statistics if in training mode
+    if env.training && env.norm_obs
+        update!(env.obs_rms, obs)
+    end
+
+    # Update reward statistics and normalize
+    if env.training && env.norm_reward
+        update_reward_stats!(env, rewards)
+    end
+
+    normalized_obs = normalize_obs(env, obs)
+    normalized_rewards = normalize_reward(env, rewards)
+
+    # Handle terminal observations in info
+    for (i, (term, trunc)) in enumerate(zip(terminateds, truncateds))
+        if term || trunc
+            if haskey(infos[i], "terminal_observation")
+                infos[i]["terminal_observation"] = normalize_obs(env, infos[i]["terminal_observation"])
+            end
+            env.returns[i] = zero(T)
+        end
+    end
+
+    return normalized_rewards, terminateds, truncateds, infos
+end
+
+function update_reward_stats!(env::NormalizeWrapperEnv{E,T}, rewards::Vector{T}) where {E,T}
+    env.returns .= env.returns .* env.gamma .+ rewards
+    # Update return statistics (single value, so we reshape for consistency)
+    update!(env.ret_rms, reshape(env.returns, 1, length(env.returns)))
+end
+
+function normalize_obs(env::NormalizeWrapperEnv{E,T}, obs::AbstractArray{T}) where {E,T}
+    if !env.norm_obs
+        return obs
+    end
+
+    # Normalize using running statistics
+    normalized = (obs .- env.obs_rms.mean) ./ sqrt.(env.obs_rms.var .+ env.epsilon)
+    return clamp.(normalized, -env.clip_obs, env.clip_obs)
+end
+
+function normalize_reward(env::NormalizeWrapperEnv{E,T}, rewards::Vector{T}) where {E,T}
+    if !env.norm_reward
+        return rewards
+    end
+
+    # Normalize rewards using return statistics
+    normalized = rewards ./ sqrt(env.ret_rms.var[1] + env.epsilon)
+    return clamp.(normalized, -env.clip_reward, env.clip_reward)
+end
+
+function unnormalize_obs(env::NormalizeWrapperEnv{E,T}, obs::AbstractArray{T}) where {E,T}
+    if !env.norm_obs
+        return obs
+    end
+    return obs .* sqrt.(env.obs_rms.var .+ env.epsilon) .+ env.obs_rms.mean
+end
+
+function unnormalize_reward(env::NormalizeWrapperEnv{E,T}, rewards::Vector{T}) where {E,T}
+    if !env.norm_reward
+        return rewards
+    end
+    return rewards .* sqrt(env.ret_rms.var[1] + env.epsilon)
+end
+
+# Get original (unnormalized) observations and rewards
+get_original_obs(env::NormalizeWrapperEnv) = copy(env.old_obs)
+get_original_rewards(env::NormalizeWrapperEnv) = copy(env.old_rewards)
+
+# Forward other methods
+terminated(env::NormalizeWrapperEnv) = terminated(env.env)
+truncated(env::NormalizeWrapperEnv) = truncated(env.env)
+get_info(env::NormalizeWrapperEnv) = get_info(env.env)
+
+function Random.seed!(env::NormalizeWrapperEnv, seed::Integer)
+    Random.seed!(env.env, seed)
+    return env
+end
+
+# Training mode control
+set_training!(env::NormalizeWrapperEnv, training::Bool) = @reset env.training = training
+is_training(env::NormalizeWrapperEnv) = env.training
+
+# Save/load functionality for normalization statistics
+"""
+    save_normalization_stats(env::NormalizeWrapperEnv, filepath::String)
+
+Save the normalization statistics (running mean/std) to a file using JLD2.
+"""
+function save_normalization_stats(env::NormalizeWrapperEnv, filepath::String)
+    save(filepath, Dict(
+        "obs_mean" => env.obs_rms.mean,
+        "obs_var" => env.obs_rms.var,
+        "obs_count" => env.obs_rms.count,
+        "ret_mean" => env.ret_rms.mean,
+        "ret_var" => env.ret_rms.var,
+        "ret_count" => env.ret_rms.count,
+        "clip_obs" => env.clip_obs,
+        "clip_reward" => env.clip_reward,
+        "gamma" => env.gamma,
+        "epsilon" => env.epsilon
+    ))
+end
+
+"""
+    load_normalization_stats!(env::NormalizeWrapperEnv, filepath::String)
+
+Load normalization statistics from a file into the environment using JLD2.
+"""
+function load_normalization_stats!(env::NormalizeWrapperEnv{E,T}, filepath::String) where {E,T}
+    stats = load(filepath)
+
+    # Load observation statistics
+    env.obs_rms.mean .= T.(stats["obs_mean"])
+    env.obs_rms.var .= T.(stats["obs_var"])
+    env.obs_rms.count = stats["obs_count"]
+
+    # Load return statistics  
+    env.ret_rms.mean .= T.(stats["ret_mean"])
+    env.ret_rms.var .= T.(stats["ret_var"])
+    env.ret_rms.count = stats["ret_count"]
+
+    return env
+end
+
+#syncs the eval env stats to be same as training env
+function sync_normalization_stats!(eval_env::NormalizeWrapperEnv, train_env::NormalizeWrapperEnv)
+    eval_env.obs_rms.mean .= train_env.obs_rms.mean
+    eval_env.obs_rms.var .= train_env.obs_rms.var
+    eval_env.obs_rms.count = train_env.obs_rms.count
+    eval_env.ret_rms.mean .= train_env.ret_rms.mean
+    eval_env.ret_rms.var .= train_env.ret_rms.var
+    eval_env.ret_rms.count = train_env.ret_rms.count
+    eval_env.returns .= train_env.returns
+    nothing
+end
+
+
+struct EpisodeStats{T<:AbstractFloat}
+    episode_returns::CircularBuffer{T}
+    episode_lengths::CircularBuffer{Int}
+end
+function EpisodeStats{T}(stats_window::Int) where T
+    return EpisodeStats{T}(CircularBuffer{T}(stats_window), CircularBuffer{Int}(stats_window))
+end
+
+struct MonitorWrapperEnv{E<:AbstractParallellEnv,T} <: AbstractParallellEnvWrapper{E} where T<:AbstractFloat
+    env::E
+    current_episode_lengths::Vector{Int}
+    current_episode_returns::Vector{T}
+    episode_stats::EpisodeStats{T}
+end
+
+function MonitorWrapperEnv(env::E, stats_window::Int=100) where E<:AbstractParallellEnv
+    T = eltype(observation_space(env))
+    return MonitorWrapperEnv{E,T}(
+        env,
+        zeros(Int, number_of_envs(env)),
+        zeros(T, number_of_envs(env)),
+        EpisodeStats{T}(stats_window)
+    )
+end
+
+#TODO clean up this so its not necessary to forward all the methods
+observe(monitor_env::MonitorWrapperEnv) = observe(monitor_env.env)
+terminated(monitor_env::MonitorWrapperEnv) = terminated(monitor_env.env)
+truncated(monitor_env::MonitorWrapperEnv) = truncated(monitor_env.env)
+get_info(monitor_env::MonitorWrapperEnv) = get_info(monitor_env.env)
+action_space(monitor_env::MonitorWrapperEnv) = action_space(monitor_env.env)
+observation_space(monitor_env::MonitorWrapperEnv) = observation_space(monitor_env.env)
+number_of_envs(monitor_env::MonitorWrapperEnv) = number_of_envs(monitor_env.env)
+function reset!(monitor_env::MonitorWrapperEnv)
+    DRiL.reset!(monitor_env.env)
+    #dont count the current episodes to the stats, since they are manually stopped
+    monitor_env.current_episode_lengths .= 0
+    monitor_env.current_episode_returns .= 0
+    nothing
+end
+
+function step!(monitor_env::MonitorWrapperEnv, action)
+    rewards, terminateds, truncateds, infos = step!(monitor_env.env, action)
+    monitor_env.current_episode_returns .+= rewards
+    monitor_env.current_episode_lengths .+= 1
+    dones = terminateds .| truncateds
+    for (i, done) in enumerate(dones)
+        if done
+            push!(monitor_env.episode_stats.episode_returns, monitor_env.current_episode_returns[i])
+            push!(monitor_env.episode_stats.episode_lengths, monitor_env.current_episode_lengths[i])
+            infos[i]["episode"] = Dict("r" => monitor_env.current_episode_returns[i], "l" => monitor_env.current_episode_lengths[i])
+            monitor_env.current_episode_returns[i] = 0
+            monitor_env.current_episode_lengths[i] = 0
+        end
+    end
+    return rewards, terminateds, truncateds, infos
+end
+
+unwrap(env::MonitorWrapperEnv) = env.env
+
+function log_stats(env::MonitorWrapperEnv, logger::TensorBoardLogger.TBLogger)
+    log_value(logger, "env/ep_rew_mean", mean(env.episode_stats.episode_returns))
+    log_value(logger, "env/ep_len_mean", mean(env.episode_stats.episode_lengths))
+    nothing
+end
+function log_stats(env::AbstractParallellEnvWrapper, logger::AbstractLogger)
+    log_stats(unwrap(env), logger)
 end
