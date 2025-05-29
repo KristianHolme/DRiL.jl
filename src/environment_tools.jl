@@ -274,33 +274,32 @@ struct NormalizeWrapperEnv{E<:AbstractParallellEnv,T<:AbstractFloat} <: Abstract
     # Cache for original observations/rewards
     old_obs::Array{T}
     old_rewards::Vector{T}
+end
+function NormalizeWrapperEnv{E,T}(
+    env::E;
+    training::Bool=true,
+    norm_obs::Bool=true,
+    norm_reward::Bool=true,
+    clip_obs::T=T(10.0),
+    clip_reward::T=T(10.0),
+    gamma::T=T(0.99),
+    epsilon::T=T(1e-8)
+) where {E<:AbstractParallellEnv,T<:AbstractFloat}
 
-    function NormalizeWrapperEnv{E,T}(
-        env::E;
-        training::Bool=true,
-        norm_obs::Bool=true,
-        norm_reward::Bool=true,
-        clip_obs::T=T(10.0),
-        clip_reward::T=T(10.0),
-        gamma::T=T(0.99),
-        epsilon::T=T(1e-8)
-    ) where {E<:AbstractParallellEnv,T<:AbstractFloat}
+    obs_space = observation_space(env)
+    n_envs = number_of_envs(env)
 
-        obs_space = observation_space(env)
-        n_envs = number_of_envs(env)
+    # Initialize running statistics
+    obs_rms = RunningMeanStd(T, obs_space.shape)
+    ret_rms = RunningMeanStd(T, ())
+    returns = zeros(T, n_envs)
 
-        # Initialize running statistics
-        obs_rms = RunningMeanStd(T, obs_space.shape)
-        ret_rms = RunningMeanStd(T, ())
-        returns = zeros(T, n_envs)
+    # Initialize cache arrays
+    old_obs = Array{T}(undef, obs_space.shape..., n_envs)
+    old_rewards = Vector{T}(undef, n_envs)
 
-        # Initialize cache arrays
-        old_obs = Array{T}(undef, obs_space.shape..., n_envs)
-        old_rewards = Vector{T}(undef, n_envs)
-
-        return new{E,T}(env, obs_rms, ret_rms, returns, training, norm_obs, norm_reward,
-            clip_obs, clip_reward, gamma, epsilon, old_obs, old_rewards)
-    end
+    return NormalizeWrapperEnv{E,T}(env, obs_rms, ret_rms, returns, training, norm_obs, norm_reward,
+        clip_obs, clip_reward, gamma, epsilon, old_obs, old_rewards)
 end
 DRiL.unwrap(env::NormalizeWrapperEnv) = env.env
 
@@ -541,8 +540,10 @@ end
 unwrap(env::MonitorWrapperEnv) = env.env
 
 function log_stats(env::MonitorWrapperEnv, logger::TensorBoardLogger.TBLogger)
-    log_value(logger, "env/ep_rew_mean", mean(env.episode_stats.episode_returns))
-    log_value(logger, "env/ep_len_mean", mean(env.episode_stats.episode_lengths))
+    if length(env.episode_stats.episode_returns) > 0
+        log_value(logger, "env/ep_rew_mean", mean(env.episode_stats.episode_returns))
+        log_value(logger, "env/ep_len_mean", mean(env.episode_stats.episode_lengths))
+    end
     nothing
 end
 function log_stats(env::AbstractParallellEnvWrapper, logger::AbstractLogger)
