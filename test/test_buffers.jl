@@ -5,7 +5,7 @@ using TestItems
     using Random
 
     # Test: logprobs are consistent after rollout
-    pend_env() = PendulumEnv() |> ScalingWrapperEnv
+    pend_env() = PendulumEnv()
     env = MultiThreadedParallelEnv([pend_env() for _ in 1:4])
     policy = ActorCriticPolicy(DRiL.observation_space(env), DRiL.action_space(env))
     agent = ActorCriticAgent(policy; n_steps=8, batch_size=8, epochs=1, verbose=0)
@@ -68,8 +68,8 @@ end
     bootstrap_value = 0.2f0
 
     # Create a simple trajectory manually to test bootstrap handling
-    obs_space = UniformBox{Float32}(-1.0f0, 1.0f0, (2,))
-    act_space = UniformBox{Float32}(-1.0f0, 1.0f0, (2,))
+    obs_space = Box(Float32[-1.0, -1.0], Float32[1.0, 1.0])
+    act_space = Box(Float32[-1.0, -1.0], Float32[1.0, 1.0])
 
     # Create trajectory with known values
     traj = Trajectory(obs_space, act_space)
