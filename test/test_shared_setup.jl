@@ -10,8 +10,8 @@
     mutable struct CustomEnv <: AbstractEnv
         max_steps::Int
         n_steps::Int
-        observation_space::UniformBox
-        action_space::UniformBox
+        observation_space::Box
+        action_space::Box
         _terminated::Bool
         _truncated::Bool
         _last_reward::Float32
@@ -19,8 +19,8 @@
         rng::Random.AbstractRNG
 
         function CustomEnv(max_steps::Int=8, rng::Random.AbstractRNG=Random.Xoshiro())
-            obs_space = UniformBox{Float32}(-1.0f0, 1.0f0, (2,))
-            act_space = UniformBox{Float32}(-1.0f0, 1.0f0, (2,))
+            obs_space = Box(Float32[-1.0, -1.0], Float32[1.0, 1.0])
+            act_space = Box(Float32[-1.0, -1.0], Float32[1.0, 1.0])
             new(max_steps, 0, obs_space, act_space, false, false, 0.0f0, Dict{String,Any}(), rng)
         end
     end
@@ -70,12 +70,12 @@
     end
 
     # Infinite horizon environment that gives reward of 1.0 at every step and never terminates.
-    # Modified from SB3's InfiniteHorizonEnv to use UniformBox instead of discrete space.
+    # Modified from SB3's InfiniteHorizonEnv to use Box instead of discrete space.
     mutable struct InfiniteHorizonEnv <: AbstractEnv
         n_states::Int
         current_state::Float32
-        observation_space::UniformBox
-        action_space::UniformBox
+        observation_space::Box
+        action_space::Box
         _terminated::Bool
         _truncated::Bool
         _last_reward::Float32
@@ -84,8 +84,8 @@
 
         function InfiniteHorizonEnv(n_states::Int=4, rng::Random.AbstractRNG=Random.Xoshiro())
             # Use continuous observation space [0, n_states] to represent the states
-            obs_space = UniformBox{Float32}(0.0f0, Float32(n_states), (1,))
-            act_space = UniformBox{Float32}(-1.0f0, 1.0f0, (2,))
+            obs_space = Box(Float32[0.0], Float32[Float32(n_states)])
+            act_space = Box(Float32[-1.0, -1.0], Float32[1.0, 1.0])
             new(n_states, 0.0f0, obs_space, act_space, false, false, 0.0f0, Dict{String,Any}(), rng)
         end
     end
@@ -138,8 +138,8 @@
     mutable struct SimpleRewardEnv <: AbstractEnv
         max_steps::Int
         current_step::Int
-        observation_space::UniformBox
-        action_space::UniformBox
+        observation_space::Box
+        action_space::Box
         _terminated::Bool
         _truncated::Bool
         _last_reward::Float32
@@ -147,8 +147,8 @@
         rng::Random.AbstractRNG
 
         function SimpleRewardEnv(max_steps::Int=8, rng::Random.AbstractRNG=Random.Xoshiro())
-            obs_space = UniformBox{Float32}(-1.0f0, 1.0f0, (2,))
-            act_space = UniformBox{Float32}(-1.0f0, 1.0f0, (2,))
+            obs_space = Box(Float32[-1.0, -1.0], Float32[1.0, 1.0])
+            act_space = Box(Float32[-1.0, -1.0], Float32[1.0, 1.0])
             new(max_steps, 0, obs_space, act_space, false, false, 0.0f0, Dict{String,Any}(), rng)
         end
     end
@@ -198,8 +198,8 @@
 
     # Custom policy that returns constant values for predictable GAE testing.
     struct ConstantValuePolicy <: DRiL.AbstractActorCriticPolicy
-        observation_space::UniformBox{Float32}
-        action_space::UniformBox{Float32}
+        observation_space::Box{Float32}
+        action_space::Box{Float32}
         constant_value::Float32
     end
 

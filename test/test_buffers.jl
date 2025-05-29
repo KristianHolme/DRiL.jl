@@ -1,7 +1,7 @@
 using TestItems
 
 @testitem "Buffer logprobs consistency" tags = [:buffers, :rollouts] setup = [SharedTestSetup] begin
-    using Pendulum
+    using ClassicControlEnvironments
     using Random
 
     # Test: logprobs are consistent after rollout
@@ -30,8 +30,8 @@ end
     using Random
 
     # Test buffer reset clears all data
-    obs_space = UniformBox{Float32}(-1.0f0, 1.0f0, (2,))
-    act_space = UniformBox{Float32}(-1.0f0, 1.0f0, (1,))
+    obs_space = Box(Float32[-1.0, -1.0], Float32[1.0, 1.0])
+    act_space = Box(Float32[-1.0], Float32[1.0])
 
     roll_buffer = RolloutBuffer(obs_space, act_space, 0.95f0, 0.99f0, 8, 2)
 
@@ -118,8 +118,8 @@ end
     using Random
 
     # Test that buffer maintains data integrity during rollout collection
-    obs_space = UniformBox{Float32}(-1.0f0, 1.0f0, (2,))  # Match SimpleRewardEnv shape
-    act_space = UniformBox{Float32}(-1.0f0, 1.0f0, (2,))
+    obs_space = Box(Float32[-1.0, -1.0], Float32[1.0, 1.0])  # Match SimpleRewardEnv shape
+    act_space = Box(Float32[-1.0, -1.0], Float32[1.0, 1.0])
 
     n_steps = 16
     n_envs = 2

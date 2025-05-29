@@ -20,8 +20,8 @@ using TestItems
     # Test space properties
     obs_space = DRiL.observation_space(env)
     act_space = DRiL.action_space(env)
-    @test obs_space isa UniformBox{Float32}
-    @test act_space isa UniformBox{Float32}
+    @test obs_space isa Box{Float32}
+    @test act_space isa Box{Float32}
     @test obs_space.shape == (2,)
     @test act_space.shape == (2,)
 
@@ -86,8 +86,8 @@ end
     env = SharedTestSetup.InfiniteHorizonEnv(4)
 
     # Test interface compliance
-    @test DRiL.observation_space(env) isa UniformBox{Float32}
-    @test DRiL.action_space(env) isa UniformBox{Float32}
+    @test DRiL.observation_space(env) isa Box{Float32}
+    @test DRiL.action_space(env) isa Box{Float32}
 
     initial_obs = DRiL.reset!(env)
     @test length(initial_obs) == 1
