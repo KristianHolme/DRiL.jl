@@ -361,7 +361,7 @@ end
 
     # Run a complete episode
     reset!(scaled_env)
-    total_reward = 0.0f0
+    tot_reward = 0.0f0
     episode_length = 0
 
     while !terminated(scaled_env) && episode_length < 20
@@ -372,7 +372,7 @@ end
         # Take a scaled action (in [-1, 1] range)
         action = Float32[0.1]  # Small positive action
         reward = act!(scaled_env, action)
-        total_reward += reward
+        tot_reward += reward
         episode_length += 1
 
         # Check info forwarding
@@ -384,5 +384,5 @@ end
     @test episode_length == base_env.max_steps
     @test terminated(scaled_env)
     @test !truncated(scaled_env)
-    @test total_reward > 0.0f0  # Should have earned some reward
+    @test tot_reward > 0.0f0  # Should have earned some reward
 end 
