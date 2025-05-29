@@ -132,8 +132,8 @@ end
     env = MultiThreadedParallelEnv([SharedTestSetup.SimpleRewardEnv(8) for _ in 1:n_envs])
     env_obs_space = DRiL.observation_space(env)
     env_act_space = DRiL.action_space(env)
-    @test env_obs_space == obs_space
-    @test env_act_space == act_space
+    @test isequal(env_obs_space, obs_space)
+    @test isequal(env_act_space, act_space)
 
 
     policy = SharedTestSetup.ConstantValuePolicy(env_obs_space, env_act_space, 0.5f0)
