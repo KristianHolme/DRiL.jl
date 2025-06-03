@@ -4,7 +4,7 @@ using TestItems
     using Random
 
     # Define a test environment with known observation and action spaces
-    struct TestScalingEnv <: AbstractEnv 
+    struct TestScalingEnv <: AbstractEnv
         rng::Random.AbstractRNG
     end
     TestScalingEnv() = TestScalingEnv(Random.Xoshiro(42))
@@ -28,7 +28,7 @@ using TestItems
     # Test that scaled spaces have [-1, 1] bounds
     scaled_obs_space = observation_space(scaled_env)
     scaled_act_space = action_space(scaled_env)
-    
+
     @test all(scaled_obs_space.low .== -1.0f0)
     @test all(scaled_obs_space.high .== 1.0f0)
     @test all(scaled_act_space.low .== -1.0f0)
@@ -61,7 +61,7 @@ end
     scaled_env = ScalingWrapperEnv(base_env)
 
     scaled_obs = observe(scaled_env)
-    
+
     # Expected scaled values:
     # obs[1]: (5.0 - 0.0) / (10.0 - 0.0) * 2 - 1 = 0.0
     # obs[2]: (0.0 - (-10.0)) / (10.0 - (-10.0)) * 2 - 1 = 0.0  
@@ -107,7 +107,7 @@ end
     # Test action scaling with mid-range scaled action
     scaled_action = Float32[0.0, 0.0, 0.0]  # Should map to mid-range
     act!(scaled_env, scaled_action)
-    
+
     # Expected original actions:
     # action[1]: (0.0 + 1) / 2 * (8.0 - 2.0) + 2.0 = 5.0
     # action[2]: (0.0 + 1) / 2 * (15.0 - (-5.0)) + (-5.0) = 5.0
@@ -135,7 +135,7 @@ end
     mutable struct ForwardingTestEnv <: AbstractEnv
         _terminated::Bool
         _truncated::Bool
-        _info::Dict{String, Any}
+        _info::Dict{String,Any}
         reset_called::Bool
     end
     ForwardingTestEnv() = ForwardingTestEnv(false, false, Dict("key" => "value"), false)
@@ -271,7 +271,7 @@ end
     # Test multi-dimensional action scaling
     scaled_action = Float32[0.0 -0.5; 0.5 1.0]  # Various scaled values
     act!(scaled_env, scaled_action)
-    
+
     @test size(base_env.last_action) == (2, 2)
     # Verify that scaling worked correctly for each element
     # For [1,1]: (0.0 + 1)/2 * (2.0 - 1.0) + 1.0 = 1.5
@@ -296,7 +296,7 @@ end
     DRiL.action_space(::SeededTestEnv) = Box(Float32[0.0], Float32[1.0])
     function DRiL.observe(env::SeededTestEnv)
         env.obs_counter += 1
-        return Float32[rand(env.rng) * 10.0]
+        return Float32[rand(env.rng)*10.0]
     end
     DRiL.terminated(::SeededTestEnv) = false
     DRiL.truncated(::SeededTestEnv) = false
@@ -349,7 +349,7 @@ end
         env.step_count += 1
         return Float32(10.0 - abs(env.state - 5.0))  # Reward for staying near 5.0
     end
-    DRiL.get_info(::IntegrationTestEnv) = Dict("step" => env.step_count, "state" => env.state)
+    DRiL.get_info(env::IntegrationTestEnv) = Dict("step" => env.step_count, "state" => env.state)
     function DRiL.reset!(env::IntegrationTestEnv)
         env.state = 0.0f0
         env.step_count = 0
@@ -361,28 +361,29 @@ end
 
     # Run a complete episode
     reset!(scaled_env)
-    tot_reward = 0.0f0
-    episode_length = 0
 
-    while !terminated(scaled_env) && episode_length < 20
-        # Get scaled observation (should be in [-1, 1])
-        obs = observe(scaled_env)
-        @test all(obs .>= -1.0f0) && all(obs .<= 1.0f0)
+    # Use a let block to create proper local scope
+    let tot_reward = 0.0f0, episode_length = 0
+        while !terminated(scaled_env) && episode_length < 20
+            # Get scaled observation (should be in [-1, 1])
+            obs = observe(scaled_env)
+            @test all(obs .>= -1.0f0) && all(obs .<= 1.0f0)
 
-        # Take a scaled action (in [-1, 1] range)
-        action = Float32[0.1]  # Small positive action
-        reward = act!(scaled_env, action)
-        tot_reward += reward
-        episode_length += 1
+            # Take a scaled action (in [-1, 1] range)
+            action = Float32[0.1]  # Small positive action
+            reward = act!(scaled_env, action)
+            tot_reward += reward
+            episode_length += 1
 
-        # Check info forwarding
-        info = get_info(scaled_env)
-        @test haskey(info, "step")
-        @test haskey(info, "state")
+            # Check info forwarding
+            info = get_info(scaled_env)
+            @test haskey(info, "step")
+            @test haskey(info, "state")
+        end
+
+        @test episode_length == base_env.max_steps
+        @test terminated(scaled_env)
+        @test !truncated(scaled_env)
+        @test tot_reward > 0.0f0  # Should have earned some reward
     end
-
-    @test episode_length == base_env.max_steps
-    @test terminated(scaled_env)
-    @test !truncated(scaled_env)
-    @test tot_reward > 0.0f0  # Should have earned some reward
-end 
+end
