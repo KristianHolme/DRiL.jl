@@ -68,7 +68,7 @@ total_reward(trajectory::Trajectory) = sum(trajectory.rewards)
 
 function collect_trajectories(agent::ActorCriticAgent, env::AbstractParallellEnv, n_steps::Int,
     progress_meter::Union{Progress,Nothing}=nothing)
-    reset!(env)
+    # reset!(env)
     trajectories = Trajectory[]
     obs_space = observation_space(env)
     act_space = action_space(env)
@@ -117,7 +117,7 @@ function collect_trajectories(agent::ActorCriticAgent, env::AbstractParallellEnv
 end
 
 function collect_rollouts!(rollout_buffer::RolloutBuffer, agent::ActorCriticAgent, env::AbstractEnv, progress_meter::Union{Progress,Nothing}=nothing)
-    reset!(env)
+    # reset!(env) #we dont reset the, we continue from where we left off
     obs_space = observation_space(env)
     act_space = action_space(env)
 
