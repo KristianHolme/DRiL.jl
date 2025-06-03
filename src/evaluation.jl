@@ -85,7 +85,8 @@ function evaluate_agent(
     current_lengths = zeros(Int, n_envs)
 
     # Reset environment
-    observations = reset!(env)
+    reset!(env)
+    observations = observe(env)
 
     p = Progress(n_eval_episodes; enabled=show_progress)
 
