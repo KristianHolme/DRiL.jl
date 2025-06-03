@@ -112,12 +112,12 @@ function ScalingWrapperEnv(env::E, original_obs_space::Box, original_act_space::
     T_obs = eltype(original_obs_space)
     T_act = eltype(original_act_space)
 
-    scaled_obs_space = @set original_obs_space.low = -1*ones(T_obs, size(original_obs_space.low))
-    scaled_obs_space = @set scaled_obs_space.high = 1*ones(T_obs, size(original_obs_space.high))
+    scaled_obs_space = @set original_obs_space.low = -1 * ones(T_obs, size(original_obs_space.low))
+    scaled_obs_space = @set scaled_obs_space.high = 1 * ones(T_obs, size(original_obs_space.high))
 
     # Create new action space with bounds [-1, 1]
-    scaled_act_space = @set original_act_space.low = -1*ones(T_act, size(original_act_space.low))
-    scaled_act_space = @set scaled_act_space.high = 1*ones(T_act, size(original_act_space.high))
+    scaled_act_space = @set original_act_space.low = -1 * ones(T_act, size(original_act_space.low))
+    scaled_act_space = @set scaled_act_space.high = 1 * ones(T_act, size(original_act_space.high))
 
     return ScalingWrapperEnv{E,Box,Box}(env, scaled_obs_space, scaled_act_space, original_obs_space, original_act_space)
 end
@@ -137,20 +137,48 @@ function reset!(env::ScalingWrapperEnv)
     nothing
 end
 
+function scale(x, space::Box)
+    return 2 .* (x .- space.low) ./ (space.high .- space.low) .- 1
+end
+function unscale(x, space::Box)
+    return (x .+ 1) ./ 2 .* (space.high .- space.low) .+ space.low
+end
+
+function scale_observation(env::ScalingWrapperEnv{E,Box,Box}, observation) where E
+    #scale observation from original space to [-1, 1]
+    orig_space = observation_space(env.env)
+    return scale(observation, orig_space)
+end
+
+function unscale_observation(env::ScalingWrapperEnv{E,Box,Box}, observation) where E
+    #unscale observation from [-1, 1] to original space
+    orig_space = observation_space(env.env)
+    return unscale(observation, orig_space)
+end
+
 function observe(env::ScalingWrapperEnv{E,Box,Box}) where E
     orig_obs = observe(env.env)
     orig_space = observation_space(env.env)
-    
+
     # Scale observation from original space to [-1, 1]
-    scaled_obs = 2 .* (orig_obs .- orig_space.low) ./ (orig_space.high .- orig_space.low) .- 1
+    scaled_obs = scale(orig_obs, orig_space)
     return scaled_obs
 end
 
-function act!(env::ScalingWrapperEnv{E,Box,Box}, action) where E
+function scale_action(env::ScalingWrapperEnv{E,Box,Box}, action) where E
+    #scale action from original space to [-1, 1]
     orig_space = action_space(env.env)
+    return scale(action, orig_space)
+end
 
-    # Scale action from [-1, 1] to original space
-    orig_action = (action .+ 1) ./ 2 .* (orig_space.high .- orig_space.low) .+ orig_space.low
+function unscale_action(env::ScalingWrapperEnv{E,Box,Box}, action) where E
+    #unscale action from [-1, 1] to original space
+    orig_space = action_space(env.env)
+    return unscale(action, orig_space)
+end
+
+function act!(env::ScalingWrapperEnv{E,Box,Box}, action) where E
+    orig_action = unscale_action(env, action)
     return act!(env.env, orig_action)
 end
 
@@ -322,7 +350,7 @@ function reset!(env::NormalizeWrapperEnv{E,T}) where {E,T}
         update!(env.obs_rms, obs)
     end
 
-    return normalize_obs(env, obs)
+    return nothing
 end
 
 function observe(env::NormalizeWrapperEnv{E,T}) where {E,T}
@@ -405,13 +433,13 @@ function unnormalize_reward(env::NormalizeWrapperEnv{E,T}, rewards::Vector{T}) w
 end
 
 # Get original (unnormalized) observations and rewards
-get_original_obs(env::NormalizeWrapperEnv) = copy(env.old_obs)
-get_original_rewards(env::NormalizeWrapperEnv) = copy(env.old_rewards)
+get_original_obs(env::NormalizeWrapperEnv{E,T}) where {E,T} = copy(env.old_obs)
+get_original_rewards(env::NormalizeWrapperEnv{E,T}) where {E,T} = copy(env.old_rewards)
 
 # Forward other methods
-terminated(env::NormalizeWrapperEnv) = terminated(env.env)
-truncated(env::NormalizeWrapperEnv) = truncated(env.env)
-get_info(env::NormalizeWrapperEnv) = get_info(env.env)
+terminated(env::NormalizeWrapperEnv{E,T}) where {E,T} = terminated(env.env)
+truncated(env::NormalizeWrapperEnv{E,T}) where {E,T} = truncated(env.env)
+get_info(env::NormalizeWrapperEnv{E,T}) where {E,T} = get_info(env.env)
 
 function Random.seed!(env::NormalizeWrapperEnv, seed::Integer)
     Random.seed!(env.env, seed)
@@ -419,8 +447,11 @@ function Random.seed!(env::NormalizeWrapperEnv, seed::Integer)
 end
 
 # Training mode control
-set_training!(env::NormalizeWrapperEnv, training::Bool) = @reset env.training = training
-is_training(env::NormalizeWrapperEnv) = env.training
+set_training!(env::AbstractEnv, ::Bool) = nothing #default to no-op
+#TODO: fix/doc this
+is_training(env::AbstractEnv) = true
+set_training!(env::NormalizeWrapperEnv{E,T}, training::Bool) where {E,T} = @reset env.training = training
+is_training(env::NormalizeWrapperEnv{E,T}) where {E,T} = env.training
 
 # Save/load functionality for normalization statistics
 """
@@ -428,7 +459,7 @@ is_training(env::NormalizeWrapperEnv) = env.training
 
 Save the normalization statistics (running mean/std) to a file using JLD2.
 """
-function save_normalization_stats(env::NormalizeWrapperEnv, filepath::String)
+function save_normalization_stats(env::NormalizeWrapperEnv{E,T}, filepath::String) where {E,T}
     save(filepath, Dict(
         "obs_mean" => env.obs_rms.mean,
         "obs_var" => env.obs_rms.var,
@@ -465,7 +496,7 @@ function load_normalization_stats!(env::NormalizeWrapperEnv{E,T}, filepath::Stri
 end
 
 #syncs the eval env stats to be same as training env
-function sync_normalization_stats!(eval_env::NormalizeWrapperEnv, train_env::NormalizeWrapperEnv)
+function sync_normalization_stats!(eval_env::NormalizeWrapperEnv{E,T}, train_env::NormalizeWrapperEnv{E,T}) where {E,T}
     eval_env.obs_rms.mean .= train_env.obs_rms.mean
     eval_env.obs_rms.var .= train_env.obs_rms.var
     eval_env.obs_rms.count = train_env.obs_rms.count
@@ -475,7 +506,6 @@ function sync_normalization_stats!(eval_env::NormalizeWrapperEnv, train_env::Nor
     eval_env.returns .= train_env.returns
     nothing
 end
-
 
 struct EpisodeStats{T<:AbstractFloat}
     episode_returns::CircularBuffer{T}
@@ -503,14 +533,15 @@ function MonitorWrapperEnv(env::E, stats_window::Int=100) where E<:AbstractParal
 end
 
 #TODO clean up this so its not necessary to forward all the methods
-observe(monitor_env::MonitorWrapperEnv) = observe(monitor_env.env)
-terminated(monitor_env::MonitorWrapperEnv) = terminated(monitor_env.env)
-truncated(monitor_env::MonitorWrapperEnv) = truncated(monitor_env.env)
-get_info(monitor_env::MonitorWrapperEnv) = get_info(monitor_env.env)
-action_space(monitor_env::MonitorWrapperEnv) = action_space(monitor_env.env)
-observation_space(monitor_env::MonitorWrapperEnv) = observation_space(monitor_env.env)
-number_of_envs(monitor_env::MonitorWrapperEnv) = number_of_envs(monitor_env.env)
-function reset!(monitor_env::MonitorWrapperEnv)
+observe(monitor_env::MonitorWrapperEnv{E,T}) where {E,T} = observe(monitor_env.env)
+terminated(monitor_env::MonitorWrapperEnv{E,T}) where {E,T} = terminated(monitor_env.env)
+truncated(monitor_env::MonitorWrapperEnv{E,T}) where {E,T} = truncated(monitor_env.env)
+get_info(monitor_env::MonitorWrapperEnv{E,T}) where {E,T} = get_info(monitor_env.env)
+action_space(monitor_env::MonitorWrapperEnv{E,T}) where {E,T} = action_space(monitor_env.env)
+observation_space(monitor_env::MonitorWrapperEnv{E,T}) where {E,T} = observation_space(monitor_env.env)
+number_of_envs(monitor_env::MonitorWrapperEnv{E,T}) where {E,T} = number_of_envs(monitor_env.env)
+
+function reset!(monitor_env::MonitorWrapperEnv{E,T}) where {E,T}
     DRiL.reset!(monitor_env.env)
     #dont count the current episodes to the stats, since they are manually stopped
     monitor_env.current_episode_lengths .= 0
@@ -518,7 +549,7 @@ function reset!(monitor_env::MonitorWrapperEnv)
     nothing
 end
 
-function step!(monitor_env::MonitorWrapperEnv, action)
+function step!(monitor_env::MonitorWrapperEnv{E,T}, action) where {E,T}
     rewards, terminateds, truncateds, infos = step!(monitor_env.env, action)
     monitor_env.current_episode_returns .+= rewards
     monitor_env.current_episode_lengths .+= 1
@@ -537,7 +568,7 @@ end
 
 unwrap(env::MonitorWrapperEnv) = env.env
 
-function log_stats(env::MonitorWrapperEnv, logger::TensorBoardLogger.TBLogger)
+function log_stats(env::MonitorWrapperEnv{E,T}, logger::TensorBoardLogger.TBLogger) where {E,T}
     if length(env.episode_stats.episode_returns) > 0
         log_value(logger, "env/ep_rew_mean", mean(env.episode_stats.episode_returns))
         log_value(logger, "env/ep_len_mean", mean(env.episode_stats.episode_lengths))
@@ -546,4 +577,109 @@ function log_stats(env::MonitorWrapperEnv, logger::TensorBoardLogger.TBLogger)
 end
 function log_stats(env::AbstractParallellEnvWrapper, logger::AbstractLogger)
     log_stats(unwrap(env), logger)
+end
+
+# ==============================================================================
+# Show methods for nice environment display
+# ==============================================================================
+
+# MultiThreadedParallelEnv show methods
+function Base.show(io::IO, env::MultiThreadedParallelEnv{E}) where E
+    print(io, "MultiThreadedParallelEnv{", E, "}(", length(env.envs), " envs)")
+end
+
+function Base.show(io::IO, ::MIME"text/plain", env::MultiThreadedParallelEnv{E}) where E
+    println(io, "MultiThreadedParallelEnv{", E, "}")
+    println(io, "  - Number of environments: ", length(env.envs))
+    obs_space = observation_space(env)
+    act_space = action_space(env)
+    println(io, "  - Observation space: ", obs_space)
+    println(io, "  - Action space: ", act_space)
+    print(io, "  environments: ")
+    show(io, env.envs[1])
+end
+
+# ScalingWrapperEnv show methods  
+function Base.show(io::IO, env::ScalingWrapperEnv{E,O,A}) where {E,O,A}
+    print(io, "ScalingWrapperEnv{", E, "}")
+end
+
+function Base.show(io::IO, ::MIME"text/plain", env::ScalingWrapperEnv{E,O,A}) where {E,O,A}
+    println(io, "ScalingWrapperEnv{", E, "}")
+    println(io, "  - Scaled observation bounds: [-1, 1]")
+    println(io, "  - Scaled action bounds: [-1, 1]")
+    println(io, "  - Original observation space: ", env.orig_observation_space)
+    println(io, "  - Original action space: ", env.orig_action_space)
+    print(io, "  wrapped environment: ")
+    show(io, env.env)
+end
+
+# NormalizeWrapperEnv show methods
+function Base.show(io::IO, env::NormalizeWrapperEnv{E,T}) where {E,T}
+    print(io, "NormalizeWrapperEnv{", E, ",", T, "}(", number_of_envs(env), " envs)")
+end
+
+function Base.show(io::IO, ::MIME"text/plain", env::NormalizeWrapperEnv{E,T}) where {E,T}
+    println(io, "NormalizeWrapperEnv{", E, ",", T, "}")
+    println(io, "  - Training mode: ", env.training)
+    println(io, "  - Normalize observations: ", env.norm_obs)
+    println(io, "  - Normalize rewards: ", env.norm_reward)
+    println(io, "  - Observation clip: ±", env.clip_obs)
+    println(io, "  - Reward clip: ±", env.clip_reward)
+    println(io, "  - Discount factor (γ): ", env.gamma)
+    println(io, "  - Epsilon: ", env.epsilon)
+
+    if env.obs_rms.count > 0
+        println(io, "  - Observation stats (n=", env.obs_rms.count, "):")
+        println(io, "    • Mean: ", round.(env.obs_rms.mean, digits=3))
+        println(io, "    • Std: ", round.(sqrt.(env.obs_rms.var .+ env.epsilon), digits=3))
+    else
+        println(io, "  - Observation stats: Not initialized")
+    end
+
+    if env.ret_rms.count > 0
+        println(io, "  - Return stats (n=", env.ret_rms.count, "):")
+        println(io, "    • Std: ", round(sqrt(env.ret_rms.var[1] + env.epsilon), digits=3))
+    else
+        println(io, "  - Return stats: Not initialized")
+    end
+
+    print(io, "  wrapped environment: ")
+    show(io, env.env)
+end
+
+# MonitorWrapperEnv show methods
+function Base.show(io::IO, env::MonitorWrapperEnv{E,T}) where {E,T}
+    print(io, "MonitorWrapperEnv{", E, ",", T, "}(", number_of_envs(env), " envs)")
+end
+
+function Base.show(io::IO, ::MIME"text/plain", env::MonitorWrapperEnv{E,T}) where {E,T}
+    println(io, "MonitorWrapperEnv{", E, ",", T, "}")
+    println(io, "  - Number of environments: ", number_of_envs(env))
+    println(io, "  - Stats window size: ", env.episode_stats.episode_returns.capacity)
+
+    if length(env.episode_stats.episode_returns) > 0
+        println(io, "  - Episode statistics (", length(env.episode_stats.episode_returns), " episodes):")
+        println(io, "    • Mean return: ", round(mean(env.episode_stats.episode_returns), digits=3))
+        println(io, "    • Mean length: ", round(mean(env.episode_stats.episode_lengths), digits=1))
+        println(io, "    • Return range: [", round(minimum(env.episode_stats.episode_returns), digits=3),
+            ", ", round(maximum(env.episode_stats.episode_returns), digits=3), "]")
+    else
+        println(io, "  - Episode statistics: No completed episodes")
+    end
+
+    # Show current episode progress
+    any_active = any(x -> x > 0, env.current_episode_lengths)
+    if any_active
+        active_envs = sum(x -> x > 0, env.current_episode_lengths)
+        max_len = maximum(env.current_episode_lengths)
+        max_ret = maximum(env.current_episode_returns)
+        println(io, "  - Current episodes: ", active_envs, " active, max length: ", max_len,
+            ", max return: ", round(max_ret, digits=3))
+    else
+        println(io, "  - Current episodes: None active")
+    end
+
+    print(io, "  wrapped environment: ")
+    show(io, env.env)
 end
