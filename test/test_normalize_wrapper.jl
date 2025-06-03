@@ -90,8 +90,8 @@ end
     norm_env = NormalizeWrapperEnv(base_env)
 
     @test norm_env isa NormalizeWrapperEnv
-    @test observation_space(norm_env) == observation_space(base_env)
-    @test action_space(norm_env) == action_space(base_env)
+    @test isequal(observation_space(norm_env), observation_space(base_env))
+    @test isequal(action_space(norm_env), action_space(base_env))
     @test number_of_envs(norm_env) == 4
     @test norm_env.training == true
     @test norm_env.norm_obs == true
@@ -179,7 +179,7 @@ end
     for i in 1:6  # Multiple steps to build statistics
         push!(original_obs, get_original_obs(norm_env))
         push!(all_obs, observe(norm_env))
-        rewards, terms, truncs, infos = step!(norm_env, rand(Float32, action_space(norm_env).shape..., 2))
+        rewards, terms, truncs, infos = step!(norm_env, rand(action_space(norm_env), 2))
     end
 
     # Check that observations are being normalized
@@ -455,7 +455,8 @@ end
     @test n_envs == 3
 
     # Test reset and observe
-    initial_obs = reset!(norm_env)
+    reset!(norm_env)
+    initial_obs = observe(norm_env)
     @test size(initial_obs) == (2, 3)
 
     current_obs = observe(norm_env)
@@ -476,9 +477,11 @@ end
 
     # Test seeding
     Random.seed!(norm_env, 42)
-    obs1 = reset!(norm_env)
+    reset!(norm_env)
+    obs1 = observe(norm_env)
     Random.seed!(norm_env, 42)
-    obs2 = reset!(norm_env)
+    reset!(norm_env)
+    obs2 = observe(norm_env)
     # Note: Due to running statistics, perfect reproducibility is not expected
     # but the underlying environment should be seeded
 end

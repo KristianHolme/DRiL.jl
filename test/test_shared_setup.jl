@@ -37,7 +37,7 @@
         env._truncated = false
         env._last_reward = 0.0f0
         env._info = Dict{String,Any}()
-        return rand(env.rng, Float32, 2) .* 2.0f0 .- 1.0f0  # Use env's RNG
+        return nothing
     end
 
     function DRiL.act!(env::CustomEnv, action::AbstractArray)
@@ -102,7 +102,7 @@
         env._truncated = false
         env._last_reward = 0.0f0
         env._info = Dict{String,Any}()
-        return [env.current_state]
+        return nothing
     end
 
     function DRiL.act!(env::InfiniteHorizonEnv, action::AbstractArray)
@@ -165,7 +165,7 @@
         env._truncated = false
         env._last_reward = 0.0f0
         env._info = Dict{String,Any}()
-        return rand(env.rng, Float32, 2) .* 2.0f0 .- 1.0f0  # Use env's RNG
+        return nothing
     end
 
     function DRiL.act!(env::SimpleRewardEnv, action::AbstractArray)
@@ -307,7 +307,7 @@
 
     function DRiL.reset!(wrapper::ConstantObsWrapper)
         DRiL.reset!(wrapper.env)
-        return copy(wrapper.constant_obs)
+        return nothing
     end
 
     function DRiL.act!(wrapper::ConstantObsWrapper, action::AbstractArray)
