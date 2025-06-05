@@ -27,7 +27,7 @@ include("spaces.jl")
 export AbstractSpace, AbstractBox, UniformBox, Box, Discrete
 
 include("policies.jl")
-export AbstractActorCriticPolicy, ContinuousActorCriticPolicy, DiscreteActorCriticPolicy, AbstractPolicy, AbstractWeightInitializer, OrthogonalInitializer
+export AbstractActorCriticPolicy, ActorCriticPolicy, ContinuousActorCriticPolicy, DiscreteActorCriticPolicy, AbstractPolicy, AbstractWeightInitializer, OrthogonalInitializer
 
 include("agents.jl")
 export ActorCriticAgent, predict_actions, predict_values

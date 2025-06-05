@@ -191,7 +191,7 @@ function clip_range(old_values::Vector{T}, values::Vector{T}, clip_range::T) whe
     return old_values .+ clamp.(values .- old_values, -clip_range, clip_range)
 end
 
-function loss(alg::PPO{T}, policy::ActorCriticPolicy, ps, st, batch_data) where T
+function loss(alg::PPO{T}, policy::AbstractActorCriticPolicy, ps, st, batch_data) where T
     observations, actions, advantages, returns, old_logprobs, old_values = batch_data
 
     advantages = @ignore_derivatives alg.normalize_advantage ? normalize(advantages) : advantages

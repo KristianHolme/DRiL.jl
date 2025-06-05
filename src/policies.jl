@@ -68,7 +68,7 @@ end
 
 function get_actor_head(latent_dim::Int, A::Box, hidden_dims::Vector{Int}, activation::Function, bias_init, hidden_init, output_init)
     chain = get_actor_head(latent_dim, prod(A.shape), hidden_dims, activation, bias_init, hidden_init, output_init)
-    push!(chain, ReshapeLayer(A.shape))
+    chain = Chain(chain, ReshapeLayer(Size(A.shape)))
     return chain
 end
 
@@ -91,23 +91,23 @@ function get_critic_head(laten_dim::Int, hidden_dims::Vector{Int}, activation::F
     return Chain(layers...)
 end
 
-function ContinuousActorCriticPolicy(observation_space::Box{T}, action_space::Box{T}; log_std_init=T(0), hidden_dim=[64, 64], activation=tanh, shared_features::Bool=true) where T
+function ContinuousActorCriticPolicy(observation_space::Union{Box{T}, Discrete}, action_space::Box{T}; log_std_init=T(0), hidden_dims=[64, 64], activation=tanh, shared_features::Bool=true) where T
     feature_extractor = get_feature_extractor(observation_space)
-    latent_dim = observation_space.shape |> prod
+    latent_dim = size(observation_space) |> prod
     #TODO: make this bias init work for different types
     bias_init = zeros32
 
     hidden_init = OrthogonalInitializer{T}(sqrt(T(2)))
     actor_init = OrthogonalInitializer{T}(T(0.01))
     value_init = OrthogonalInitializer{T}(T(1.0))
-    actor_head = get_actor_head(latent_dim, action_space, hidden_dim, activation, bias_init, hidden_init, actor_init)
-    critic_head = get_critic_head(latent_dim, hidden_dim, activation, bias_init, hidden_init, value_init)
+    actor_head = get_actor_head(latent_dim, action_space, hidden_dims, activation, bias_init, hidden_init, actor_init)
+    critic_head = get_critic_head(latent_dim, hidden_dims, activation, bias_init, hidden_init, value_init)
     return ContinuousActorCriticPolicy(observation_space, action_space, feature_extractor, actor_head, critic_head, log_std_init, shared_features)
 end
 
-function DiscreteActorCriticPolicy(observation_space::Box{T}, action_space::Discrete; hidden_dim=[64, 64], activation=tanh, shared_features::Bool=true) where T
+function DiscreteActorCriticPolicy(observation_space::Union{Box{T}, Discrete}, action_space::Discrete; hidden_dims=[64, 64], activation=tanh, shared_features::Bool=true) where T
     feature_extractor = get_feature_extractor(observation_space)
-    latent_dim = observation_space.shape |> prod
+    latent_dim = size(observation_space) |> prod
     #TODO: make this bias init work for different types
     bias_init = zeros32
 
@@ -161,18 +161,18 @@ end
 function (policy::ContinuousActorCriticPolicy)(obs::AbstractArray, ps, st; rng::AbstractRNG=Random.default_rng())
     feats, st = extract_features(policy, obs, ps, st)
     action_mean, st = get_actions_from_latent(policy, feats, ps, st)
-    values, critic_st = policy.critic_head(feats, ps.critic_head, st.critic_head)
+    values, st = get_values_from_latent(policy, feats, ps, st)
     std = exp.(ps.log_std)
     actions, log_probs = get_noisy_actions(policy, action_mean, std, rng; log_probs=true)
-    return actions, values, log_probs, merge(st, (; critic_head=critic_st))
+    return actions, values, log_probs, st
 end
 
 function (policy::DiscreteActorCriticPolicy)(obs::AbstractArray, ps, st; rng::AbstractRNG=Random.default_rng())
     feats, st = extract_features(policy, obs, ps, st)
     action_logits, st = get_actions_from_latent(policy, feats, ps, st)  # For discrete, these are logits
-    values, critic_st = policy.critic_head(feats, ps.critic_head, st.critic_head)
+    values, st = get_values_from_latent(policy, feats, ps, st)
     actions, log_probs = get_discrete_actions(policy, action_logits, rng; log_probs=true, deterministic=false)
-    return actions, values, log_probs, merge(st, (; critic_head=critic_st))
+    return actions, values, log_probs, st
 end
 
 function extract_features(policy::AbstractActorCriticPolicy, obs::AbstractArray, ps, st)
@@ -199,6 +199,12 @@ function get_actions_from_latent(policy::AbstractActorCriticPolicy, latent::Abst
     actions, actor_st = policy.actor_head(latent, ps.actor_head, st.actor_head)
     st = merge(st, (; actor_head=actor_st))
     return actions, st
+end
+
+function get_values_from_latent(policy::AbstractActorCriticPolicy, latent::AbstractArray, ps, st)
+    values, critic_st = policy.critic_head(latent, ps.critic_head, st.critic_head)
+    st = merge(st, (; critic_head=critic_st))
+    return values, st
 end
 
 
@@ -298,17 +304,17 @@ function get_discrete_actions(policy::DiscreteActorCriticPolicy, action_logits::
     if deterministic
         # For deterministic actions, take the action with highest probability
         if ndims(action_logits) == 1
-            # Single observation
-            actions = argmax(action_logits) + (policy.action_space.start - 1)  # Convert to action space range
+            # Single observation - keep in 1-based indexing
+            actions = argmax(action_logits)
         else
-            # Batched observations
-            actions = [argmax(selectdim(action_logits, ndims(action_logits), i)) + (policy.action_space.start - 1)
+            # Batched observations - keep in 1-based indexing
+            actions = [argmax(selectdim(action_logits, ndims(action_logits), i))
                        for i in 1:size(action_logits, ndims(action_logits))]
         end
 
         if log_probs
             # Get distributions for log prob calculation
-            distributions = get_distributions(policy, action_logits)  # std not used for discrete
+            distributions = get_distributions(policy, action_logits)
             if ndims(action_logits) == 1
                 log_prob = logpdf(distributions, actions)
             else
@@ -320,23 +326,21 @@ function get_discrete_actions(policy::DiscreteActorCriticPolicy, action_logits::
         end
     else
         # Stochastic sampling
-        distributions = get_distributions(policy, action_logits)  # std not used for discrete
+        distributions = get_distributions(policy, action_logits)
 
         if ndims(action_logits) == 1
-            # Single observation
-            sampled_action = @ignore_derivatives rand(rng, distributions)
-            actions = sampled_action + (policy.action_space.start - 1)  # Convert to action space range
+            # Single observation - sampled actions are naturally 1-based
+            actions = @ignore_derivatives rand(rng, distributions)
         else
-            # Batched observations
-            sampled_actions = [@ignore_derivatives rand(rng, distributions[i]) for i in 1:length(distributions)]
-            actions = [a + (policy.action_space.start - 1) for a in sampled_actions]  # Convert to action space range
+            # Batched observations - sampled actions are naturally 1-based
+            actions = [@ignore_derivatives rand(rng, distributions[i]) for i in 1:length(distributions)]
         end
 
         if log_probs
             if ndims(action_logits) == 1
-                log_prob = logpdf(distributions, sampled_action)
+                log_prob = logpdf(distributions, actions)
             else
-                log_prob = [logpdf(distributions[i], sampled_actions[i]) for i in 1:length(sampled_actions)]
+                log_prob = [logpdf(distributions[i], actions[i]) for i in 1:length(actions)]
             end
             return actions, log_prob
         else
@@ -347,7 +351,7 @@ end
 
 function predict(policy::ContinuousActorCriticPolicy, obs::AbstractArray, ps, st; deterministic::Bool=false, rng::AbstractRNG=Random.default_rng())
     feats, st = extract_features(policy, obs, ps, st)
-    action_mean, st = get_action_mean_from_latent(policy, feats, ps, st)
+    action_mean, st = get_actions_from_latent(policy, feats, ps, st)
 
     if deterministic
         # Process actions: clip and ensure correct type
@@ -364,7 +368,7 @@ end
 
 function predict(policy::DiscreteActorCriticPolicy, obs::AbstractArray, ps, st; deterministic::Bool=false, rng::AbstractRNG=Random.default_rng())
     feats, st = extract_features(policy, obs, ps, st)
-    action_logits, st = get_action_mean_from_latent(policy, feats, ps, st)  # For discrete, these are logits
+    action_logits, st = get_actions_from_latent(policy, feats, ps, st)  # For discrete, these are logits
 
     actions = get_discrete_actions(policy, action_logits, rng; log_probs=false, deterministic=deterministic)
     # Process actions: ensure they're in the correct range
@@ -374,9 +378,8 @@ end
 
 function evaluate_actions(policy::ContinuousActorCriticPolicy, obs::AbstractArray, actions::AbstractArray, ps, st)
     feats, st = extract_features(policy, obs, ps, st)
-    new_action_mean, st = get_action_mean_from_latent(policy, feats, ps, st)
-    values, st_critic_head = policy.critic_head(feats, ps.critic_head, st.critic_head)
-    st = merge(st, (; critic_head=st_critic_head))
+    new_action_mean, st = get_actions_from_latent(policy, feats, ps, st)
+    values, st = get_values_from_latent(policy, feats, ps, st)
     std = exp.(ps.log_std)
     distributions = get_distributions(policy, new_action_mean, std)
 
@@ -390,23 +393,21 @@ end
 
 function evaluate_actions(policy::DiscreteActorCriticPolicy, obs::AbstractArray, actions::AbstractArray, ps, st)
     feats, st = extract_features(policy, obs, ps, st)
-    new_action_logits, st = get_action_mean_from_latent(policy, feats, ps, st)  # For discrete, these are logits
-    values, st_critic_head = policy.critic_head(feats, ps.critic_head, st.critic_head)
-    st = merge(st, (; critic_head=st_critic_head))
+    new_action_logits, st = get_actions_from_latent(policy, feats, ps, st)  # For discrete, these are logits
+    values, st = get_values_from_latent(policy, feats, ps, st)
 
-    distributions = get_distributions(policy, new_action_logits, Float32[])  # std not used for discrete
+    distributions = get_distributions(policy, new_action_logits)
 
-    # Convert actions back to 1-based indexing for distribution evaluation
-    # actions are in action_space range, need to convert to distribution range (1-based)
-    dist_actions = actions .- (policy.action_space.start - 1)
+    # Actions from stored trajectory data are already in 1-based indexing (raw policy outputs)
+    # No conversion needed since distributions also use 1-based indexing
 
     if ndims(new_action_logits) == 1
         # Single observation
-        log_probs = [logpdf(distributions, dist_actions)]
+        log_probs = [logpdf(distributions, actions)]
         entropy = [Distributions.entropy(distributions)]
     else
         # Batched observations  
-        log_probs = [logpdf(distributions[i], dist_actions[i]) for i in 1:length(distributions)]
+        log_probs = [logpdf(distributions[i], actions[i]) for i in 1:length(distributions)]
         entropy = [Distributions.entropy(distributions[i]) for i in 1:length(distributions)]
     end
 
@@ -415,7 +416,6 @@ end
 
 function predict_values(policy::AbstractActorCriticPolicy, obs::AbstractArray, ps, st)
     feats, st = extract_features(policy, obs, ps, st)
-    values, critic_st = policy.critic_head(feats, ps.critic_head, st.critic_head)
-    st = merge(st, (; critic_head=critic_st))
+    values, st = get_values_from_latent(policy, feats, ps, st)
     return values, st
 end

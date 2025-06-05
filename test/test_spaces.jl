@@ -422,3 +422,270 @@ end
     @test all(s3[:, i] ∈ space for i in 1:3)
     @test all(s4[:, i] ∈ space for i in 1:3)
 end
+
+# Tests for Discrete action spaces
+@testitem "Discrete space creation and properties" tags = [:spaces, :basic, :discrete] begin
+    # Test basic Discrete creation with default start (0-based)
+    space_default = Discrete(5)
+    @test space_default.n == 5
+    @test space_default.start == 0
+    @test eltype(space_default) == Int
+    @test ndims(space_default) == 0
+
+    # Test Discrete creation with custom start (1-based)
+    space_custom = Discrete(3, 1)
+    @test space_custom.n == 3
+    @test space_custom.start == 1
+
+    # Test Discrete creation with negative start
+    space_negative = Discrete(4, -2)
+    @test space_negative.n == 4
+    @test space_negative.start == -2
+
+    # Test equality
+    space1 = Discrete(5, 0)
+    space2 = Discrete(5, 0)
+    space3 = Discrete(5, 1)
+    space4 = Discrete(4, 0)
+    
+    @test isequal(space1, space2)
+    @test !isequal(space1, space3)  # Different start
+    @test !isequal(space1, space4)  # Different n
+end
+
+@testitem "Random sampling from Discrete" tags = [:spaces, :random, :discrete] begin
+    using Random
+
+    # Test 0-based discrete space (default)
+    space_0 = Discrete(5)  # Values: 0, 1, 2, 3, 4
+    rng = MersenneTwister(42)
+
+    # Test rand(rng, space)
+    sample1 = rand(rng, space_0)
+    @test sample1 isa Int
+    @test 0 ≤ sample1 ≤ 4
+    @test sample1 ∈ space_0
+
+    # Test rand(space) - default RNG
+    sample2 = rand(space_0)
+    @test sample2 isa Int
+    @test 0 ≤ sample2 ≤ 4
+    @test sample2 ∈ space_0
+
+    # Test rand(rng, space, n) - multiple samples
+    n = 20
+    samples = rand(rng, space_0, n)
+    @test length(samples) == n
+    @test all(s -> s isa Int, samples)
+    @test all(s -> 0 ≤ s ≤ 4, samples)
+    @test all(s -> s ∈ space_0, samples)
+
+    # Test rand(space, n) - multiple samples with default RNG
+    samples2 = rand(space_0, n)
+    @test length(samples2) == n
+    @test all(s -> s isa Int, samples2)
+    @test all(s -> 0 ≤ s ≤ 4, samples2)
+
+    # Test 1-based discrete space
+    space_1 = Discrete(3, 1)  # Values: 1, 2, 3
+    samples_1based = rand(rng, space_1, 15)
+    @test all(s -> 1 ≤ s ≤ 3, samples_1based)
+    @test all(s -> s ∈ space_1, samples_1based)
+
+    # Test custom start space
+    space_custom = Discrete(4, -1)  # Values: -1, 0, 1, 2
+    samples_custom = rand(rng, space_custom, 15)
+    @test all(s -> -1 ≤ s ≤ 2, samples_custom)
+    @test all(s -> s ∈ space_custom, samples_custom)
+end
+
+@testitem "Discrete containment checking" tags = [:spaces, :containment, :discrete] begin
+    # Test 0-based discrete space
+    space_0 = Discrete(5)  # Values: 0, 1, 2, 3, 4
+
+    # Test valid values
+    valid_values = [0, 1, 2, 3, 4]
+    for val in valid_values
+        @test val ∈ space_0
+        @test val in space_0
+    end
+
+    # Test invalid values
+    invalid_values = [-1, 5, 6, 10]
+    for val in invalid_values
+        @test !(val ∈ space_0)
+        @test !(val in space_0)
+    end
+
+    # Test 1-based discrete space
+    space_1 = Discrete(3, 1)  # Values: 1, 2, 3
+    @test 1 ∈ space_1
+    @test 2 ∈ space_1
+    @test 3 ∈ space_1
+    @test !(0 ∈ space_1)
+    @test !(4 ∈ space_1)
+
+    # Test custom start space
+    space_custom = Discrete(4, -2)  # Values: -2, -1, 0, 1
+    @test (-2) ∈ space_custom
+    @test (-1) ∈ space_custom
+    @test 0 ∈ space_custom
+    @test 1 ∈ space_custom
+    @test !((-3) ∈ space_custom)
+    @test !(2 ∈ space_custom)
+
+    # Test non-integer types are rejected
+    @test !(1.0 ∈ space_0)
+    @test !(1.5 ∈ space_0)
+    @test !("1" ∈ space_0)
+    @test !([1] ∈ space_0)
+end
+
+@testitem "Discrete action processing" tags = [:spaces, :discrete, :action_processing] begin
+    # Test process_action for different discrete spaces
+
+    # Test 0-based space (Gymnasium style)
+    space_0 = Discrete(5, 0)  # Valid actions: 0, 1, 2, 3, 4
+
+    # Test basic conversion from 1-based to 0-based
+    @test process_action(1, space_0) == 0  # Julia 1-based → space 0-based
+    @test process_action(2, space_0) == 1
+    @test process_action(3, space_0) == 2
+    @test process_action(4, space_0) == 3
+    @test process_action(5, space_0) == 4
+
+    # Test clamping for out-of-bounds actions
+    @test process_action(0, space_0) == 0    # Below valid range, clamp to min
+    @test process_action(6, space_0) == 4    # Above valid range, clamp to max
+    @test process_action(10, space_0) == 4   # Far above valid range
+
+    # Test 1-based space (natural Julia style)
+    space_1 = Discrete(3, 1)  # Valid actions: 1, 2, 3
+
+    @test process_action(1, space_1) == 1  # 1-based → 1-based (no change)
+    @test process_action(2, space_1) == 2
+    @test process_action(3, space_1) == 3
+
+    # Test clamping
+    @test process_action(0, space_1) == 1    # Below valid range
+    @test process_action(4, space_1) == 3    # Above valid range
+
+    # Test custom start space
+    space_custom = Discrete(4, -1)  # Valid actions: -1, 0, 1, 2
+
+    @test process_action(1, space_custom) == -1  # Julia 1-based → space start -1
+    @test process_action(2, space_custom) == 0   # Julia 2-based → space 0
+    @test process_action(3, space_custom) == 1   # Julia 3-based → space 1
+    @test process_action(4, space_custom) == 2   # Julia 4-based → space 2
+
+    # Test clamping for custom space
+    @test process_action(0, space_custom) == -1   # Below valid range
+    @test process_action(5, space_custom) == 2    # Above valid range
+end
+
+@testitem "Discrete action processing array inputs" tags = [:spaces, :discrete, :action_processing, :arrays] begin
+    space_0 = Discrete(3, 0)  # Valid actions: 0, 1, 2
+
+    # Test single element array input
+    @test process_action([2], space_0) == 1  # Julia 2 → space 1
+
+    # Test error for multi-element array
+    @test_throws ErrorException process_action([1, 2], space_0)
+
+    # Test batched actions (Vector{Int})
+    actions_batch = [1, 2, 3]
+    expected_batch = [0, 1, 2]  # Julia 1-based → space 0-based
+    @test process_action(actions_batch, space_0) == expected_batch
+
+    # Test batched actions with clamping
+    actions_with_bounds = [0, 1, 2, 3, 4]
+    expected_with_bounds = [0, 0, 1, 2, 2]  # Clamped to [0, 2]
+    @test process_action(actions_with_bounds, space_0) == expected_with_bounds
+end
+
+@testitem "Discrete space interface completeness" tags = [:spaces, :interface, :discrete] begin
+    using Random
+
+    # Test that Discrete implements all expected interface methods
+    space = Discrete(4, 0)
+
+    # Test that all expected methods exist
+    @test hasmethod(rand, (AbstractRNG, typeof(space)))
+    @test hasmethod(rand, (typeof(space),))
+    @test hasmethod(rand, (AbstractRNG, typeof(space), Int))
+    @test hasmethod(rand, (typeof(space), Int))
+    @test hasmethod(in, (Int, typeof(space)))
+    @test hasmethod(Base.size, (typeof(space),))
+    @test hasmethod(Base.ndims, (typeof(space),))
+    @test hasmethod(Base.eltype, (typeof(space),))
+
+    # Test that methods work as expected
+    rng = MersenneTwister(42)
+
+    # Single sample methods
+    s1 = rand(rng, space)
+    s2 = rand(space)
+    @test s1 ∈ space
+    @test s2 ∈ space
+
+    # Multiple sample methods
+    s3 = rand(rng, space, 5)
+    s4 = rand(space, 5)
+    @test length(s3) == 5
+    @test length(s4) == 5
+    @test all(s -> s ∈ space, s3)
+    @test all(s -> s ∈ space, s4)
+
+    # Size and properties
+    @test size(space) == (4,)
+    @test ndims(space) == 0
+    @test eltype(space) == Int
+end
+
+@testitem "Discrete space edge cases" tags = [:spaces, :discrete, :edge_cases] begin
+    # Test single action space
+    space_single = Discrete(1, 0)  # Only action: 0
+    @test space_single.n == 1
+    @test space_single.start == 0
+    @test 0 ∈ space_single
+    @test !(1 ∈ space_single)
+    @test !(-1 ∈ space_single)
+
+    # Test process_action with single action space
+    @test process_action(1, space_single) == 0  # Only valid action
+    @test process_action(0, space_single) == 0  # Clamped
+    @test process_action(5, space_single) == 0  # Clamped
+
+    # Test single action space with different start
+    space_single_1 = Discrete(1, 5)  # Only action: 5
+    @test 5 ∈ space_single_1
+    @test !(4 ∈ space_single_1)
+    @test !(6 ∈ space_single_1)
+    @test process_action(1, space_single_1) == 5
+
+    # Test large action space
+    space_large = Discrete(1000, 0)
+    @test 0 ∈ space_large
+    @test 999 ∈ space_large
+    @test !(1000 ∈ space_large)
+    @test !(-1 ∈ space_large)
+
+    # Test random sampling from large space covers range
+    samples = rand(space_large, 100)
+    @test minimum(samples) >= 0
+    @test maximum(samples) <= 999
+    @test length(unique(samples)) > 50  # Should have good diversity
+
+    # Test negative start with various boundaries
+    space_neg = Discrete(5, -10)  # Actions: -10, -9, -8, -7, -6
+    @test (-10) ∈ space_neg
+    @test (-6) ∈ space_neg
+    @test !((-11) ∈ space_neg)
+    @test !((-5) ∈ space_neg)
+
+    # Test process_action with negative start
+    @test process_action(1, space_neg) == -10  # Julia 1 → space start -10
+    @test process_action(5, space_neg) == -6   # Julia 5 → space end -6
+    @test process_action(0, space_neg) == -10  # Clamped to min
+    @test process_action(6, space_neg) == -6   # Clamped to max
+end

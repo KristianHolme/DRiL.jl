@@ -306,19 +306,20 @@ function Base.in(sample, space::Discrete)
     return space.start <= sample <= (space.start + space.n - 1)
 end
 
-# Helper function to process actions: ensure valid discrete action
+# Helper function to process actions: convert from 1-based indexing to action space range
 function process_action(action::Integer, action_space::Discrete)
+    # Convert from 1-based (Julia natural) indexing to action space indexing
+    action_space_action = action + (action_space.start - 1)
     # Clamp to valid range
-    return clamp(action, action_space.start, action_space.start + action_space.n - 1)
+    #TODO: not necessary?
+    return clamp(action_space_action, action_space.start, action_space.start + action_space.n - 1)
 end
 
 # Handle case where action might be in an array (for consistency with Box spaces)
-function process_action(action::AbstractArray, action_space::Discrete)
-    if length(action) != 1
-        error("Discrete action space expects a single action, got array of length $(length(action))")
-    end
-    return process_action(action[1], action_space)
+function process_action(action::AbstractArray{<:Integer}, action_space::Discrete)
+        return process_action.(action, action_space)
 end
+
 
 Base.size(space::Discrete) = (space.n,)
 Base.size(space::Box) = space.shape
