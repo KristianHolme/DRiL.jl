@@ -19,7 +19,7 @@ function Box{T}(low::Array{T}, high::Array{T}) where T<:Number
     return Box{T}(low, high, shape)
 end
 function Box(low::T, high::T, shape::Tuple{Vararg{Int}}) where T<:Number
-    return Box{T}(low*ones(T, shape), high*ones(T, shape), shape)
+    return Box{T}(low * ones(T, shape), high * ones(T, shape), shape)
 end
 
 # Convenience constructors
@@ -225,3 +225,101 @@ function process_action(action::AbstractArray, action_space::Box{T}) where T
     action = clamp.(action, action_space.low, action_space.high)
     return action
 end
+
+
+struct Discrete <: AbstractSpace
+    n::Int
+    start::Int
+end
+
+# Convenience constructor - default start at 0
+Discrete(n::Int) = Discrete(n, 0)
+
+Base.ndims(::Discrete) = 0  # Discrete spaces are 0-dimensional (single values)
+Base.eltype(::Discrete) = Int
+
+function Base.isequal(disc1::Discrete, disc2::Discrete)
+    return disc1.n == disc2.n && disc1.start == disc2.start
+end
+
+# Extend Random.rand for Discrete spaces
+"""
+    rand([rng], space::Discrete)
+
+Sample a random value from the discrete space.
+
+Returns an integer in the range [start, start + n - 1].
+
+# Examples
+```julia
+space = Discrete(5, 1)  # Values 1, 2, 3, 4, 5
+sample = rand(space)    # Returns a random integer from 1 to 5
+
+space = Discrete(3)     # Values 0, 1, 2 (default start=0)
+sample = rand(space)    # Returns 0, 1, or 2
+```
+"""
+function Random.rand(rng::AbstractRNG, space::Discrete)
+    return rand(rng, space.start:(space.start+space.n-1))
+end
+
+# Default RNG version
+Random.rand(space::Discrete) = rand(Random.default_rng(), space)
+
+# Multiple samples version
+"""
+    rand([rng], space::Discrete, n::Integer)
+
+Sample `n` random values from the discrete space.
+
+Returns a vector of integers, each in the range [start, start + n - 1].
+"""
+function Random.rand(rng::AbstractRNG, space::Discrete, n::Integer)
+    return [rand(rng, space) for _ in 1:n]
+end
+
+Random.rand(space::Discrete, n::Integer) = rand(Random.default_rng(), space, n)
+
+"""
+    sample in space::Discrete
+
+Check if a sample is within the discrete space.
+
+# Examples
+```julia
+space = Discrete(5, 1)  # Values 1, 2, 3, 4, 5
+3 in space              # Returns true
+0 in space              # Returns false
+6 in space              # Returns false
+
+# Can also use ∈ symbol
+@test action ∈ action_space
+```
+"""
+function Base.in(sample, space::Discrete)
+    # Must be an integer
+    if !isa(sample, Integer)
+        return false
+    end
+
+    # Check if within valid range
+    return space.start <= sample <= (space.start + space.n - 1)
+end
+
+# Helper function to process actions: ensure valid discrete action
+function process_action(action::Integer, action_space::Discrete)
+    # Clamp to valid range
+    return clamp(action, action_space.start, action_space.start + action_space.n - 1)
+end
+
+# Handle case where action might be in an array (for consistency with Box spaces)
+function process_action(action::AbstractArray, action_space::Discrete)
+    if length(action) != 1
+        error("Discrete action space expects a single action, got array of length $(length(action))")
+    end
+    return process_action(action[1], action_space)
+end
+
+Base.size(space::Discrete) = (space.n,)
+Base.size(space::Box) = space.shape
+Base.size(space::UniformBox) = space.shape

@@ -24,10 +24,10 @@ export AbstractEnv, AbstractAgent, AbstractBuffer
 export reset!, act!, observe, terminated, truncated, action_space, observation_space, get_info, number_of_envs
 
 include("spaces.jl")
-export AbstractSpace, AbstractBox, UniformBox, Box
+export AbstractSpace, AbstractBox, UniformBox, Box, Discrete
 
 include("policies.jl")
-export AbstractActorCriticPolicy, ActorCriticPolicy, AbstractPolicy, AbstractWeightInitializer, OrthogonalInitializer
+export AbstractActorCriticPolicy, ContinuousActorCriticPolicy, DiscreteActorCriticPolicy, AbstractPolicy, AbstractWeightInitializer, OrthogonalInitializer
 
 include("agents.jl")
 export ActorCriticAgent, predict_actions, predict_values
