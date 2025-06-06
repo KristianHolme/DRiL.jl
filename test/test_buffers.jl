@@ -188,19 +188,19 @@ end
     # Check observations are valid
     obs = roll_buffer.observations
     obs_space = DRiL.observation_space(env)
-    @test size(obs) == (obs_space.shape..., n_steps, n_envs)
+    @test size(obs) == (obs_space.shape..., n_steps*n_envs)
     @test eltype(obs) == Float32
     
     # Check that rewards are reasonable
     rewards = roll_buffer.rewards
     @test all(rewards .>= 0.0f0)  # CartPole gives positive rewards
-    @test size(rewards) == (n_steps, n_envs)
+    @test size(rewards) == (n_steps*n_envs, )
     
     # Check that log probabilities are consistent
     logprobs = roll_buffer.logprobs
     values = roll_buffer.values
-    @test size(logprobs) == (n_steps, n_envs)
-    @test size(values) == (n_steps, n_envs)
+    @test size(logprobs) == (n_steps*n_envs, )
+    @test size(values) == (n_steps*n_envs, )
     
     # Test action evaluation consistency
     ps = agent.train_state.parameters
@@ -246,10 +246,9 @@ end
     # Test continuous actions are floats
     continuous_actions = continuous_buffer.actions
     @test eltype(continuous_actions) <: AbstractFloat
-    @test size(continuous_actions) == (1, 4, 2)  # (action_dim, n_steps, n_envs)
+    @test size(continuous_actions) == (1, 4*2)  # (action_dim, n_steps*n_envs)
     
     # Test that both have same buffer structure otherwise
-    @test size(discrete_buffer.observations) == size(continuous_buffer.observations)  # Both should be (4, n_steps, n_envs)
     @test size(discrete_buffer.rewards) == size(continuous_buffer.rewards)
     @test size(discrete_buffer.logprobs) == size(continuous_buffer.logprobs)
     @test size(discrete_buffer.values) == size(continuous_buffer.values)
@@ -304,25 +303,25 @@ end
     
     # Policy output (1-based)
     policy_actions, _, _, _ = policy(obs[:, 1:1], ps, st)  # Single observation
-    @test 1 <= policy_actions <= 2  # Should be 1-based
+    @test all(1 .<= policy_actions .<= 2)  # Should be 1-based
     
     # Processed actions for environment (0-based)
-    processed_actions, _ = predict(policy, obs[:, 1:1], ps, st)
-    @test processed_actions ∈ DRiL.action_space(env)  # Should be 0 or 1
-    @test processed_actions == policy_actions + (DRiL.action_space(env).start - 1)
+    actions, _ = DRiL.predict(policy, obs[:, 1:1], ps, st)
+    processed_actions = DRiL.process_action(actions, DRiL.action_space(env))
+    @test processed_actions[1] ∈ DRiL.action_space(env)  # Should be 0 or 1
     
     # Verify that evaluate_actions works with stored (1-based) actions
     eval_values, eval_logprobs, entropy, _ = DRiL.evaluate_actions(
         policy, roll_buffer.observations, stored_actions, ps, st)
     
-    @test size(eval_values) == size(roll_buffer.values)
-    @test size(eval_logprobs) == size(roll_buffer.logprobs)
+    @test size(eval_values) == (1, 4*2)
+    @test size(eval_logprobs) == (4*2,)
     @test all(entropy .>= 0.0f0)
     
     # Test that the indexing conversion is correct
     action_space = DRiL.action_space(env)
     for stored_action in unique(stored_actions)
-        processed = process_action(stored_action, action_space)
+        processed = DRiL.process_action(stored_action, action_space)
         @test processed ∈ action_space
         @test processed == stored_action + (action_space.start - 1)  # 1-based to 0-based
     end

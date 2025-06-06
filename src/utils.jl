@@ -2,7 +2,7 @@ function collect_trajectory(agent::ActorCriticAgent, env::AbstractEnv;
     max_steps::Union{Int,Nothing}=nothing, norm_env::Union{NormalizeWrapperEnv,Nothing}=nothing)
     reset!(env)
     original_training = is_training(env)
-    set_training!(env, false)
+    env = set_training(env, false)
     observations = []
     actions = []
     rewards = []
@@ -35,6 +35,7 @@ function collect_trajectory(agent::ActorCriticAgent, env::AbstractEnv;
             break
         end
     end
-    set_training!(env, original_training)
+    #FIXME this doesnt really work as expected, the change here is not affecting the real env
+    env = set_training(env, original_training) 
     return observations, actions, rewards
 end

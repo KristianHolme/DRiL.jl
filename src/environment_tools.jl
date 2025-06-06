@@ -448,10 +448,10 @@ function Random.seed!(env::NormalizeWrapperEnv, seed::Integer)
 end
 
 # Training mode control
-set_training!(env::AbstractEnv, ::Bool) = nothing #default to no-op
+set_training(env::AbstractEnv, ::Bool) = env #default to no-op
 #TODO: fix/doc this
 is_training(env::AbstractEnv) = true
-set_training!(env::NormalizeWrapperEnv{E,T}, training::Bool) where {E,T} = @reset env.training = training
+set_training(env::NormalizeWrapperEnv{E,T}, training::Bool) where {E,T} = @set env.training = training
 is_training(env::NormalizeWrapperEnv{E,T}) where {E,T} = env.training
 
 # Save/load functionality for normalization statistics

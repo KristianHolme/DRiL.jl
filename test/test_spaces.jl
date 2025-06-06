@@ -542,6 +542,8 @@ end
 end
 
 @testitem "Discrete action processing" tags = [:spaces, :discrete, :action_processing] begin
+    using DRiL: process_action
+
     # Test process_action for different discrete spaces
 
     # Test 0-based space (Gymnasium style)
@@ -584,6 +586,7 @@ end
 end
 
 @testitem "Discrete action processing array inputs" tags = [:spaces, :discrete, :action_processing, :arrays] begin
+    using DRiL: process_action
     space_0 = Discrete(3, 0)  # Valid actions: 0, 1, 2
 
     # Test single element array input
@@ -643,6 +646,8 @@ end
 end
 
 @testitem "Discrete space edge cases" tags = [:spaces, :discrete, :edge_cases] begin
+    using DRiL: process_action
+
     # Test single action space
     space_single = Discrete(1, 0)  # Only action: 0
     @test space_single.n == 1
