@@ -8,6 +8,7 @@ end
 
 @testitem "DiscreteActorCriticPolicy construction" tags = [:policies, :discrete, :construction] setup = [SharedTestSetup] begin
     using Random
+    using Lux
 
     # Test basic construction
     obs_space = Box(Float32[-1.0, -1.0], Float32[1.0, 1.0])

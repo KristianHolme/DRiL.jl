@@ -179,7 +179,7 @@ end
     for i in 1:6  # Multiple steps to build statistics
         push!(original_obs, get_original_obs(norm_env))
         push!(all_obs, observe(norm_env))
-        rewards, terms, truncs, infos = step!(norm_env, rand(action_space(norm_env), 2))
+        rewards, terms, truncs, infos = DRiL.step!(norm_env, rand(action_space(norm_env), 2))
     end
 
     # Check that observations are being normalized
@@ -226,7 +226,7 @@ end
 
     # Collect rewards
     for i in 1:8
-        rewards, terms, truncs, infos = step!(norm_env, rand(Float32, 1, 2))
+        rewards, terms, truncs, infos = DRiL.step!(norm_env, rand(Float32, 1, 2))
         push!(all_rewards, rewards...)
         push!(original_rewards, get_original_rewards(norm_env)...)
     end
@@ -238,7 +238,7 @@ end
     @test norm_reward_std < orig_reward_std
 
     # Test unnormalization
-    last_rewards, _, _, _ = step!(norm_env, rand(Float32, 1, 2))
+    last_rewards, _, _, _ = DRiL.step!(norm_env, rand(Float32, 1, 2))
     last_original = get_original_rewards(norm_env)
     unnorm_rewards = unnormalize_reward(norm_env, last_rewards)
 
@@ -265,7 +265,7 @@ end
     reset!(norm_env)
     # Build some statistics first
     for i in 1:5
-        step!(norm_env, rand(Float32, 1, 1))
+        DRiL.step!(norm_env, rand(Float32, 1, 1))
     end
 
     obs = observe(norm_env)
@@ -302,13 +302,13 @@ end
 
     # In training mode, statistics should update
     initial_count = norm_env.obs_rms.count
-    step!(norm_env, rand(Float32, 1, 2))
+    DRiL.step!(norm_env, rand(Float32, 1, 2))
     training_count = norm_env.obs_rms.count
     @test training_count > initial_count
 
     # Switch to evaluation mode
     set_training!(norm_env, false)
-    step!(norm_env, rand(Float32, 1, 2))
+    DRiL.step!(norm_env, rand(Float32, 1, 2))
     eval_count = norm_env.obs_rms.count
 
     # Statistics should not update in evaluation mode
@@ -346,7 +346,7 @@ end
 
     # We need to implement step! for single environments since our wrapper expects parallel envs
     # Let's create a simple parallel version
-    mutable struct TerminalParallelEnv <: AbstractParallellEnv
+    mutable struct TerminalParallelEnv <: DRiL.AbstractParallellEnv
         envs::Vector{TerminalEnv}
     end
 
@@ -398,10 +398,10 @@ end
     reset!(norm_env)
 
     # Step until termination
-    rewards, terms, truncs, infos = step!(norm_env, rand(Float32, 1, 2))
+    rewards, terms, truncs, infos = DRiL.step!(norm_env, rand(Float32, 1, 2))
     @test !any(terms)
 
-    rewards, terms, truncs, infos = step!(norm_env, rand(Float32, 1, 2))
+    rewards, terms, truncs, infos = DRiL.step!(norm_env, rand(Float32, 1, 2))
     @test all(terms)
 
     # Check that terminal observations are normalized in info
@@ -412,7 +412,7 @@ end
             @test length(terminal_obs) == 1
             # Terminal observation should be normalized (different from raw value)
             # The raw terminal observation would be [12.0] or [13.0], normalized should be different
-            @test abs(terminal_obs[1]) < 10.0  # Should be normalized
+            @test abs(terminal_obs[1]) ≤ 10.0f0  # Should be normalized
         end
     end
 end
@@ -464,7 +464,7 @@ end
 
     # Test step
     actions = rand(Float32, 1, 3)
-    rewards, terms, truncs, infos = step!(norm_env, actions)
+    rewards, terms, truncs, infos = DRiL.step!(norm_env, actions)
 
     @test length(rewards) == 3
     @test length(terms) == 3
