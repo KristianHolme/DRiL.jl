@@ -195,7 +195,8 @@ function loss(alg::PPO{T}, policy::AbstractActorCriticPolicy, ps, st, batch_data
     observations, actions, advantages, returns, old_logprobs, old_values = batch_data
 
     advantages = @ignore_derivatives alg.normalize_advantage ? normalize(advantages) : advantages
-
+    # @info "in loss, evaluating actions!"
+    # @info "actions: $actions"
     values, log_probs, entropy, st = evaluate_actions(policy, observations, actions, ps, st)
 
     log_probs = vec(log_probs)

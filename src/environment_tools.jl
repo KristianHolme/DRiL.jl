@@ -32,12 +32,13 @@ function reset!(env::MultiThreadedParallelEnv{E}) where E<:AbstractEnv
     nothing
 end
 
+#TODO: check if this typing is correct
 function observe(env::MultiThreadedParallelEnv{E}) where E<:AbstractEnv
     obs_space = observation_space(env)
     type = eltype(obs_space)
-    observations = Array{type,length(obs_space.shape) + 1}(undef, (obs_space.shape..., length(env.envs)))
+    observations = Array{type,length(size(obs_space)) + 1}(undef, (size(obs_space)..., length(env.envs)))
     @threads for i in 1:length(env.envs)
-        selectdim(observations, length(obs_space.shape) + 1, i) .= observe(env.envs[i])
+        selectdim(observations, length(size(obs_space)) + 1, i) .= observe(env.envs[i])
     end
     return observations
 end
@@ -69,8 +70,8 @@ function step!(env::MultiThreadedParallelEnv{E}, action) where E<:AbstractEnv
     terminateds = Vector{Bool}(undef, length(env.envs))
     truncateds = Vector{Bool}(undef, length(env.envs))
     infos = Vector{Dict{String,Any}}(undef, length(env.envs))
-    action_dims = length(action_space(env).shape)
-    @assert size(action) == (action_space(env).shape..., length(env.envs)) "Action must be of shape $((action_space(env).shape..., length(env.envs)))"
+    action_dims = length(size(action_space(env)))
+    @assert size(action) == (size(action_space(env))..., length(env.envs)) "Action must be of shape $((size(action_space(env))..., length(env.envs))), got $(size(action))"
     @threads for i in 1:length(env.envs)
         # @info "Stepping env $i"
         local_action = selectdim(action, action_dims + 1, i)
@@ -316,12 +317,12 @@ function NormalizeWrapperEnv{E,T}(
     n_envs = number_of_envs(env)
 
     # Initialize running statistics
-    obs_rms = RunningMeanStd(T, obs_space.shape)
+    obs_rms = RunningMeanStd(T, size(obs_space))
     ret_rms = RunningMeanStd(T, ())
     returns = zeros(T, n_envs)
 
     # Initialize cache arrays
-    old_obs = Array{T}(undef, obs_space.shape..., n_envs)
+    old_obs = Array{T}(undef, size(obs_space)..., n_envs)
     old_rewards = Vector{T}(undef, n_envs)
 
     return NormalizeWrapperEnv{E,T}(env, obs_rms, ret_rms, returns, training, norm_obs, norm_reward,

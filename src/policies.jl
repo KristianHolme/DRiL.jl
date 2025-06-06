@@ -68,7 +68,7 @@ end
 
 function get_actor_head(latent_dim::Int, A::Box, hidden_dims::Vector{Int}, activation::Function, bias_init, hidden_init, output_init)
     chain = get_actor_head(latent_dim, prod(A.shape), hidden_dims, activation, bias_init, hidden_init, output_init)
-    chain = Chain(chain, ReshapeLayer(Size(A.shape)))
+    chain = Chain(chain, ReshapeLayer(size(A)))
     return chain
 end
 
@@ -91,7 +91,7 @@ function get_critic_head(laten_dim::Int, hidden_dims::Vector{Int}, activation::F
     return Chain(layers...)
 end
 
-function ContinuousActorCriticPolicy(observation_space::Union{Box{T}, Discrete}, action_space::Box{T}; log_std_init=T(0), hidden_dims=[64, 64], activation=tanh, shared_features::Bool=true) where T
+function ContinuousActorCriticPolicy(observation_space::Union{Box{T},Discrete}, action_space::Box{T}; log_std_init=T(0), hidden_dims=[64, 64], activation=tanh, shared_features::Bool=true) where T
     feature_extractor = get_feature_extractor(observation_space)
     latent_dim = size(observation_space) |> prod
     #TODO: make this bias init work for different types
@@ -105,7 +105,7 @@ function ContinuousActorCriticPolicy(observation_space::Union{Box{T}, Discrete},
     return ContinuousActorCriticPolicy(observation_space, action_space, feature_extractor, actor_head, critic_head, log_std_init, shared_features)
 end
 
-function DiscreteActorCriticPolicy(observation_space::Union{Box{T}, Discrete}, action_space::Discrete; hidden_dims=[64, 64], activation=tanh, shared_features::Bool=true) where T
+function DiscreteActorCriticPolicy(observation_space::Union{Box{T},Discrete}, action_space::Discrete; hidden_dims=[64, 64], activation=tanh, shared_features::Bool=true) where T
     feature_extractor = get_feature_extractor(observation_space)
     latent_dim = size(observation_space) |> prod
     #TODO: make this bias init work for different types
@@ -114,8 +114,8 @@ function DiscreteActorCriticPolicy(observation_space::Union{Box{T}, Discrete}, a
     hidden_init = OrthogonalInitializer{T}(sqrt(T(2)))
     actor_init = OrthogonalInitializer{T}(T(0.01))
     value_init = OrthogonalInitializer{T}(T(1.0))
-    actor_head = get_actor_head(latent_dim, action_space, hidden_dim, activation, bias_init, hidden_init, actor_init)
-    critic_head = get_critic_head(latent_dim, hidden_dim, activation, bias_init, hidden_init, value_init)
+    actor_head = get_actor_head(latent_dim, action_space, hidden_dims, activation, bias_init, hidden_init, actor_init)
+    critic_head = get_critic_head(latent_dim, hidden_dims, activation, bias_init, hidden_init, value_init)
     return DiscreteActorCriticPolicy(observation_space, action_space, feature_extractor, actor_head, critic_head, shared_features)
 end
 
@@ -127,7 +127,7 @@ function Lux.initialparameters(rng::AbstractRNG, policy::ContinuousActorCriticPo
     params = ComponentArray(feature_extractor=Lux.initialparameters(rng, policy.feature_extractor),
         actor_head=Lux.initialparameters(rng, policy.actor_head),
         critic_head=Lux.initialparameters(rng, policy.critic_head),
-        log_std=policy.log_std_init * ones(typeof(policy.log_std_init), policy.action_space.shape))
+        log_std=policy.log_std_init * ones(typeof(policy.log_std_init), size(policy.action_space)))
     return params
 end
 
@@ -261,12 +261,11 @@ function get_distributions(policy::DiscreteActorCriticPolicy, action_logits::Abs
     else
         # Batched observations
         batch_size = size(action_logits, ndims(action_logits))
-        distributions = Vector{Distributions.Categorical}(undef, batch_size)
-
-        for i in 1:batch_size
-            logits_i = selectdim(action_logits, ndims(action_logits), i)
-            distributions[i] = Distributions.Categorical(Lux.softmax(logits_i))
-        end
+        probs = Lux.softmax(action_logits)
+        #TODO simplify this when PR is done https://github.com/JuliaStats/Distributions.jl/pull/1908
+        # distributions = Distributions.Categorical.(eachcol(probs))
+        vec_probs = eachcol(probs) .|> Vector
+        distributions = Distributions.Categorical.(vec_probs)
         return distributions
     end
 end
@@ -303,49 +302,27 @@ end
 function get_discrete_actions(policy::DiscreteActorCriticPolicy, action_logits::AbstractArray, rng::AbstractRNG; log_probs::Bool=false, deterministic::Bool=false)
     if deterministic
         # For deterministic actions, take the action with highest probability
-        if ndims(action_logits) == 1
-            # Single observation - keep in 1-based indexing
-            actions = argmax(action_logits)
-        else
-            # Batched observations - keep in 1-based indexing
-            actions = [argmax(selectdim(action_logits, ndims(action_logits), i))
-                       for i in 1:size(action_logits, ndims(action_logits))]
-        end
-
-        if log_probs
-            # Get distributions for log prob calculation
-            distributions = get_distributions(policy, action_logits)
-            if ndims(action_logits) == 1
-                log_prob = logpdf(distributions, actions)
-            else
-                log_prob = [logpdf(distributions[i], actions[i]) for i in 1:length(actions)]
-            end
-            return actions, log_prob
-        else
-            return actions
-        end
+        # Batched observations - keep in 1-based indexing
+        actions = argmax.(eachcol(action_logits))
     else
         # Stochastic sampling
-        distributions = get_distributions(policy, action_logits)
+        distributions = @ignore_derivatives get_distributions(policy, action_logits)
+        # Batched observations - sampled actions are naturally 1-based
+        actions = @ignore_derivatives rand.(rng, distributions)
+    end
+    if log_probs
+        # Use broadcasting for log prob calculation
+        log_probs_matrix = Lux.logsoftmax(action_logits)
 
-        if ndims(action_logits) == 1
-            # Single observation - sampled actions are naturally 1-based
-            actions = @ignore_derivatives rand(rng, distributions)
-        else
-            # Batched observations - sampled actions are naturally 1-based
-            actions = [@ignore_derivatives rand(rng, distributions[i]) for i in 1:length(distributions)]
-        end
+        action_indices = Int.(actions)
+        log_prob = getindex.(eachcol(log_probs_matrix), action_indices)
 
-        if log_probs
-            if ndims(action_logits) == 1
-                log_prob = logpdf(distributions, actions)
-            else
-                log_prob = [logpdf(distributions[i], actions[i]) for i in 1:length(actions)]
-            end
-            return actions, log_prob
-        else
-            return actions
-        end
+        actions = reshape(actions, (1, size(action_logits, 2)))
+        log_prob = reshape(log_prob, (1, size(action_logits, 2)))
+        return actions, log_prob
+    else
+        actions = reshape(actions, (1, size(action_logits, 2)))
+        return actions
     end
 end
 
@@ -391,25 +368,23 @@ function evaluate_actions(policy::ContinuousActorCriticPolicy, obs::AbstractArra
     return values, log_probs, entropy, st
 end
 
-function evaluate_actions(policy::DiscreteActorCriticPolicy, obs::AbstractArray, actions::AbstractArray, ps, st)
+function get_discrete_logprobs_and_entropy(action_logits::AbstractArray, actions::AbstractArray{<:Int})
+    log_probs_matrix = Lux.logsoftmax(action_logits)
+    probs_matrix = Lux.softmax(action_logits)
+    # batch_size = size(action_logits, 2)
+    log_probs = getindex.(eachcol(log_probs_matrix), vec(actions))
+    entropy = -vec(sum(probs_matrix .* log_probs_matrix, dims=1))
+    return log_probs, entropy
+end
+
+function evaluate_actions(policy::DiscreteActorCriticPolicy, obs::AbstractArray, actions::AbstractArray{<:Int}, ps, st)
+    # @info "in evaluate_actions"
     feats, st = extract_features(policy, obs, ps, st)
     new_action_logits, st = get_actions_from_latent(policy, feats, ps, st)  # For discrete, these are logits
     values, st = get_values_from_latent(policy, feats, ps, st)
-
-    distributions = get_distributions(policy, new_action_logits)
-
-    # Actions from stored trajectory data are already in 1-based indexing (raw policy outputs)
-    # No conversion needed since distributions also use 1-based indexing
-
-    if ndims(new_action_logits) == 1
-        # Single observation
-        log_probs = [logpdf(distributions, actions)]
-        entropy = [Distributions.entropy(distributions)]
-    else
-        # Batched observations  
-        log_probs = [logpdf(distributions[i], actions[i]) for i in 1:length(distributions)]
-        entropy = [Distributions.entropy(distributions[i]) for i in 1:length(distributions)]
-    end
+    # @info "gone through networks"
+    # Fast path: compute log probs and entropy directly using broadcasting
+    log_probs, entropy = get_discrete_logprobs_and_entropy(new_action_logits, actions)
 
     return values, log_probs, entropy, st
 end

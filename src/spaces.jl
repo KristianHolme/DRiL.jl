@@ -25,10 +25,10 @@ end
 # Convenience constructors
 Box(low::Array{T}, high::Array{T}) where T<:Number = Box{T}(low, high)
 
-Base.ndims(space::UniformBox) = length(space.shape)
+Base.ndims(space::UniformBox) = length(size(space))
 Base.eltype(::UniformBox{T}) where T = T
 
-Base.ndims(space::Box) = length(space.shape)
+Base.ndims(space::Box) = length(size(space))
 Base.eltype(::Box{T}) where T = T
 
 #TODO fix comparison of spaces
@@ -227,16 +227,16 @@ function process_action(action::AbstractArray, action_space::Box{T}) where T
 end
 
 
-struct Discrete <: AbstractSpace
-    n::Int
-    start::Int
+struct Discrete{T<:Integer} <: AbstractSpace
+    n::T
+    start::T
 end
 
-# Convenience constructor - default start at 0
-Discrete(n::Int) = Discrete(n, 0)
+# Convenience constructor - default start at 1
+Discrete(n::T) where T<:Integer = Discrete(n, 1)
 
 Base.ndims(::Discrete) = 0  # Discrete spaces are 0-dimensional (single values)
-Base.eltype(::Discrete) = Int
+Base.eltype(::Discrete{T}) where T = T
 
 function Base.isequal(disc1::Discrete, disc2::Discrete)
     return disc1.n == disc2.n && disc1.start == disc2.start
@@ -260,7 +260,7 @@ sample = rand(space)    # Returns 0, 1, or 2
 ```
 """
 function Random.rand(rng::AbstractRNG, space::Discrete)
-    return rand(rng, space.start:(space.start+space.n-1))
+    return rand(rng, space.start:space.start+space.n-1)
 end
 
 # Default RNG version
@@ -303,7 +303,7 @@ function Base.in(sample, space::Discrete)
     end
 
     # Check if within valid range
-    return space.start <= sample <= (space.start + space.n - 1)
+    return space.start <= sample <= space.start + space.n - 1
 end
 
 # Helper function to process actions: convert from 1-based indexing to action space range
@@ -317,10 +317,10 @@ end
 
 # Handle case where action might be in an array (for consistency with Box spaces)
 function process_action(action::AbstractArray{<:Integer}, action_space::Discrete)
-        return process_action.(action, action_space)
+    return process_action.(action, Ref(action_space))
 end
 
 
-Base.size(space::Discrete) = (space.n,)
+Base.size(space::Discrete) = (1,)
 Base.size(space::Box) = space.shape
 Base.size(space::UniformBox) = space.shape
