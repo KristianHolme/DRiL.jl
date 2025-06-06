@@ -23,7 +23,7 @@ end
     
     # Test with custom parameters
     policy_custom = DiscreteActorCriticPolicy(obs_space, action_space; 
-                                             hidden_dim=[32, 16], 
+                                             hidden_dims=[32, 16], 
                                              activation=relu, 
                                              shared_features=false)
     @test policy_custom.shared_features == false
@@ -36,6 +36,8 @@ end
 
 @testitem "DiscreteActorCriticPolicy parameter initialization" tags = [:policies, :discrete, :parameters] setup = [SharedTestSetup] begin
     using Random
+    using Lux
+    using ComponentArrays
 
     obs_space = Box(Float32[-1.0, -1.0], Float32[1.0, 1.0])
     action_space = Discrete(5, 0)
@@ -64,6 +66,7 @@ end
 
 @testitem "DiscreteActorCriticPolicy prediction" tags = [:policies, :discrete, :prediction] setup = [SharedTestSetup] begin
     using Random
+    using Lux
 
     obs_space = Box(Float32[-1.0, -1.0], Float32[1.0, 1.0])
     action_space = Discrete(3, 0)  # Actions: 0, 1, 2
@@ -75,20 +78,20 @@ end
     
     # Test single observation prediction
     obs = Float32[0.5, -0.3]
-    actions, new_states = predict(policy, obs, params, states; deterministic=false, rng=rng)
+    actions, new_states = DRiL.predict(policy, obs, params, states; deterministic=false, rng=rng)
     
     # Actions should be in environment action space after processing
     @test actions ∈ action_space
     @test actions isa Integer
     
     # Test deterministic prediction
-    actions_det, _ = predict(policy, obs, params, states; deterministic=true, rng=rng)
+    actions_det, _ = DRiL.predict(policy, obs, params, states; deterministic=true, rng=rng)
     @test actions_det ∈ action_space
     @test actions_det isa Integer
     
     # Test batch prediction
     batch_obs = Float32[0.5 -0.2; -0.3 0.7]  # 2 observations
-    batch_actions, _ = predict(policy, batch_obs, params, states; deterministic=false, rng=rng)
+    batch_actions, _ = DRiL.predict(policy, batch_obs, params, states; deterministic=false, rng=rng)
     
     @test length(batch_actions) == 2
     @test all(a -> a ∈ action_space, batch_actions)
@@ -97,7 +100,7 @@ end
 
 @testitem "DiscreteActorCriticPolicy action evaluation" tags = [:policies, :discrete, :evaluation] setup = [SharedTestSetup] begin
     using Random
-
+    using Lux
     obs_space = Box(Float32[-1.0, -1.0], Float32[1.0, 1.0])
     action_space = Discrete(4, 0)  # Actions: 0, 1, 2, 3
     policy = DiscreteActorCriticPolicy(obs_space, action_space)
@@ -117,7 +120,7 @@ end
     @test 1 <= actions <= action_space.n
     
     # Evaluate the same actions
-    eval_values, eval_log_probs, entropy, _ = evaluate_actions(policy, obs, actions, params, states)
+    eval_values, eval_log_probs, entropy, _ = DRiL.evaluate_actions(policy, obs, actions, params, states)
     
     # Values should match
     @test eval_values ≈ values atol=1e-6
@@ -132,7 +135,7 @@ end
     batch_obs = Float32[0.5 -0.2; -0.3 0.7]
     batch_actions, batch_values, batch_log_probs, _ = policy(batch_obs, params, states; rng=rng)
     
-    eval_batch_values, eval_batch_log_probs, batch_entropy, _ = evaluate_actions(policy, batch_obs, batch_actions, params, states)
+    eval_batch_values, eval_batch_log_probs, batch_entropy, _ = DRiL.evaluate_actions(policy, batch_obs, batch_actions, params, states)
     
     @test length(eval_batch_values) == 2
     @test length(eval_batch_log_probs) == 2
@@ -143,7 +146,7 @@ end
 
 @testitem "DiscreteActorCriticPolicy indexing consistency" tags = [:policies, :discrete, :indexing] setup = [SharedTestSetup] begin
     using Random
-
+    using Lux
     obs_space = Box(Float32[-1.0, -1.0], Float32[1.0, 1.0])
     
     # Test different action space configurations
@@ -167,11 +170,11 @@ end
         @test 1 <= actions <= action_space.n  # Internal actions should be 1-based
         
         # Test that predict() returns processed actions in action space range
-        processed_actions, _ = predict(policy, obs, params, states; rng=rng)
+        processed_actions, _ = DRiL.predict(policy, obs, params, states; rng=rng)
         @test processed_actions ∈ action_space  # Should be in action space range
         
         # Test that evaluation works with stored actions (1-based)
-        eval_values, eval_log_probs, entropy, _ = evaluate_actions(policy, obs, actions, params, states)
+        eval_values, eval_log_probs, entropy, _ = DRiL.evaluate_actions(policy, obs, actions, params, states)
         @test length(eval_log_probs) == 1
         @test length(entropy) == 1
         @test eval_log_probs[1] isa Float32
@@ -181,7 +184,7 @@ end
 
 @testitem "DiscreteActorCriticPolicy action space conversion" tags = [:policies, :discrete, :conversion] setup = [SharedTestSetup] begin
     using Random
-
+    using Lux
     obs_space = Box(Float32[-1.0, -1.0], Float32[1.0, 1.0])
     action_space = Discrete(3, 0)  # Gymnasium style: 0, 1, 2
     policy = DiscreteActorCriticPolicy(obs_space, action_space)
@@ -199,7 +202,7 @@ end
         @test 1 <= raw_action <= 3  # Should be in [1, 2, 3]
         
         # Get processed action for environment
-        env_action, _ = predict(policy, obs, params, states; rng=rng)
+        env_action, _ = DRiL.predict(policy, obs, params, states; rng=rng)
         @test env_action ∈ action_space  # Should be in [0, 1, 2]
         @test 0 <= env_action <= 2
         
@@ -212,7 +215,7 @@ end
 
 @testitem "DiscreteActorCriticPolicy vs ContinuousActorCriticPolicy interface" tags = [:policies, :discrete, :interface] setup = [SharedTestSetup] begin
     using Random
-
+    using Lux
     obs_space = Box(Float32[-1.0, -1.0], Float32[1.0, 1.0])
     discrete_action_space = Discrete(4, 0)
     continuous_action_space = Box(Float32[-1.0], Float32[1.0])
@@ -236,16 +239,16 @@ end
     continuous_actions, continuous_values, continuous_log_probs, _ = continuous_policy(obs, continuous_params, continuous_states; rng=rng)
     
     # Test predict
-    discrete_pred, _ = predict(discrete_policy, obs, discrete_params, discrete_states; rng=rng)
-    continuous_pred, _ = predict(continuous_policy, obs, continuous_params, continuous_states; rng=rng)
+    discrete_pred, _ = DRiL.predict(discrete_policy, obs, discrete_params, discrete_states; rng=rng)
+    continuous_pred, _ = DRiL.predict(continuous_policy, obs, continuous_params, continuous_states; rng=rng)
     
     # Test predict_values
     discrete_vals, _ = predict_values(discrete_policy, obs, discrete_params, discrete_states)
     continuous_vals, _ = predict_values(continuous_policy, obs, continuous_params, continuous_states)
     
     # Test evaluate_actions
-    discrete_eval_values, discrete_eval_log_probs, discrete_entropy, _ = evaluate_actions(discrete_policy, obs, discrete_actions, discrete_params, discrete_states)
-    continuous_eval_values, continuous_eval_log_probs, continuous_entropy, _ = evaluate_actions(continuous_policy, obs, continuous_actions, continuous_params, continuous_states)
+    discrete_eval_values, discrete_eval_log_probs, discrete_entropy, _ = DRiL.evaluate_actions(discrete_policy, obs, discrete_actions, discrete_params, discrete_states)
+    continuous_eval_values, continuous_eval_log_probs, continuous_entropy, _ = DRiL.evaluate_actions(continuous_policy, obs, continuous_actions, continuous_params, continuous_states)
     
     # Test that outputs have expected types and shapes
     @test discrete_actions isa Integer
@@ -260,7 +263,7 @@ end
 
 @testitem "DiscreteActorCriticPolicy edge cases" tags = [:policies, :discrete, :edge_cases] setup = [SharedTestSetup] begin
     using Random
-
+    using Lux
     # Test single action space
     obs_space = Box(Float32[-1.0], Float32[1.0])
     single_action_space = Discrete(1, 0)  # Only action 0
@@ -276,7 +279,7 @@ end
     actions, values, log_probs, _ = policy(obs, params, states; rng=rng)
     @test actions == 1  # Should always be 1 (1-based internally)
     
-    processed_action, _ = predict(policy, obs, params, states; rng=rng)
+    processed_action, _ = DRiL.predict(policy, obs, params, states; rng=rng)
     @test processed_action == 0  # Should be 0 after processing
     
     # Test large action space
@@ -289,7 +292,7 @@ end
     large_actions, _, _, _ = large_policy(obs, large_params, large_states; rng=rng)
     @test 1 <= large_actions <= 100  # Internal action should be in [1, 100]
     
-    large_processed, _ = predict(large_policy, obs, large_params, large_states; rng=rng)
+    large_processed, _ = DRiL.predict(large_policy, obs, large_params, large_states; rng=rng)
     @test 0 <= large_processed <= 99  # Processed should be in [0, 99]
     
     # Test negative start action space
@@ -302,6 +305,6 @@ end
     neg_actions, _, _, _ = neg_policy(obs, neg_params, neg_states; rng=rng)
     @test 1 <= neg_actions <= 5  # Internal should be [1, 5]
     
-    neg_processed, _ = predict(neg_policy, obs, neg_params, neg_states; rng=rng)
+    neg_processed, _ = DRiL.predict(neg_policy, obs, neg_params, neg_states; rng=rng)
     @test -2 <= neg_processed <= 2  # Processed should be [-2, 2]
 end 

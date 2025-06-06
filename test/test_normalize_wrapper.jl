@@ -132,7 +132,7 @@ end
 
     # Test training mode control
     @test is_training(norm_env) == false
-    set_training!(norm_env, true)
+    norm_env = set_training(norm_env, true)
     @test is_training(norm_env) == true
 end
 
@@ -307,7 +307,7 @@ end
     @test training_count > initial_count
 
     # Switch to evaluation mode
-    set_training!(norm_env, false)
+    norm_env = set_training(norm_env, false)
     DRiL.step!(norm_env, rand(Float32, 1, 2))
     eval_count = norm_env.obs_rms.count
 

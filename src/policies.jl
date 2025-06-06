@@ -1,5 +1,5 @@
 abstract type AbstractPolicy <: Lux.AbstractLuxLayer end
-
+#FIXME document these functions instead of making default implementations
 #predicts actions from observations, also returns st
 function predict(policy::AbstractPolicy, obs::AbstractArray, ps, st; deterministic::Bool=false) end
 
