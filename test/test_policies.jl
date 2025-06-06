@@ -207,7 +207,7 @@ end
         @test 0 <= env_action <= 2
         
         # Test that process_action works correctly
-        manual_processed = process_action(raw_action, action_space)
+        manual_processed = DRiL.process_action(raw_action, action_space)
         @test manual_processed ∈ action_space
         @test manual_processed == raw_action + (action_space.start - 1)  # 1-based to 0-based
     end
