@@ -20,15 +20,16 @@ using TestItems
     # Test space properties
     obs_space = DRiL.observation_space(env)
     act_space = DRiL.action_space(env)
-    @test obs_space isa UniformBox{Float32}
-    @test act_space isa UniformBox{Float32}
+    @test obs_space isa Box{Float32}
+    @test act_space isa Box{Float32}
     @test obs_space.shape == (2,)
     @test act_space.shape == (2,)
 
     # Test reset functionality
     rng = Random.MersenneTwister(42)
     Random.seed!(env, rand(rng, UInt32))
-    initial_obs = DRiL.reset!(env)
+    DRiL.reset!(env)
+    initial_obs = DRiL.observe(env)
     @test length(initial_obs) == 2
     @test initial_obs ∈ obs_space
     @test !DRiL.terminated(env)
@@ -86,10 +87,11 @@ end
     env = SharedTestSetup.InfiniteHorizonEnv(4)
 
     # Test interface compliance
-    @test DRiL.observation_space(env) isa UniformBox{Float32}
-    @test DRiL.action_space(env) isa UniformBox{Float32}
+    @test DRiL.observation_space(env) isa Box{Float32}
+    @test DRiL.action_space(env) isa Box{Float32}
 
-    initial_obs = DRiL.reset!(env)
+    DRiL.reset!(env)
+    initial_obs = DRiL.observe(env)
     @test length(initial_obs) == 1
     @test initial_obs[1] ≈ 0.0f0
 
@@ -122,7 +124,8 @@ end
     @test DRiL.action_space(wrapped_env) == DRiL.action_space(base_env)
 
     # Test reset
-    obs = DRiL.reset!(wrapped_env)
+    DRiL.reset!(wrapped_env)
+    obs = DRiL.observe(wrapped_env)
     @test obs == constant_obs
     @test !DRiL.terminated(wrapped_env)
     @test !DRiL.truncated(wrapped_env)
@@ -155,7 +158,8 @@ end
     rng = Random.MersenneTwister(123)
     for i in 1:10
         Random.seed!(env, rand(rng, UInt32))
-        obs = DRiL.reset!(env)
+        DRiL.reset!(env)
+        obs = DRiL.observe(env)
         @test length(obs) == obs_space.shape[1]
         @test obs ∈ obs_space
 
@@ -188,7 +192,8 @@ end
     results1 = []
     env1 = SharedTestSetup.CustomEnv(max_steps)
     Random.seed!(env1, seed)
-    obs1 = DRiL.reset!(env1)
+    DRiL.reset!(env1)
+    obs1 = DRiL.observe(env1)
     push!(results1, copy(obs1))
 
     action = [0.5f0, -0.2f0]
@@ -204,7 +209,8 @@ end
     results2 = []
     env2 = SharedTestSetup.CustomEnv(max_steps)
     Random.seed!(env2, seed)
-    obs2 = DRiL.reset!(env2)
+    DRiL.reset!(env2)
+    obs2 = DRiL.observe(env2)
     push!(results2, copy(obs2))
 
     for i in 1:max_steps

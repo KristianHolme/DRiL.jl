@@ -17,10 +17,10 @@ end
 #     return PPO{T}(; kwargs...)
 # end
 
-function learn!(agent::ActorCriticAgent, env::AbstractEnv, alg::PPO{T}; max_steps::Int, ad_type::Lux.Training.AbstractADType=AutoZygote()) where T
+function learn!(agent::ActorCriticAgent, env::AbstractParallellEnv, alg::PPO{T}; max_steps::Int, ad_type::Lux.Training.AbstractADType=AutoZygote()) where T
     n_steps = agent.n_steps
-    n_envs = env.n_envs
-    roll_buffer = RolloutBuffer(observation_space(env), action_space(env), 
+    n_envs = number_of_envs(env)
+    roll_buffer = RolloutBuffer(observation_space(env), action_space(env),
         alg.gae_lambda, alg.gamma, n_steps, n_envs)
 
     iterations = max_steps ÷ (n_steps * n_envs)
@@ -28,7 +28,7 @@ function learn!(agent::ActorCriticAgent, env::AbstractEnv, alg::PPO{T}; max_step
 
     agent.verbose > 0 && @info "Training with total_steps: $total_steps, 
         iterations: $iterations, n_steps: $n_steps, n_envs: $n_envs"
-    
+
     progress_meter = Progress(total_steps, desc="Training...",
         showspeed=true, enabled=agent.verbose > 0
     )
@@ -57,11 +57,12 @@ function learn!(agent::ActorCriticAgent, env::AbstractEnv, alg::PPO{T}; max_step
         if !isnothing(agent.logger)
             set_step!(agent.logger, steps_taken(agent))
             log_value(agent.logger, "env/fps", fps)
+            log_stats(env, agent.logger)
         end
         data_loader = DataLoader((roll_buffer.observations, roll_buffer.actions,
                 roll_buffer.advantages, roll_buffer.returns,
                 roll_buffer.logprobs, roll_buffer.values),
-            batchsize=agent.batch_size, shuffle=true, parallel=true)
+            batchsize=agent.batch_size, shuffle=true, parallel=true, rng=agent.rng)
         continue_training = true
         entropy_losses = Float32[]
         entropy = Float32[]
@@ -190,11 +191,12 @@ function clip_range(old_values::Vector{T}, values::Vector{T}, clip_range::T) whe
     return old_values .+ clamp.(values .- old_values, -clip_range, clip_range)
 end
 
-function loss(alg::PPO{T}, policy::ActorCriticPolicy, ps, st, batch_data) where T
+function loss(alg::PPO{T}, policy::AbstractActorCriticPolicy, ps, st, batch_data) where T
     observations, actions, advantages, returns, old_logprobs, old_values = batch_data
 
     advantages = @ignore_derivatives alg.normalize_advantage ? normalize(advantages) : advantages
-
+    # @info "in loss, evaluating actions!"
+    # @info "actions: $actions"
     values, log_probs, entropy, st = evaluate_actions(policy, observations, actions, ps, st)
 
     log_probs = vec(log_probs)
