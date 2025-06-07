@@ -172,20 +172,16 @@ end
 
     # Reset and collect observations 
     reset!(norm_env)
-    all_obs = []
-    original_obs = []
 
     # Collect data for normalization
     for i in 1:6  # Multiple steps to build statistics
-        push!(original_obs, get_original_obs(norm_env))
-        push!(all_obs, observe(norm_env))
         actions = [rand(action_space(norm_env)) for _ in 1:2]
         rewards = act!(norm_env, actions)
     end
 
     # Check that observations are being normalized
-    final_obs = observe(norm_env)
-    final_original = get_original_obs(norm_env)
+    final_obs = observe(norm_env)[1]
+    final_original = get_original_obs(norm_env)[1]
 
     # The normalized observations should be different from original
     @test final_obs != final_original
@@ -272,7 +268,7 @@ end
         act!(norm_env, actions)
     end
 
-    obs = observe(norm_env)
+    obs = observe(norm_env)[1]
 
     # All normalized observations should be within clipping bounds
     @test all(abs.(obs) .<= norm_env.clip_obs + 1e-6)
