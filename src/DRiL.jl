@@ -35,7 +35,7 @@ include("buffers.jl")
 export Trajectory, RolloutBuffer
 
 include("environment_tools.jl")
-export MultiThreadedParallelEnv, ScalingWrapperEnv, NormalizeWrapperEnv, RunningMeanStd
+export MultiThreadedParallelEnv, BroadcastedParallelEnv, ScalingWrapperEnv, NormalizeWrapperEnv, RunningMeanStd
 export save_normalization_stats, load_normalization_stats!, set_training, is_training
 export get_original_obs, get_original_rewards, normalize_obs, normalize_reward, unnormalize_obs, unnormalize_reward
 export MonitorWrapperEnv, EpisodeStats, is_wrapper, unwrap, unwrap_all

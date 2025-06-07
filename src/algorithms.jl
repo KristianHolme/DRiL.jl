@@ -17,7 +17,7 @@ end
 #     return PPO{T}(; kwargs...)
 # end
 
-function learn!(agent::ActorCriticAgent, env::AbstractParallellEnv, alg::PPO{T}; max_steps::Int, ad_type::Lux.Training.AbstractADType=AutoZygote()) where T
+function learn!(agent::ActorCriticAgent, env::AbstractParallellEnv, alg::PPO{T}, ad_type::Lux.Training.AbstractADType=AutoZygote(); max_steps::Int) where T
     n_steps = agent.n_steps
     n_envs = number_of_envs(env)
     roll_buffer = RolloutBuffer(observation_space(env), action_space(env),

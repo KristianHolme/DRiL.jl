@@ -281,7 +281,7 @@ end
     # Test: Verify that discrete action indexing is consistent throughout the pipeline
     
     # Create CartPole environment with 0-based action space
-    env = MultiThreadedParallelEnv([CartPoleEnv() for _ in 1:2])
+    env = BroadcastedParallelEnv([CartPoleEnv() for _ in 1:2])
     policy = DiscreteActorCriticPolicy(DRiL.observation_space(env), DRiL.action_space(env))
     agent = ActorCriticAgent(policy; n_steps=4, batch_size=4, epochs=1, verbose=0)
     alg = PPO()
@@ -302,11 +302,11 @@ end
     st = agent.train_state.states
     
     # Policy output (1-based)
-    policy_actions, _, _, _ = policy(obs[:, 1:1], ps, st)  # Single observation
+    policy_actions, _, _, _ = policy(stack(obs)[:,1:1], ps, st)  # Single observation
     @test all(1 .<= policy_actions .<= 2)  # Should be 1-based
     
     # Processed actions for environment (0-based)
-    actions, _ = DRiL.predict(policy, obs[:, 1:1], ps, st)
+    actions, _ = DRiL.predict(policy, stack(obs)[:,1:1], ps, st)
     processed_actions = DRiL.process_action(actions, DRiL.action_space(env))
     @test processed_actions[1] ∈ DRiL.action_space(env)  # Should be 0 or 1
     

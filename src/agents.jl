@@ -73,30 +73,33 @@ function ActorCriticAgent(policy::AbstractActorCriticPolicy;
         logger, verbose, rng, AgentStats(0, 0))
 end
 
-function get_action_and_values(agent::ActorCriticAgent, observations::AbstractArray)
+#takes vector of observations
+function get_action_and_values(agent::ActorCriticAgent, observations::AbstractVector)
     policy = agent.policy
     ps = agent.train_state.parameters
     st = agent.train_state.states
-    actions, values, logprobs, st = policy(observations, ps, st; rng=agent.rng)
+    actions, values, logprobs, st = policy(stack(observations), ps, st; rng=agent.rng)
+    #does this reset work?, probably not
     @reset agent.train_state.states = st
-    return actions, values, logprobs
+    return eachcol(actions), vec(values), vec(logprobs)
 end
 
-function predict_values(agent::ActorCriticAgent, observations::AbstractArray)
+function predict_values(agent::ActorCriticAgent, observations::AbstractVector)
     policy = agent.policy
     ps = agent.train_state.parameters
     st = agent.train_state.states
-    values, st = predict_values(policy, observations, ps, st)
+    values, st = predict_values(policy, stack(observations), ps, st)
+    #FIXME: this does not work?
     @reset agent.train_state.states = st
     return values
 end
 
-function predict_actions(agent::ActorCriticAgent, observations::AbstractArray; deterministic::Bool=false, rng::AbstractRNG=agent.rng)
+function predict_actions(agent::ActorCriticAgent, observations::AbstractVector; deterministic::Bool=false, rng::AbstractRNG=agent.rng)
     policy = agent.policy
     ps = agent.train_state.parameters
     st = agent.train_state.states
-    actions, _ = predict(policy, observations, ps, st; deterministic=deterministic, rng=rng)
-    return actions
+    actions, _ = predict(policy, stack(observations), ps, st; deterministic=deterministic, rng=rng)
+    return eachcol(actions)
 end
 
 # Abstract methods for all agents

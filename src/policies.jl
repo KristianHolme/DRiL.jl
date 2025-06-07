@@ -196,8 +196,8 @@ end
 
 function (policy::ContinuousActorCriticPolicy)(obs::AbstractArray, ps, st; rng::AbstractRNG=Random.default_rng())
     feats, st = extract_features(policy, obs, ps, st)
-    action_mean, st = get_actions_from_latent(policy, feats, ps, st)
-    values, st = get_values_from_latent(policy, feats, ps, st)
+    action_mean, st = get_actions_from_features(policy, feats, ps, st)
+    values, st = get_values_from_features(policy, feats, ps, st)
     std = exp.(ps.log_std)
     actions, log_probs = get_noisy_actions(policy, action_mean, std, rng; log_probs=true)
     return actions, values, log_probs, st
@@ -205,40 +205,26 @@ end
 
 function (policy::DiscreteActorCriticPolicy)(obs::AbstractArray, ps, st; rng::AbstractRNG=Random.default_rng())
     feats, st = extract_features(policy, obs, ps, st)
-    action_logits, st = get_actions_from_latent(policy, feats, ps, st)  # For discrete, these are logits
-    values, st = get_values_from_latent(policy, feats, ps, st)
+    action_logits, st = get_actions_from_features(policy, feats, ps, st)  # For discrete, these are logits
+    values, st = get_values_from_features(policy, feats, ps, st)
     actions, log_probs = get_discrete_actions(policy, action_logits, rng; log_probs=true, deterministic=false)
     return actions, values, log_probs, st
 end
 
 function extract_features(policy::AbstractActorCriticPolicy, obs::AbstractArray, ps, st)
-
-    obs_space_shape = size(observation_space(policy))
-    obs_shape = size(obs)
-    # @info "obs_space_shape: $obs_space_shape"
-    # @info "obs_shape: $obs_shape"
-    # @info "ndims(obs): $(ndims(obs))"
-    # @info "length(obs_space_shape): $(length(obs_space_shape))"
-    if ndims(obs) - 1 == length(obs_space_shape)
-        batch_size = obs_shape[end]
-    else
-        batch_size = 1
-    end
-    reshaped_obs = reshape(obs, obs_space_shape..., batch_size)
-
-    feats, feats_st = policy.feature_extractor(reshaped_obs, ps.feature_extractor, st.feature_extractor)
+    feats, feats_st = policy.feature_extractor(obs, ps.feature_extractor, st.feature_extractor)
     st = merge(st, (; feature_extractor=feats_st))
     return feats, st
 end
 
-function get_actions_from_latent(policy::AbstractActorCriticPolicy, latent::AbstractArray, ps, st)
-    actions, actor_st = policy.actor_head(latent, ps.actor_head, st.actor_head)
+function get_actions_from_features(policy::AbstractActorCriticPolicy, feats::AbstractArray, ps, st)
+    actions, actor_st = policy.actor_head(feats, ps.actor_head, st.actor_head)
     st = merge(st, (; actor_head=actor_st))
     return actions, st
 end
 
-function get_values_from_latent(policy::AbstractActorCriticPolicy, latent::AbstractArray, ps, st)
-    values, critic_st = policy.critic_head(latent, ps.critic_head, st.critic_head)
+function get_values_from_features(policy::AbstractActorCriticPolicy, feats::AbstractArray, ps, st)
+    values, critic_st = policy.critic_head(feats, ps.critic_head, st.critic_head)
     st = merge(st, (; critic_head=critic_st))
     return values, st
 end
@@ -252,30 +238,21 @@ function get_distributions(policy::ContinuousActorCriticPolicy, action_means::Ab
 
     if prod(policy.action_space.shape) > 1
         # Multivariate case - use MvNormal
-        if ndims(action_means) == 1
-            # Single observation
-            if static_std
-                cov = Diagonal(fill(std[1]^2, length(action_means)))
-            else
-                cov = Diagonal(std .^ 2)
-            end
-            return Distributions.MvNormal(action_means, cov)
-        else
-            # Batched observations
-            batch_size = size(action_means, ndims(action_means))
-            distributions = Vector{Distributions.MvNormal}(undef, batch_size)
+        
+        # Batched observations
+        batch_size = size(action_means, ndims(action_means))
+        distributions = Vector{Distributions.MvNormal}(undef, batch_size)
 
-            for i in 1:batch_size
-                mean_i = action_means[:, i]
-                if static_std
-                    cov = Diagonal(fill(std[1]^2, length(mean_i)))
-                else
-                    cov = Diagonal((std[:, i]) .^ 2)
-                end
-                distributions[i] = Distributions.MvNormal(mean_i, cov)
+        for i in 1:batch_size
+            mean_i = action_means[:, i]
+            if static_std
+                cov = Diagonal(fill(std[1]^2, length(mean_i)))
+            else
+                cov = Diagonal((std[:, i]) .^ 2)
             end
-            return distributions
+            distributions[i] = Distributions.MvNormal(mean_i, cov)
         end
+        return distributions
     else
         # Univariate case - use Normal
         if static_std
@@ -317,7 +294,7 @@ function get_noisy_actions(policy::AbstractActorCriticPolicy, action_means::Abst
     noise = @ignore_derivatives randn(rng, act_type, act_shape...)
 
     # Apply noise with std: action = mean + std * noise
-    actions = action_means + std .* noise
+    actions = action_means .+ std .* noise
 
     @assert size(actions) == size(action_means) "action_means and actions have different shapes"
 
@@ -364,7 +341,7 @@ end
 
 function predict(policy::ContinuousActorCriticPolicy, obs::AbstractArray, ps, st; deterministic::Bool=false, rng::AbstractRNG=Random.default_rng())
     feats, st = extract_features(policy, obs, ps, st)
-    action_mean, st = get_actions_from_latent(policy, feats, ps, st)
+    action_mean, st = get_actions_from_features(policy, feats, ps, st)
 
     if deterministic
         # Process actions: clip and ensure correct type
@@ -381,7 +358,7 @@ end
 
 function predict(policy::DiscreteActorCriticPolicy, obs::AbstractArray, ps, st; deterministic::Bool=false, rng::AbstractRNG=Random.default_rng())
     feats, st = extract_features(policy, obs, ps, st)
-    action_logits, st = get_actions_from_latent(policy, feats, ps, st)  # For discrete, these are logits
+    action_logits, st = get_actions_from_features(policy, feats, ps, st)  # For discrete, these are logits
 
     actions = get_discrete_actions(policy, action_logits, rng; log_probs=false, deterministic=deterministic)
     # Process actions: ensure they're in the correct range
@@ -391,8 +368,8 @@ end
 
 function evaluate_actions(policy::ContinuousActorCriticPolicy, obs::AbstractArray, actions::AbstractArray, ps, st)
     feats, st = extract_features(policy, obs, ps, st)
-    new_action_mean, st = get_actions_from_latent(policy, feats, ps, st)
-    values, st = get_values_from_latent(policy, feats, ps, st)
+    new_action_mean, st = get_actions_from_features(policy, feats, ps, st)
+    values, st = get_values_from_features(policy, feats, ps, st)
     std = exp.(ps.log_std)
     distributions = get_distributions(policy, new_action_mean, std)
 
@@ -416,8 +393,8 @@ end
 function evaluate_actions(policy::DiscreteActorCriticPolicy, obs::AbstractArray, actions::AbstractArray{<:Int}, ps, st)
     # @info "in evaluate_actions"
     feats, st = extract_features(policy, obs, ps, st)
-    new_action_logits, st = get_actions_from_latent(policy, feats, ps, st)  # For discrete, these are logits
-    values, st = get_values_from_latent(policy, feats, ps, st)
+    new_action_logits, st = get_actions_from_features(policy, feats, ps, st)  # For discrete, these are logits
+    values, st = get_values_from_features(policy, feats, ps, st)
     # @info "gone through networks"
     # Fast path: compute log probs and entropy directly using broadcasting
     log_probs, entropy = get_discrete_logprobs_and_entropy(new_action_logits, actions)
@@ -427,6 +404,6 @@ end
 
 function predict_values(policy::AbstractActorCriticPolicy, obs::AbstractArray, ps, st)
     feats, st = extract_features(policy, obs, ps, st)
-    values, st = get_values_from_latent(policy, feats, ps, st)
+    values, st = get_values_from_features(policy, feats, ps, st)
     return values, st
 end

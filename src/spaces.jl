@@ -215,7 +215,7 @@ function Base.in(sample, space::Box{T}) where T
 end
 
 # Helper function to process actions: ensure correct type and clipping for Box
-function process_action(action::AbstractArray, action_space::Box{T}) where T
+function process_action(action::AbstractArray{T}, action_space::Box{T}) where T
     # First check if type conversion is needed
     if eltype(action) != T
         @warn "Action type mismatch: $(eltype(action)) != $T"

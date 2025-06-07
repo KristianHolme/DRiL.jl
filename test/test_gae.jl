@@ -11,7 +11,7 @@
     constant_value = 0.5f0
 
     # Create environment that gives reward 1.0 only at final step
-    env = MultiThreadedParallelEnv([SharedTestSetup.CustomEnv(max_steps)])
+    env = BroadcastedParallelEnv([SharedTestSetup.CustomEnv(max_steps)])
 
     # Create policy with constant value function
     policy = SharedTestSetup.ConstantValuePolicy(DRiL.observation_space(env), DRiL.action_space(env), constant_value)
@@ -86,7 +86,7 @@ end
     ]
 
     for (gamma, gae_lambda) in test_cases
-        env = MultiThreadedParallelEnv([SharedTestSetup.CustomEnv(max_steps)])
+        env = BroadcastedParallelEnv([SharedTestSetup.CustomEnv(max_steps)])
         policy = SharedTestSetup.ConstantValuePolicy(DRiL.observation_space(env), DRiL.action_space(env), constant_value)
         agent = ActorCriticAgent(policy; n_steps=max_steps, batch_size=max_steps, epochs=1, verbose=0)
         alg = PPO(; gamma=gamma, gae_lambda=gae_lambda)
@@ -124,7 +124,7 @@ end
     constant_value = 0.5f0
 
     # Create environment
-    env = MultiThreadedParallelEnv([SharedTestSetup.CustomEnv(max_steps)])
+    env = BroadcastedParallelEnv([SharedTestSetup.CustomEnv(max_steps)])
 
     # Create policy with constant value function
     policy = SharedTestSetup.ConstantValuePolicy(DRiL.observation_space(env), DRiL.action_space(env), constant_value)
@@ -184,7 +184,7 @@ end
     n_total_steps = 32  # Should get 4 episodes
 
     # Create environment
-    env = MultiThreadedParallelEnv([SharedTestSetup.CustomEnv(max_steps)])
+    env = BroadcastedParallelEnv([SharedTestSetup.CustomEnv(max_steps)])
 
     # Create policy with constant value function
     policy = SharedTestSetup.ConstantValuePolicy(DRiL.observation_space(env), DRiL.action_space(env), constant_value)
@@ -206,7 +206,7 @@ end
     # Advantages = returns - values = returns - 0.0 = returns
 
     # Check episode boundaries
-    episode_ends = findall(i -> rewards[i] ≈ 1.0f0, 1:length(rewards))
+    episode_ends = findall(isapprox.(rewards, 1.0f0, atol=1e-5))
 
     for episode_end in episode_ends
         episode_start = max(1, episode_end - max_steps + 1)
@@ -229,7 +229,7 @@ end
     constant_value = 0.5f0
 
     # Create infinite horizon environment (always reward 1.0, never terminates)
-    env = MultiThreadedParallelEnv([SharedTestSetup.InfiniteHorizonEnv()])
+    env = BroadcastedParallelEnv([SharedTestSetup.InfiniteHorizonEnv()])
 
     # Create policy with constant value function
     policy = SharedTestSetup.ConstantValuePolicy(DRiL.observation_space(env), DRiL.action_space(env), constant_value)
@@ -280,7 +280,7 @@ end
     gae_lambda = 0.8f0
     constant_value = 0.3f0
 
-    env = MultiThreadedParallelEnv([SharedTestSetup.CustomEnv(max_steps)])
+    env = BroadcastedParallelEnv([SharedTestSetup.CustomEnv(max_steps)])
     policy = SharedTestSetup.ConstantValuePolicy(DRiL.observation_space(env), DRiL.action_space(env), constant_value)
     agent = ActorCriticAgent(policy; n_steps=max_steps, batch_size=max_steps, epochs=1, verbose=0)
     alg = PPO(; gamma=gamma, gae_lambda=gae_lambda)
@@ -311,7 +311,7 @@ end
 
     # Test zero lambda case (TD(0))
     lambda_zero = 0.0f0
-    env_multi = MultiThreadedParallelEnv([SharedTestSetup.CustomEnv(3)])  # 3 steps for better testing
+    env_multi = BroadcastedParallelEnv([SharedTestSetup.CustomEnv(3)])  # 3 steps for better testing
     agent_multi = ActorCriticAgent(policy; n_steps=3, batch_size=3, epochs=1, verbose=0)
     roll_buffer_td0 = RolloutBuffer(DRiL.observation_space(env_multi), DRiL.action_space(env_multi), lambda_zero, gamma, 3, 1)
     DRiL.collect_rollouts!(roll_buffer_td0, agent_multi, env_multi)

@@ -17,15 +17,11 @@ end
 
 struct MultiThreadedParallelEnv{E<:AbstractEnv} <: AbstractParallellEnv
     envs::Vector{E}
-    infos::Vector{Dict{String,Any}}
-
-
     function MultiThreadedParallelEnv(envs::Vector{E}) where E<:AbstractEnv
         @assert all(env -> typeof(env) == E, envs) "All environments must be of the same type"
         @assert all(env -> isequal(observation_space(env), observation_space(envs[1])), envs) "All environments must have the same observation space"
         @assert all(env -> isequal(action_space(env), action_space(envs[1])), envs) "All environments must have the same action space"
-        infos = get_info.(envs)
-        return new{E}(envs, infos)
+        return new{E}(envs)
     end
 end
 
@@ -42,7 +38,7 @@ function observe(env::MultiThreadedParallelEnv{E}) where E<:AbstractEnv
     @threads for i in 1:length(env.envs)
         observations[i] = observe(env.envs[i])
     end
-    return env.observations
+    return observations
 end
 
 function terminated(env::MultiThreadedParallelEnv{E}) where E<:AbstractEnv
@@ -65,35 +61,105 @@ function get_info(env::MultiThreadedParallelEnv{E}) where E<:AbstractEnv
     return get_info.(env.envs)
 end
 
-function act!(env::MultiThreadedParallelEnv{E}, actions::Vector) where E<:AbstractEnv
+function act!(env::MultiThreadedParallelEnv{E}, actions::AbstractVector) where E<:AbstractEnv
     @assert length(actions) == length(env.envs) "Number of actions ($(length(actions))) must match number of environments ($(length(env.envs)))"
     
     T = eltype(observation_space(env))
     rewards = Vector{T}(undef, length(env.envs))
+    terminateds = Vector{Bool}(undef, length(env.envs))
+    truncateds = Vector{Bool}(undef, length(env.envs))
+    infos = Vector{Dict{String,Any}}(undef, length(env.envs))
     
     @threads for i in 1:length(env.envs)
         rewards[i] = act!(env.envs[i], actions[i])
-        env.infos[i] = get_info(env.envs[i])
         
-        env_terminated = terminated(env.envs[i])
-        env_truncated = truncated(env.envs[i])
+        # Capture termination status BEFORE reset
+        terminateds[i] = terminated(env.envs[i])
+        truncateds[i] = truncated(env.envs[i])
+        infos[i] = get_info(env.envs[i])
         
-        if env_truncated
-            env.infos[i]["terminal_observation"] = observe(env.envs[i])
+        if truncateds[i]
+            infos[i]["terminal_observation"] = observe(env.envs[i])
         end
         
-        if env_terminated || env_truncated
+        if terminateds[i] || truncateds[i]
             reset!(env.envs[i])
         end
-        
-        # Update cached observation
-        env.observations[i] = observe(env.envs[i])
     end
     
-    return rewards
+    return rewards, terminateds, truncateds, infos
 end
 
 number_of_envs(env::MultiThreadedParallelEnv) = length(env.envs)
+
+struct BroadcastedParallelEnv{E<:AbstractEnv} <: AbstractParallellEnv
+    envs::Vector{E}
+
+    function BroadcastedParallelEnv(envs::Vector{E}) where E<:AbstractEnv
+        @assert all(env -> typeof(env) == E, envs) "All environments must be of the same type"
+        @assert all(env -> isequal(observation_space(env), observation_space(envs[1])), envs) "All environments must have the same observation space"
+        @assert all(env -> isequal(action_space(env), action_space(envs[1])), envs) "All environments must have the same action space"
+        return new{E}(envs)
+    end
+end
+
+function reset!(env::BroadcastedParallelEnv{E}) where E<:AbstractEnv
+    reset!.(env.envs)
+    nothing
+end
+
+function observe(env::BroadcastedParallelEnv{E}) where E<:AbstractEnv
+    return observe.(env.envs)
+end
+
+function terminated(env::BroadcastedParallelEnv{E}) where E<:AbstractEnv
+    return terminated.(env.envs)
+end
+
+function truncated(env::BroadcastedParallelEnv{E}) where E<:AbstractEnv
+    return truncated.(env.envs)
+end
+
+function action_space(env::BroadcastedParallelEnv{E}) where E<:AbstractEnv
+    return action_space(env.envs[1])
+end
+
+function observation_space(env::BroadcastedParallelEnv{E}) where E<:AbstractEnv
+    return observation_space(env.envs[1])
+end
+
+function get_info(env::BroadcastedParallelEnv{E}) where E<:AbstractEnv
+    return get_info.(env.envs)
+end
+
+function act!(env::BroadcastedParallelEnv{E}, actions::AbstractVector) where E<:AbstractEnv
+    @assert length(actions) == length(env.envs) "Number of actions ($(length(actions))) must match number of environments ($(length(env.envs)))"
+    
+    # Use broadcasting for the main operations
+    rewards = act!.(env.envs, actions)
+    
+    # Capture termination status BEFORE reset
+    terminateds = terminated.(env.envs)
+    truncateds = truncated.(env.envs)
+    
+    # Update infos using broadcasting
+    infos = get_info.(env.envs)
+    
+    # Handle terminal observations for truncated environments
+    for i in 1:length(env.envs)
+        if truncateds[i]
+            infos[i]["terminal_observation"] = observe(env.envs[i])
+        end
+        
+        if terminateds[i] || truncateds[i]
+            reset!(env.envs[i])
+        end
+    end
+    
+    return rewards, terminateds, truncateds, infos
+end
+
+number_of_envs(env::BroadcastedParallelEnv) = length(env.envs)
 
 struct ScalingWrapperEnv{E<:AbstractEnv,O<:AbstractSpace,A<:AbstractSpace} <: AbstractEnvWrapper{E}
     env::E
@@ -227,6 +293,19 @@ function Random.seed!(env::AbstractParallellEnv, seed::Integer)
 end
 
 """
+    Random.seed!(env::BroadcastedParallelEnv, seed::Integer)
+
+Seed all sub-environments in a broadcasted parallel environment with incremented seeds.
+Each sub-environment gets seeded with `seed + i - 1` where `i` is the environment index.
+"""
+function Random.seed!(env::BroadcastedParallelEnv, seed::Integer)
+    for (i, sub_env) in enumerate(env.envs)
+        Random.seed!(sub_env, seed + i - 1)
+    end
+    return env
+end
+
+"""
     Random.seed!(env::ScalingWrapperEnv, seed::Integer)
 
 Seed a wrapped environment by forwarding the seed to the underlying environment.
@@ -347,7 +426,7 @@ function reset!(env::NormalizeWrapperEnv{E,T}) where {E,T}
     obs = observe(env.env)
     
     # Store original observations (concatenate for batch processing)
-    env.old_obs = stack(obs)
+    env.old_obs .= stack(obs)
     env.returns .= zero(T)
 
     # Update observation statistics if in training mode
@@ -363,7 +442,7 @@ function observe(env::NormalizeWrapperEnv{E,T}) where {E,T}
     obs = observe(env.env)
 
     # Store original observations and rewards for access
-    env.old_obs = stack(obs)
+    env.old_obs .= stack(obs)
 
     # Update observation statistics if in training mode
     if env.training && env.norm_obs
@@ -374,22 +453,31 @@ function observe(env::NormalizeWrapperEnv{E,T}) where {E,T}
     return normalized_obs
 end
 
-function act!(env::NormalizeWrapperEnv{E,T}, actions::Vector) where {E,T}
-    rewards = act!(env.env, actions)
+function act!(env::NormalizeWrapperEnv{E,T}, actions::AbstractVector) where {E,T}
+    rewards, terminateds, truncateds, infos = act!(env.env, actions)
     env.old_rewards .= rewards
+    
     # Update reward statistics and normalize
     if env.training && env.norm_reward
         update_reward_stats!(env, rewards)
     end
     normalized_rewards = normalize_reward(env, rewards)
 
-    #is this in the right place?
-    for i in findall(terminated(env) .| truncated(env))
+    # Reset returns for terminated environments
+    dones = terminateds .| truncateds
+    for i in findall(dones)
         env.returns[i] = zero(T)
     end
 
-    # Handle terminal observations in info not anymore TODO check
-    return normalized_rewards
+    # Normalize terminal observations in infos
+    for i in findall(truncateds)
+        if haskey(infos[i], "terminal_observation")
+            term_obs = infos[i]["terminal_observation"]
+            infos[i]["terminal_observation"] = normalize_obs(env, term_obs)
+        end
+    end
+
+    return normalized_rewards, terminateds, truncateds, infos
 end
 
 function update_reward_stats!(env::NormalizeWrapperEnv{E,T}, rewards::Vector{T}) where {E,T}
@@ -440,9 +528,12 @@ get_original_rewards(env::NormalizeWrapperEnv{E,T}) where {E,T} = copy(env.old_r
 terminated(env::NormalizeWrapperEnv{E,T}) where {E,T} = terminated(env.env)
 truncated(env::NormalizeWrapperEnv{E,T}) where {E,T} = truncated(env.env)
 function get_info(env::NormalizeWrapperEnv{E,T}) where {E,T}
-    #TODO: check if this is correct
     infos = get_info(env.env)
-    for i in findall(terminated(env) .| truncated(env))
+    terminateds = terminated(env.env)
+    truncateds = truncated(env.env)
+    dones = terminateds .| truncateds
+    
+    for i in findall(dones)
         if haskey(infos[i], "terminal_observation")
             term_obs = infos[i]["terminal_observation"]
             infos[i]["terminal_observation"] = normalize_obs(env, term_obs)
@@ -559,11 +650,8 @@ function reset!(monitor_env::MonitorWrapperEnv{E,T}) where {E,T}
     nothing
 end
 
-function act!(monitor_env::MonitorWrapperEnv{E,T}, actions::Vector) where {E,T}
-    rewards = act!(monitor_env.env, actions)
-    terminateds = terminated(monitor_env.env)
-    truncateds = truncated(monitor_env.env)
-    infos = get_info(monitor_env.env)
+function act!(monitor_env::MonitorWrapperEnv{E,T}, actions::AbstractVector) where {E,T}
+    rewards, terminateds, truncateds, infos = act!(monitor_env.env, actions)
     
     monitor_env.current_episode_returns .+= rewards
     monitor_env.current_episode_lengths .+= 1
@@ -577,7 +665,7 @@ function act!(monitor_env::MonitorWrapperEnv{E,T}, actions::Vector) where {E,T}
         monitor_env.current_episode_lengths[i] = 0
     end
     
-    return rewards
+    return rewards, terminateds, truncateds, infos
 end
 
 unwrap(env::MonitorWrapperEnv) = env.env
@@ -604,6 +692,22 @@ end
 
 function Base.show(io::IO, ::MIME"text/plain", env::MultiThreadedParallelEnv{E}) where E
     println(io, "MultiThreadedParallelEnv{", E, "}")
+    println(io, "  - Number of environments: ", length(env.envs))
+    obs_space = observation_space(env)
+    act_space = action_space(env)
+    println(io, "  - Observation space: ", obs_space)
+    println(io, "  - Action space: ", act_space)
+    print(io, "  environments: ")
+    show(io, env.envs[1])
+end
+
+# BroadcastedParallelEnv show methods
+function Base.show(io::IO, env::BroadcastedParallelEnv{E}) where E
+    print(io, "BroadcastedParallelEnv{", E, "}(", length(env.envs), " envs)")
+end
+
+function Base.show(io::IO, ::MIME"text/plain", env::BroadcastedParallelEnv{E}) where E
+    println(io, "BroadcastedParallelEnv{", E, "}")
     println(io, "  - Number of environments: ", length(env.envs))
     obs_space = observation_space(env)
     act_space = action_space(env)

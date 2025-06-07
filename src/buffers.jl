@@ -82,15 +82,12 @@ function collect_trajectories(agent::ActorCriticAgent, env::AbstractParallellEnv
     for i in 1:n_steps
         observations = new_obs
         actions, values, logprobs = get_action_and_values(agent, observations)
-        processed_actions = process_action(actions, act_space)
-        rewards = act!(env, processed_actions)
-        terminateds = terminated(env)
-        truncateds = truncated(env)
-        infos = get_info(env)
+        processed_actions = process_action.(actions, Ref(act_space))
+        rewards, terminateds, truncateds, infos = act!(env, processed_actions)
         new_obs = observe(env)
         for j in 1:n_envs
-            push!(current_trajectories[j].observations, eachslice(observations, dims=length(size(obs_space)) + 1)[j])
-            push!(current_trajectories[j].actions, eachslice(actions, dims=length(size(act_space)) + 1)[j])
+            push!(current_trajectories[j].observations, observations[j])
+            push!(current_trajectories[j].actions, actions[j])
             push!(current_trajectories[j].rewards, rewards[j])
             push!(current_trajectories[j].logprobs, logprobs[j])
             push!(current_trajectories[j].values, values[j])
@@ -101,7 +98,7 @@ function collect_trajectories(agent::ActorCriticAgent, env::AbstractParallellEnv
                 # Handle bootstrapping for truncated episodes
                 if truncateds[j] && haskey(infos[j], "terminal_observation")
                     last_observation = infos[j]["terminal_observation"]
-                    terminal_value = predict_values(agent, last_observation)[1]
+                    terminal_value = predict_values(agent, [last_observation])[1]
                     current_trajectories[j].bootstrap_value = terminal_value
                 end
 
@@ -109,8 +106,8 @@ function collect_trajectories(agent::ActorCriticAgent, env::AbstractParallellEnv
                 # We need to bootstrap with the value of the current observation
                 if !terminateds[j] && !truncateds[j] && i == n_steps
                     # Get the next observation after last step (which is the current state)
-                    next_obs = selectdim(new_obs, ndims(new_obs), j)
-                    next_value = predict_values(agent, next_obs)[1]
+                    next_obs = new_obs[j]
+                    next_value = predict_values(agent, [next_obs])[1]
                     current_trajectories[j].bootstrap_value = next_value
                 end
 

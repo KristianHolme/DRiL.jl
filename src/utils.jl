@@ -14,13 +14,12 @@ function collect_trajectory(agent::ActorCriticAgent, env::AbstractEnv;
             original_observation = observation
         end
         push!(observations, original_observation)
-        observation = reshape(observation, size(observation)..., 1)
         if norm_env !== nothing
             observation = normalize_obs(norm_env, observation)
         end
 
-        agent_action = predict_actions(agent, observation, deterministic=true)
-        agent_action = selectdim(agent_action, ndims(agent_action), 1)
+        agent_action = predict_actions(agent, [observation], deterministic=true)
+        agent_action = first(agent_action)
         if env isa ScalingWrapperEnv
             env_action = unscale_action(env, agent_action)
         else
