@@ -19,17 +19,6 @@ function act!(env::AbstractEnv, action)
 end
 
 """
-step!(env::AbstractParallellEnv, action)
-- take an action in the environment, return reward, terminated, truncated, info
-- auto reset individual environments when they are terminated or truncated
-    - when truncated, the last observation is given as info["terminal_observation"]
--for parallell envs
-"""
-function step!(env::AbstractParallellEnv, action)
-    error("step! not implemented for $(typeof(env))")
-end
-
-"""
 observe(env::AbstractEnv)
 - observe the environment, return observation
 """

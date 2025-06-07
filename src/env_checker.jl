@@ -64,6 +64,7 @@ function _check_required_methods(env::AbstractEnv; verbose::Bool=true)
         (truncated, "truncated(env)"),
         (action_space, "action_space(env)"),
         (observation_space, "observation_space(env)"),
+        (act!, "act!(env, action)"),
         (get_info, "get_info(env)")
     ]
 
@@ -73,21 +74,6 @@ function _check_required_methods(env::AbstractEnv; verbose::Bool=true)
             throw(AssertionError("Environment must implement method: $method_name"))
         end
         verbose && @info "  ✓ $method_name implemented"
-    end
-
-    # Check environment-type specific methods
-    if env isa AbstractParallellEnv
-        # Parallel environments need step! but not act!
-        if !hasmethod(step!, (typeof(env), Any)) && !hasmethod(step!, (typeof(env), Vector))
-            throw(AssertionError("Parallel environment must implement method: step!(env, actions)"))
-        end
-        verbose && @info "  ✓ step!(env, actions) implemented (parallel environment)"
-    else
-        # Single environments need act! but not step!
-        if !hasmethod(act!, (typeof(env), Any))
-            throw(AssertionError("Single environment must implement method: act!(env, action)"))
-        end
-        verbose && @info "  ✓ act!(env, action) implemented (single environment)"
     end
 end
 
@@ -184,24 +170,28 @@ function _check_step_functionality(env::AbstractEnv, obs_space, act_space; warn:
     action = rand(act_space)
 
     if env isa AbstractParallellEnv
-        # Test parallel environment step!
+        # Test parallel environment act!
         try
-            next_obs, rewards, terminateds, truncateds, infos = step!(env, [action])
+            rewards = act!(env, action)
+            terminateds = terminated(env)
+            truncateds = truncated(env)
+            infos = get_info(env)
+            next_obs = observe(env)
 
             @assert length(rewards) == number_of_envs(env) "rewards length must match n_envs"
             @assert length(terminateds) == number_of_envs(env) "terminateds length must match n_envs"
             @assert length(truncateds) == number_of_envs(env) "truncateds length must match n_envs"
             @assert length(infos) == number_of_envs(env) "infos length must match n_envs"
 
-            _check_observation_shape(next_obs, obs_space, "step!(parallel_env)")
+            _check_observation_shape(next_obs, obs_space, "act!(parallel_env)")
 
-            verbose && @info "  ✓ Parallel environment step! works correctly"
+            verbose && @info "  ✓ Parallel environment act! works correctly"
         catch e
-            @error "Parallel environment step! failed: $e"
+            @error "Parallel environment act! failed: $e"
             rethrow(e)
         end
     else
-        # Test single environment act! only (not step!)
+        # Test single environment act!
         try
             # Test act!
             obs_before = observe(env)
@@ -243,7 +233,9 @@ function _check_space_constraints(env::AbstractEnv, obs_space, act_space; warn::
 
             if env isa AbstractParallellEnv
                 # For parallel envs, auto-reset happens
-                next_obs, rewards, terminateds, truncateds, infos = step!(env, [action])
+                rewards = act!(env, [action])
+                terminateds = terminated(env)
+                truncateds = truncated(env)
                 if terminateds[1] || truncateds[1]
                     break  # Episode ended
                 end

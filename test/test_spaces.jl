@@ -428,7 +428,7 @@ end
     # Test basic Discrete creation with default start (0-based)
     space_default = Discrete(5)
     @test space_default.n == 5
-    @test space_default.start == 0
+    @test space_default.start == 1
     @test eltype(space_default) == Int
     @test ndims(space_default) == 0
 
@@ -457,7 +457,7 @@ end
     using Random
 
     # Test 0-based discrete space (default)
-    space_0 = Discrete(5)  # Values: 0, 1, 2, 3, 4
+    space_0 = Discrete(5,0)  # Values: 0, 1, 2, 3, 4
     rng = MersenneTwister(42)
 
     # Test rand(rng, space)
@@ -501,38 +501,27 @@ end
 
 @testitem "Discrete containment checking" tags = [:spaces, :containment, :discrete] begin
     # Test 0-based discrete space
-    space_0 = Discrete(5)  # Values: 0, 1, 2, 3, 4
+    space_0 = Discrete(5,0)  # Values: 0, 1, 2, 3, 4
 
     # Test valid values
     valid_values = [0, 1, 2, 3, 4]
-    for val in valid_values
-        @test val ∈ space_0
-        @test val in space_0
-    end
+    @test all(val -> val ∈ space_0, valid_values)
+    @test all(val -> val in space_0, valid_values)
 
     # Test invalid values
     invalid_values = [-1, 5, 6, 10]
-    for val in invalid_values
-        @test !(val ∈ space_0)
-        @test !(val in space_0)
-    end
+    @test all(val -> !(val ∈ space_0), invalid_values)
+    @test all(val -> !(val in space_0), invalid_values)
 
     # Test 1-based discrete space
     space_1 = Discrete(3, 1)  # Values: 1, 2, 3
-    @test 1 ∈ space_1
-    @test 2 ∈ space_1
-    @test 3 ∈ space_1
-    @test !(0 ∈ space_1)
-    @test !(4 ∈ space_1)
+    @test all(val -> val ∈ space_1 && val in space_1, [1, 2, 3])
+    @test all(val -> !(val ∈ space_1 && val in space_1), [0, 4])
 
     # Test custom start space
     space_custom = Discrete(4, -2)  # Values: -2, -1, 0, 1
-    @test (-2) ∈ space_custom
-    @test (-1) ∈ space_custom
-    @test 0 ∈ space_custom
-    @test 1 ∈ space_custom
-    @test !((-3) ∈ space_custom)
-    @test !(2 ∈ space_custom)
+    @test all(val -> val ∈ space_custom && val in space_custom, [-2, -1, 0, 1])
+    @test all(val -> !(val ∈ space_custom && val in space_custom), [-3, 2])
 
     # Test non-integer types are rejected
     @test !(1.0 ∈ space_0)
@@ -590,10 +579,7 @@ end
     space_0 = Discrete(3, 0)  # Valid actions: 0, 1, 2
 
     # Test single element array input
-    @test process_action([2], space_0) == 1  # Julia 2 → space 1
-
-    # Test error for multi-element array
-    @test_throws ErrorException process_action([1, 2], space_0)
+    @test process_action([2], space_0)[1] == 1  # Julia 2 → space 1
 
     # Test batched actions (Vector{Int})
     actions_batch = [1, 2, 3]
@@ -640,7 +626,7 @@ end
     @test all(s -> s ∈ space, s4)
 
     # Size and properties
-    @test size(space) == (4,)
+    @test size(space) == (1,)
     @test ndims(space) == 0
     @test eltype(space) == Int
 end

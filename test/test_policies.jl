@@ -81,13 +81,13 @@ end
     actions, new_states = DRiL.predict(policy, obs, params, states; deterministic=false, rng=rng)
     
     # Actions should be in environment action space after processing
-    @test actions ∈ action_space
-    @test actions isa Integer
+    @test actions[1] ∈ action_space
+    @test actions[1] isa Integer
     
     # Test deterministic prediction
     actions_det, _ = DRiL.predict(policy, obs, params, states; deterministic=true, rng=rng)
-    @test actions_det ∈ action_space
-    @test actions_det isa Integer
+    @test actions_det[1] ∈ action_space
+    @test actions_det[1] isa Integer
     
     # Test batch prediction
     batch_obs = Float32[0.5 -0.2; -0.3 0.7]  # 2 observations
@@ -116,8 +116,8 @@ end
     actions, values, log_probs, _ = policy(obs, params, states; rng=rng)
     
     # Test that actions are valid indices (1-based for internal use)
-    @test actions isa Integer
-    @test 1 <= actions <= action_space.n
+    @test actions[1] isa Integer
+    @test 1 <= actions[1] <= action_space.n
     
     # Evaluate the same actions
     eval_values, eval_log_probs, entropy, _ = DRiL.evaluate_actions(policy, obs, actions, params, states)
@@ -126,10 +126,10 @@ end
     @test eval_values ≈ values atol=1e-6
     
     # Log probabilities should match (approximately due to floating point)
-    @test eval_log_probs[1] ≈ log_probs atol=1e-5
+    @test isapprox.(eval_log_probs, log_probs, atol=1e-5) |> all
     
     # Entropy should be positive for stochastic policy
-    @test entropy[1] >= 0
+    @test entropy[1] >= 0f0
     
     # Test batch evaluation
     batch_obs = Float32[0.5 -0.2; -0.3 0.7]
@@ -167,18 +167,18 @@ end
         
         # Test that policy actions (before processing) are in 1-based indexing
         actions, _, _, _ = policy(obs, params, states; rng=rng)
-        @test 1 <= actions <= action_space.n  # Internal actions should be 1-based
+        @test 1 <= actions[1] <= action_space.n  # Internal actions should be 1-based
         
         # Test that predict() returns processed actions in action space range
         processed_actions, _ = DRiL.predict(policy, obs, params, states; rng=rng)
-        @test processed_actions ∈ action_space  # Should be in action space range
+        @test processed_actions[1] ∈ action_space  # Should be in action space range
         
         # Test that evaluation works with stored actions (1-based)
         eval_values, eval_log_probs, entropy, _ = DRiL.evaluate_actions(policy, obs, actions, params, states)
         @test length(eval_log_probs) == 1
         @test length(entropy) == 1
         @test eval_log_probs[1] isa Float32
-        @test entropy[1] >= 0
+        @test entropy[1] >= 0f0
     end
 end
 
@@ -199,17 +199,17 @@ end
     for i in 1:10
         # Get raw policy action (1-based internally)
         raw_action, _, _, _ = policy(obs, params, states; rng=rng)
-        @test 1 <= raw_action <= 3  # Should be in [1, 2, 3]
+        @test 1 <= raw_action[1] <= 3  # Should be in [1, 2, 3]
         
         # Get processed action for environment
         env_action, _ = DRiL.predict(policy, obs, params, states; rng=rng)
-        @test env_action ∈ action_space  # Should be in [0, 1, 2]
-        @test 0 <= env_action <= 2
+        @test env_action[1] ∈ action_space  # Should be in [0, 1, 2]
+        @test 0 <= env_action[1] <= 2
         
         # Test that process_action works correctly
         manual_processed = DRiL.process_action(raw_action, action_space)
-        @test manual_processed ∈ action_space
-        @test manual_processed == raw_action + (action_space.start - 1)  # 1-based to 0-based
+        @test manual_processed[1] ∈ action_space
+        @test manual_processed[1] == raw_action[1] + (action_space.start - 1)  # 1-based to 0-based
     end
 end
 
@@ -251,12 +251,12 @@ end
     continuous_eval_values, continuous_eval_log_probs, continuous_entropy, _ = DRiL.evaluate_actions(continuous_policy, obs, continuous_actions, continuous_params, continuous_states)
     
     # Test that outputs have expected types and shapes
-    @test discrete_actions isa Integer
-    @test continuous_actions isa AbstractArray
-    @test discrete_pred isa Integer  
-    @test continuous_pred isa AbstractArray
-    @test discrete_vals isa AbstractArray
-    @test continuous_vals isa AbstractArray
+    @test discrete_actions isa AbstractArray{<:Integer}
+    @test continuous_actions isa AbstractArray{<:Real}
+    @test discrete_pred isa AbstractArray{<:Integer}  
+    @test continuous_pred isa AbstractArray{<:Real}
+    @test discrete_vals isa AbstractArray{<:Real}
+    @test continuous_vals isa AbstractArray{<:Real}
     @test length(discrete_eval_log_probs) == 1
     @test length(continuous_eval_log_probs) == 1
 end
@@ -277,10 +277,10 @@ end
     
     # Test that single action space works
     actions, values, log_probs, _ = policy(obs, params, states; rng=rng)
-    @test actions == 1  # Should always be 1 (1-based internally)
+    @test actions[1] == 1  # Should always be 1 (1-based internally)
     
     processed_action, _ = DRiL.predict(policy, obs, params, states; rng=rng)
-    @test processed_action == 0  # Should be 0 after processing
+    @test processed_action[1] == 0  # Should be 0 after processing
     
     # Test large action space
     large_action_space = Discrete(100, 0)
@@ -290,10 +290,10 @@ end
     large_states = Lux.initialstates(rng, large_policy)
     
     large_actions, _, _, _ = large_policy(obs, large_params, large_states; rng=rng)
-    @test 1 <= large_actions <= 100  # Internal action should be in [1, 100]
+    @test 1 <= large_actions[1] <= 100  # Internal action should be in [1, 100]
     
     large_processed, _ = DRiL.predict(large_policy, obs, large_params, large_states; rng=rng)
-    @test 0 <= large_processed <= 99  # Processed should be in [0, 99]
+    @test 0 <= large_processed[1] <= 99  # Processed should be in [0, 99]
     
     # Test negative start action space
     neg_action_space = Discrete(5, -2)  # Actions: -2, -1, 0, 1, 2
@@ -303,8 +303,8 @@ end
     neg_states = Lux.initialstates(rng, neg_policy)
     
     neg_actions, _, _, _ = neg_policy(obs, neg_params, neg_states; rng=rng)
-    @test 1 <= neg_actions <= 5  # Internal should be [1, 5]
+    @test 1 <= neg_actions[1] <= 5  # Internal should be [1, 5]
     
     neg_processed, _ = DRiL.predict(neg_policy, obs, neg_params, neg_states; rng=rng)
-    @test -2 <= neg_processed <= 2  # Processed should be [-2, 2]
+    @test -2 <= neg_processed[1] <= 2  # Processed should be [-2, 2]
 end 

@@ -179,7 +179,8 @@ end
     for i in 1:6  # Multiple steps to build statistics
         push!(original_obs, get_original_obs(norm_env))
         push!(all_obs, observe(norm_env))
-        rewards, terms, truncs, infos = DRiL.step!(norm_env, rand(action_space(norm_env), 2))
+        actions = [rand(action_space(norm_env)) for _ in 1:2]
+        rewards = act!(norm_env, actions)
     end
 
     # Check that observations are being normalized
@@ -226,7 +227,8 @@ end
 
     # Collect rewards
     for i in 1:8
-        rewards, terms, truncs, infos = DRiL.step!(norm_env, rand(Float32, 1, 2))
+        actions = [rand(Float32) for _ in 1:2]
+        rewards = act!(norm_env, actions)
         push!(all_rewards, rewards...)
         push!(original_rewards, get_original_rewards(norm_env)...)
     end
@@ -238,7 +240,8 @@ end
     @test norm_reward_std < orig_reward_std
 
     # Test unnormalization
-    last_rewards, _, _, _ = DRiL.step!(norm_env, rand(Float32, 1, 2))
+    actions = [rand(Float32) for _ in 1:2]
+    last_rewards = act!(norm_env, actions)
     last_original = get_original_rewards(norm_env)
     unnorm_rewards = unnormalize_reward(norm_env, last_rewards)
 
@@ -265,7 +268,8 @@ end
     reset!(norm_env)
     # Build some statistics first
     for i in 1:5
-        DRiL.step!(norm_env, rand(Float32, 1, 1))
+        actions = [rand(Float32)]
+        act!(norm_env, actions)
     end
 
     obs = observe(norm_env)
@@ -302,13 +306,15 @@ end
 
     # In training mode, statistics should update
     initial_count = norm_env.obs_rms.count
-    DRiL.step!(norm_env, rand(Float32, 1, 2))
+    actions = [rand(Float32) for _ in 1:2]
+    act!(norm_env, actions)
     training_count = norm_env.obs_rms.count
     @test training_count > initial_count
 
     # Switch to evaluation mode
     norm_env = set_training(norm_env, false)
-    DRiL.step!(norm_env, rand(Float32, 1, 2))
+    actions = [rand(Float32) for _ in 1:2]
+    act!(norm_env, actions)
     eval_count = norm_env.obs_rms.count
 
     # Statistics should not update in evaluation mode
@@ -344,10 +350,18 @@ end
         nothing
     end
 
-    # We need to implement step! for single environments since our wrapper expects parallel envs
+    # We need to implement act! for parallel environments since our wrapper expects parallel envs
     # Let's create a simple parallel version
     mutable struct TerminalParallelEnv <: DRiL.AbstractParallellEnv
         envs::Vector{TerminalEnv}
+        infos::Vector{Dict{String,Any}}
+        observations::Vector{Any}
+        
+        function TerminalParallelEnv(envs::Vector{TerminalEnv})
+            infos = [get_info(e) for e in envs]
+            observations = [observe(e) for e in envs]
+            return new(envs, infos, observations)
+        end
     end
 
     DRiL.observation_space(env::TerminalParallelEnv) = observation_space(env.envs[1])
@@ -355,41 +369,55 @@ end
     DRiL.number_of_envs(env::TerminalParallelEnv) = length(env.envs)
 
     function DRiL.observe(env::TerminalParallelEnv)
-        obs = [observe(e) for e in env.envs]
-        return hcat(obs...)
+        for i in 1:length(env.envs)
+            env.observations[i] = observe(env.envs[i])
+        end
+        return env.observations
     end
 
     function DRiL.reset!(env::TerminalParallelEnv)
         for e in env.envs
             reset!(e)
         end
-        return observe(env)
+        for i in 1:length(env.envs)
+            env.observations[i] = observe(env.envs[i])
+        end
+        nothing
     end
 
-    function DRiL.step!(env::TerminalParallelEnv, actions)
-        rewards = Float32[]
-        terminateds = Bool[]
-        truncateds = Bool[]
-        infos = Dict[]
+    function DRiL.terminated(env::TerminalParallelEnv)
+        return terminated.(env.envs)
+    end
 
-        for (i, (e, action)) in enumerate(zip(env.envs, eachcol(actions)))
+    function DRiL.truncated(env::TerminalParallelEnv)
+        return truncated.(env.envs)
+    end
+
+    function DRiL.get_info(env::TerminalParallelEnv)
+        return get_info.(env.envs)
+    end
+
+    function DRiL.act!(env::TerminalParallelEnv, actions::Vector)
+        rewards = Float32[]
+
+        for (i, (e, action)) in enumerate(zip(env.envs, actions))
             reward = act!(e, action)
+            push!(rewards, reward)
+            
             term = terminated(e)
             trunc = truncated(e)
-            info = get_info(e)
-
-            push!(rewards, reward)
-            push!(terminateds, term)
-            push!(truncateds, trunc)
-            push!(infos, info)
+            env.infos[i] = get_info(e)
 
             # Auto-reset if terminated or truncated
             if term || trunc
                 reset!(e)
             end
+            
+            # Update cached observation
+            env.observations[i] = observe(e)
         end
 
-        return rewards, terminateds, truncateds, infos
+        return rewards
     end
 
     base_env = TerminalParallelEnv([TerminalEnv(2) for _ in 1:2])
@@ -398,10 +426,15 @@ end
     reset!(norm_env)
 
     # Step until termination
-    rewards, terms, truncs, infos = DRiL.step!(norm_env, rand(Float32, 1, 2))
+    actions = [rand(Float32) for _ in 1:2]
+    rewards = act!(norm_env, actions)
+    terms = terminated(norm_env)
     @test !any(terms)
 
-    rewards, terms, truncs, infos = DRiL.step!(norm_env, rand(Float32, 1, 2))
+    actions = [rand(Float32) for _ in 1:2]
+    rewards = act!(norm_env, actions)
+    terms = terminated(norm_env)
+    infos = get_info(norm_env)
     @test all(terms)
 
     # Check that terminal observations are normalized in info
@@ -440,7 +473,7 @@ end
     @test hasmethod(number_of_envs, (typeof(norm_env),))
     @test hasmethod(reset!, (typeof(norm_env),))
     @test hasmethod(observe, (typeof(norm_env),))
-    @test hasmethod(step!, (typeof(norm_env), AbstractArray))
+    @test hasmethod(act!, (typeof(norm_env), Vector))
     @test hasmethod(terminated, (typeof(norm_env),))
     @test hasmethod(truncated, (typeof(norm_env),))
     @test hasmethod(get_info, (typeof(norm_env),))
@@ -457,20 +490,28 @@ end
     # Test reset and observe
     reset!(norm_env)
     initial_obs = observe(norm_env)
-    @test size(initial_obs) == (2, 3)
+    @test length(initial_obs) == 3
+    @test all(obs -> length(obs) == 2, initial_obs)
 
     current_obs = observe(norm_env)
-    @test size(current_obs) == (2, 3)
+    @test length(current_obs) == 3
+    @test all(obs -> length(obs) == 2, current_obs)
 
-    # Test step
-    actions = rand(Float32, 1, 3)
-    rewards, terms, truncs, infos = DRiL.step!(norm_env, actions)
+    # Test act!
+    actions = [rand(Float32) for _ in 1:3]
+    rewards = act!(norm_env, actions)
 
     @test length(rewards) == 3
+    @test all(r -> r isa Float32, rewards)
+    
+    # Test other methods
+    terms = terminated(norm_env)
+    truncs = truncated(norm_env)
+    infos = get_info(norm_env)
+    
     @test length(terms) == 3
     @test length(truncs) == 3
     @test length(infos) == 3
-    @test all(r -> r isa Float32, rewards)
     @test all(t -> t isa Bool, terms)
     @test all(t -> t isa Bool, truncs)
     @test all(i -> i isa Dict, infos)

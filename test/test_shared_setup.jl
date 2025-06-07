@@ -56,15 +56,6 @@
         return reward
     end
 
-    function DRiL.step!(env::CustomEnv, action::AbstractArray)
-        reward = DRiL.act!(env, action)
-
-        # Random next observation using env's RNG
-        next_obs = rand(env.rng, Float32, 2) .* 2.0f0 .- 1.0f0
-
-        return next_obs, reward, env._terminated, env._truncated, env._info
-    end
-
     function DRiL.observe(env::CustomEnv)
         return rand(env.rng, Float32, 2) .* 2.0f0 .- 1.0f0  # Use env's RNG
     end
@@ -120,15 +111,6 @@
         return reward
     end
 
-    function DRiL.step!(env::InfiniteHorizonEnv, action::AbstractArray)
-        reward = DRiL.act!(env, action)
-
-        # Return current state as observation
-        next_obs = [env.current_state]
-
-        return next_obs, reward, env._terminated, env._truncated, env._info
-    end
-
     function DRiL.observe(env::InfiniteHorizonEnv)
         return [env.current_state]
     end
@@ -181,15 +163,6 @@
         env._info = Dict{String,Any}()
 
         return reward
-    end
-
-    function DRiL.step!(env::SimpleRewardEnv, action::AbstractArray)
-        reward = DRiL.act!(env, action)
-
-        # Random next observation using env's RNG
-        next_obs = rand(env.rng, Float32, 2) .* 2.0f0 .- 1.0f0
-
-        return next_obs, reward, env._terminated, env._truncated, env._info
     end
 
     function DRiL.observe(env::SimpleRewardEnv)
@@ -312,12 +285,6 @@
 
     function DRiL.act!(wrapper::ConstantObsWrapper, action::AbstractArray)
         return DRiL.act!(wrapper.env, action)
-    end
-
-    function DRiL.step!(wrapper::ConstantObsWrapper, action::AbstractArray)
-        next_obs, reward, terminated, truncated, info = DRiL.step!(wrapper.env, action)
-        # Return constant observation instead of the environment's observation
-        return copy(wrapper.constant_obs), reward, terminated, truncated, info
     end
 
     function DRiL.observe(wrapper::ConstantObsWrapper)

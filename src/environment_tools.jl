@@ -17,30 +17,32 @@ end
 
 struct MultiThreadedParallelEnv{E<:AbstractEnv} <: AbstractParallellEnv
     envs::Vector{E}
+    infos::Vector{Dict{String,Any}}
+
+
     function MultiThreadedParallelEnv(envs::Vector{E}) where E<:AbstractEnv
         @assert all(env -> typeof(env) == E, envs) "All environments must be of the same type"
         @assert all(env -> isequal(observation_space(env), observation_space(envs[1])), envs) "All environments must have the same observation space"
         @assert all(env -> isequal(action_space(env), action_space(envs[1])), envs) "All environments must have the same action space"
-        return new{E}(envs)
+        infos = get_info.(envs)
+        return new{E}(envs, infos)
     end
 end
 
 function reset!(env::MultiThreadedParallelEnv{E}) where E<:AbstractEnv
-    @threads for env in env.envs
-        reset!(env)
+    @threads for sub_env in env.envs
+        reset!(sub_env)
     end
     nothing
 end
 
 #TODO: check if this typing is correct
 function observe(env::MultiThreadedParallelEnv{E}) where E<:AbstractEnv
-    obs_space = observation_space(env)
-    type = eltype(obs_space)
-    observations = Array{type,length(size(obs_space)) + 1}(undef, (size(obs_space)..., length(env.envs)))
+    observations = Vector{Array{eltype(observation_space(env)),length(size(observation_space(env)))}}(undef, length(env.envs))
     @threads for i in 1:length(env.envs)
-        selectdim(observations, length(size(obs_space)) + 1, i) .= observe(env.envs[i])
+        observations[i] = observe(env.envs[i])
     end
-    return observations
+    return env.observations
 end
 
 function terminated(env::MultiThreadedParallelEnv{E}) where E<:AbstractEnv
@@ -63,32 +65,32 @@ function get_info(env::MultiThreadedParallelEnv{E}) where E<:AbstractEnv
     return get_info.(env.envs)
 end
 
-function step!(env::MultiThreadedParallelEnv{E}, action) where E<:AbstractEnv
-    # @show action
-    type = eltype(observation_space(env))
-    rewards = Vector{type}(undef, length(env.envs))
-    terminateds = Vector{Bool}(undef, length(env.envs))
-    truncateds = Vector{Bool}(undef, length(env.envs))
-    infos = Vector{Dict{String,Any}}(undef, length(env.envs))
-    action_dims = length(size(action_space(env)))
-    @assert size(action) == (size(action_space(env))..., length(env.envs)) "Action must be of shape $((size(action_space(env))..., length(env.envs))), got $(size(action))"
+function act!(env::MultiThreadedParallelEnv{E}, actions::Vector) where E<:AbstractEnv
+    @assert length(actions) == length(env.envs) "Number of actions ($(length(actions))) must match number of environments ($(length(env.envs)))"
+    
+    T = eltype(observation_space(env))
+    rewards = Vector{T}(undef, length(env.envs))
+    
     @threads for i in 1:length(env.envs)
-        # @info "Stepping env $i"
-        local_action = selectdim(action, action_dims + 1, i)
-        # @show local_action i
-        rewards[i] = act!(env.envs[i], local_action)
-        # @info "Reward: $rewards[i]"
-        terminateds[i] = terminated(env.envs[i])
-        truncateds[i] = truncated(env.envs[i])
-        infos[i] = get_info(env.envs[i])
-        if truncateds[i]
-            infos[i]["terminal_observation"] = observe(env.envs[i])
+        rewards[i] = act!(env.envs[i], actions[i])
+        env.infos[i] = get_info(env.envs[i])
+        
+        env_terminated = terminated(env.envs[i])
+        env_truncated = truncated(env.envs[i])
+        
+        if env_truncated
+            env.infos[i]["terminal_observation"] = observe(env.envs[i])
         end
-        if terminateds[i] || truncateds[i]
+        
+        if env_terminated || env_truncated
             reset!(env.envs[i])
         end
+        
+        # Update cached observation
+        env.observations[i] = observe(env.envs[i])
     end
-    return rewards, terminateds, truncateds, infos
+    
+    return rewards
 end
 
 number_of_envs(env::MultiThreadedParallelEnv) = length(env.envs)
@@ -343,12 +345,15 @@ number_of_envs(env::NormalizeWrapperEnv) = number_of_envs(env.env)
 function reset!(env::NormalizeWrapperEnv{E,T}) where {E,T}
     reset!(env.env)
     obs = observe(env.env)
-    env.old_obs .= obs
+    
+    # Store original observations (concatenate for batch processing)
+    env.old_obs = stack(obs)
     env.returns .= zero(T)
 
     # Update observation statistics if in training mode
     if env.training && env.norm_obs
-        update!(env.obs_rms, obs)
+        obs_batch = stack(obs)
+        update!(env.obs_rms, obs_batch)
     end
 
     return nothing
@@ -356,41 +361,35 @@ end
 
 function observe(env::NormalizeWrapperEnv{E,T}) where {E,T}
     obs = observe(env.env)
-    env.old_obs .= obs
-    return normalize_obs(env, obs)
-end
 
-function step!(env::NormalizeWrapperEnv{E,T}, action) where {E,T}
-    rewards, terminateds, truncateds, infos = step!(env.env, action)
-    obs = observe(env.env)
-
-    env.old_obs .= obs
-    env.old_rewards .= rewards
+    # Store original observations and rewards for access
+    env.old_obs = stack(obs)
 
     # Update observation statistics if in training mode
     if env.training && env.norm_obs
-        update!(env.obs_rms, obs)
+        obs_batch = stack(obs)
+        update!(env.obs_rms, obs_batch)
     end
+    normalized_obs = normalize_obs.(Ref(env), obs)
+    return normalized_obs
+end
 
+function act!(env::NormalizeWrapperEnv{E,T}, actions::Vector) where {E,T}
+    rewards = act!(env.env, actions)
+    env.old_rewards .= rewards
     # Update reward statistics and normalize
     if env.training && env.norm_reward
         update_reward_stats!(env, rewards)
     end
-
-    normalized_obs = normalize_obs(env, obs)
     normalized_rewards = normalize_reward(env, rewards)
 
-    # Handle terminal observations in info
-    for (i, (term, trunc)) in enumerate(zip(terminateds, truncateds))
-        if term || trunc
-            if haskey(infos[i], "terminal_observation")
-                infos[i]["terminal_observation"] = normalize_obs(env, infos[i]["terminal_observation"])
-            end
-            env.returns[i] = zero(T)
-        end
+    #is this in the right place?
+    for i in findall(terminated(env) .| truncated(env))
+        env.returns[i] = zero(T)
     end
 
-    return normalized_rewards, terminateds, truncateds, infos
+    # Handle terminal observations in info not anymore TODO check
+    return normalized_rewards
 end
 
 function update_reward_stats!(env::NormalizeWrapperEnv{E,T}, rewards::Vector{T}) where {E,T}
@@ -440,7 +439,17 @@ get_original_rewards(env::NormalizeWrapperEnv{E,T}) where {E,T} = copy(env.old_r
 # Forward other methods
 terminated(env::NormalizeWrapperEnv{E,T}) where {E,T} = terminated(env.env)
 truncated(env::NormalizeWrapperEnv{E,T}) where {E,T} = truncated(env.env)
-get_info(env::NormalizeWrapperEnv{E,T}) where {E,T} = get_info(env.env)
+function get_info(env::NormalizeWrapperEnv{E,T}) where {E,T}
+    #TODO: check if this is correct
+    infos = get_info(env.env)
+    for i in findall(terminated(env) .| truncated(env))
+        if haskey(infos[i], "terminal_observation")
+            term_obs = infos[i]["terminal_observation"]
+            infos[i]["terminal_observation"] = normalize_obs(env, term_obs)
+        end
+    end
+    return infos
+end
 
 function Random.seed!(env::NormalizeWrapperEnv, seed::Integer)
     Random.seed!(env.env, seed)
@@ -550,21 +559,25 @@ function reset!(monitor_env::MonitorWrapperEnv{E,T}) where {E,T}
     nothing
 end
 
-function step!(monitor_env::MonitorWrapperEnv{E,T}, action) where {E,T}
-    rewards, terminateds, truncateds, infos = step!(monitor_env.env, action)
+function act!(monitor_env::MonitorWrapperEnv{E,T}, actions::Vector) where {E,T}
+    rewards = act!(monitor_env.env, actions)
+    terminateds = terminated(monitor_env.env)
+    truncateds = truncated(monitor_env.env)
+    infos = get_info(monitor_env.env)
+    
     monitor_env.current_episode_returns .+= rewards
     monitor_env.current_episode_lengths .+= 1
     dones = terminateds .| truncateds
-    for (i, done) in enumerate(dones)
-        if done
-            push!(monitor_env.episode_stats.episode_returns, monitor_env.current_episode_returns[i])
-            push!(monitor_env.episode_stats.episode_lengths, monitor_env.current_episode_lengths[i])
-            infos[i]["episode"] = Dict("r" => monitor_env.current_episode_returns[i], "l" => monitor_env.current_episode_lengths[i])
-            monitor_env.current_episode_returns[i] = 0
-            monitor_env.current_episode_lengths[i] = 0
-        end
+    
+    for i in findall(dones)
+        push!(monitor_env.episode_stats.episode_returns, monitor_env.current_episode_returns[i])
+        push!(monitor_env.episode_stats.episode_lengths, monitor_env.current_episode_lengths[i])
+        infos[i]["episode"] = Dict("r" => monitor_env.current_episode_returns[i], "l" => monitor_env.current_episode_lengths[i])
+        monitor_env.current_episode_returns[i] = 0
+        monitor_env.current_episode_lengths[i] = 0
     end
-    return rewards, terminateds, truncateds, infos
+    
+    return rewards
 end
 
 unwrap(env::MonitorWrapperEnv) = env.env
