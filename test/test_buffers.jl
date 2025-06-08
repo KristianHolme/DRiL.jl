@@ -301,20 +301,22 @@ end
     ps = agent.train_state.parameters
     st = agent.train_state.states
     
-    # Policy output (1-based)
-    policy_actions, _, _, _ = policy(stack(obs)[:,1:1], ps, st)  # Single observation
+    # Policy output (1-based) - use single observation (first env)
+    single_obs = obs[1]  # Get first environment's observation
+    batched_obs = reshape(single_obs, :, 1)  # Create proper batch dimension
+    policy_actions, _, _, _ = policy(batched_obs, ps, st)  # Single observation
     @test all(1 .<= policy_actions .<= 2)  # Should be 1-based
     
     # Processed actions for environment (0-based)
-    actions, _ = DRiL.predict_actions(policy, stack(obs)[:,1:1], ps, st)
-    processed_actions = DRiL.process_action(actions, DRiL.action_space(env))
+    actions, _ = DRiL.predict_actions(policy, batched_obs, ps, st)
+    processed_actions = DRiL.process_action.(actions, Ref(DRiL.action_space(env)))
     @test processed_actions[1] ∈ DRiL.action_space(env)  # Should be 0 or 1
     
     # Verify that evaluate_actions works with stored (1-based) actions
     eval_values, eval_logprobs, entropy, _ = DRiL.evaluate_actions(
         policy, roll_buffer.observations, stored_actions, ps, st)
     
-    @test size(eval_values) == (1, 4*2)
+    @test size(eval_values) == (4*2,)
     @test size(eval_logprobs) == (4*2,)
     @test all(entropy .>= 0.0f0)
     

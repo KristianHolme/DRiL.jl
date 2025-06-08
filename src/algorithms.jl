@@ -16,7 +16,7 @@ end
 # function PPO(; T::Type{<:AbstractFloat}=Float32, kwargs...)
 #     return PPO{T}(; kwargs...)
 # end
-
+#TODO make parameters n_steps, batch_size, epochs, max_steps kwargs, default to values from agent
 function learn!(agent::ActorCriticAgent, env::AbstractParallellEnv, alg::PPO{T}, ad_type::Lux.Training.AbstractADType=AutoZygote(); max_steps::Int) where T
     n_steps = agent.n_steps
     n_envs = number_of_envs(env)
@@ -85,6 +85,9 @@ function learn!(agent::ActorCriticAgent, env::AbstractParallellEnv, alg::PPO{T},
                 @assert !any(isinf, grads) "gradient not finite, iter $i, epoch $epoch, batch $i_batch"
 
                 current_grad_norm = norm(grads)
+                @info "actor grad norm: $(norm(grads.actor_head))"
+                @info "critic grad norm: $(norm(grads.critic_head))"
+                @info "log_std grad norm: $(norm(grads.log_std))"
                 push!(grad_norms, current_grad_norm)
 
                 if !isnothing(alg.max_grad_norm) && current_grad_norm > alg.max_grad_norm
@@ -195,13 +198,7 @@ function loss(alg::PPO{T}, policy::AbstractActorCriticPolicy, ps, st, batch_data
     observations, actions, advantages, returns, old_logprobs, old_values = batch_data
 
     advantages = @ignore_derivatives alg.normalize_advantage ? normalize(advantages) : advantages
-    # @info "in loss, evaluating actions!"
-    # @info "actions: $actions"
     values, log_probs, entropy, st = evaluate_actions(policy, observations, actions, ps, st)
-
-    log_probs = vec(log_probs)
-    values = vec(values)
-    entropy = vec(entropy)
 
     values = !isnothing(alg.clip_range_vf) ? clip_range(old_values, values, alg.clip_range_vf) : values
 
@@ -215,21 +212,24 @@ function loss(alg::PPO{T}, policy::AbstractActorCriticPolicy, ps, st, batch_data
     v_loss = mean((values .- returns) .^ 2)
     loss = p_loss + alg.ent_coef * ent_loss + alg.vf_coef * v_loss
 
-    # Calculate statistics
-    clip_fraction = mean(r .!= ratio_clipped)
-    #approx kl div
-    log_ratio = log_probs - old_logprobs
-    approx_kl_div = mean(exp.(log_ratio) .- 1 .- log_ratio)
+    stats = Dict()
+    @ignore_derivatives begin
+        # Calculate statistics
+        clip_fraction = mean(r .!= ratio_clipped)
+        #approx kl div
+        log_ratio = log_probs - old_logprobs
+        approx_kl_div = mean(exp.(log_ratio) .- 1 .- log_ratio)
 
-    stats = Dict(
-        "policy_loss" => p_loss,
-        "value_loss" => v_loss,
-        "entropy_loss" => ent_loss,
-        "clip_fraction" => clip_fraction,
-        "approx_kl_div" => approx_kl_div,
-        "entropy" => mean(entropy),
-        "ratio" => mean(r)
-    )
+        stats = Dict(
+            "policy_loss" => p_loss,
+            "value_loss" => v_loss,
+            "entropy_loss" => ent_loss,
+            "clip_fraction" => clip_fraction,
+            "approx_kl_div" => approx_kl_div,
+            "entropy" => mean(entropy),
+            "ratio" => mean(r)
+        )
+    end
 
     return loss, st, stats
 end

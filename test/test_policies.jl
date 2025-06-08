@@ -76,16 +76,17 @@ end
     params = Lux.initialparameters(rng, policy)
     states = Lux.initialstates(rng, policy)
     
-    # Test single observation prediction
-    obs = Float32[0.5, -0.3]
-    actions, new_states = DRiL.predict_actions(policy, obs, params, states; deterministic=false, rng=rng)
+    # Test single observation prediction (with batch dimension)
+    obs = Float32[0.5, -0.3]  # Single observation as column vector
+    batched_obs = reduce(hcat, [obs])
+    actions, new_states = DRiL.predict_actions(policy, batched_obs, params, states; deterministic=false, rng=rng)
     
     # Actions should be in environment action space after processing
     @test actions[1] ∈ action_space
     @test actions[1] isa Integer
     
     # Test deterministic prediction
-    actions_det, _ = DRiL.predict_actions(policy, obs, params, states; deterministic=true, rng=rng)
+    actions_det, _ = DRiL.predict_actions(policy, batched_obs, params, states; deterministic=true, rng=rng)
     @test actions_det[1] ∈ action_space
     @test actions_det[1] isa Integer
     
@@ -113,14 +114,15 @@ end
     obs = Float32[0.5, -0.3]
     
     # Get action from policy (this will be in 1-based Julia indexing internally)
-    actions, values, log_probs, _ = policy(obs, params, states; rng=rng)
+    batched_obs = reduce(hcat, [obs])
+    actions, values, log_probs, _ = policy(batched_obs, params, states)
     
     # Test that actions are valid indices (1-based for internal use)
     @test actions[1] isa Integer
     @test 1 <= actions[1] <= action_space.n
     
     # Evaluate the same actions
-    eval_values, eval_log_probs, entropy, _ = DRiL.evaluate_actions(policy, obs, actions, params, states)
+    eval_values, eval_log_probs, entropy, _ = DRiL.evaluate_actions(policy, batched_obs, actions, params, states)
     
     # Values should match
     @test eval_values ≈ values atol=1e-6
@@ -133,7 +135,7 @@ end
     
     # Test batch evaluation
     batch_obs = Float32[0.5 -0.2; -0.3 0.7]
-    batch_actions, batch_values, batch_log_probs, _ = policy(batch_obs, params, states; rng=rng)
+    batch_actions, batch_values, batch_log_probs, _ = policy(batch_obs, params, states)
     
     eval_batch_values, eval_batch_log_probs, batch_entropy, _ = DRiL.evaluate_actions(policy, batch_obs, batch_actions, params, states)
     
@@ -164,17 +166,18 @@ end
         states = Lux.initialstates(rng, policy)
         
         obs = Float32[0.5, -0.3]
+        batched_obs = reduce(hcat, [obs])
         
         # Test that policy actions (before processing) are in 1-based indexing
-        actions, _, _, _ = policy(obs, params, states; rng=rng)
+        actions, _, _, _ = policy(batched_obs, params, states)
         @test 1 <= actions[1] <= action_space.n  # Internal actions should be 1-based
         
         # Test that predict_actions() returns processed actions in action space range
-        processed_actions, _ = DRiL.predict_actions(policy, obs, params, states; rng=rng)
+        processed_actions, _ = DRiL.predict_actions(policy, batched_obs, params, states)
         @test processed_actions[1] ∈ action_space  # Should be in action space range
         
         # Test that evaluation works with stored actions (1-based)
-        eval_values, eval_log_probs, entropy, _ = DRiL.evaluate_actions(policy, obs, actions, params, states)
+        eval_values, eval_log_probs, entropy, _ = DRiL.evaluate_actions(policy, batched_obs, actions, params, states)
         @test length(eval_log_probs) == 1
         @test length(entropy) == 1
         @test eval_log_probs[1] isa Float32
@@ -198,11 +201,11 @@ end
     # Test multiple predictions to check conversion consistency
     for i in 1:10
         # Get raw policy action (1-based internally)
-        raw_action, _, _, _ = policy(obs, params, states; rng=rng)
+        raw_action, _, _, _ = policy(reduce(hcat, [obs]), params, states)
         @test 1 <= raw_action[1] <= 3  # Should be in [1, 2, 3]
         
         # Get processed action for environment
-        env_action, _ = DRiL.predict_actions(policy, obs, params, states; rng=rng)
+        env_action, _ = DRiL.predict_actions(policy, reduce(hcat, [obs]), params, states)
         @test env_action[1] ∈ action_space  # Should be in [0, 1, 2]
         @test 0 <= env_action[1] <= 2
         
@@ -233,22 +236,23 @@ end
     continuous_states = Lux.initialstates(rng, continuous_policy)
     
     obs = Float32[0.5, -0.3]
+    batched_obs = reduce(hcat, [obs])
     
     # Test that both implement the same methods
-    discrete_actions, discrete_values, discrete_log_probs, _ = discrete_policy(obs, discrete_params, discrete_states; rng=rng)
-    continuous_actions, continuous_values, continuous_log_probs, _ = continuous_policy(obs, continuous_params, continuous_states; rng=rng)
+    discrete_actions, discrete_values, discrete_log_probs, _ = discrete_policy(batched_obs, discrete_params, discrete_states)
+    continuous_actions, continuous_values, continuous_log_probs, _ = continuous_policy(batched_obs, continuous_params, continuous_states)
     
     # Test predict
-    discrete_pred, _ = DRiL.predict_actions(discrete_policy, obs, discrete_params, discrete_states; rng=rng)
-    continuous_pred, _ = DRiL.predict_actions(continuous_policy, obs, continuous_params, continuous_states; rng=rng)
+    discrete_pred, _ = DRiL.predict_actions(discrete_policy, batched_obs, discrete_params, discrete_states)
+    continuous_pred, _ = DRiL.predict_actions(continuous_policy, batched_obs, continuous_params, continuous_states)
     
     # Test predict_values
-    discrete_vals, _ = predict_values(discrete_policy, obs, discrete_params, discrete_states)
-    continuous_vals, _ = predict_values(continuous_policy, obs, continuous_params, continuous_states)
+    discrete_vals, _ = predict_values(discrete_policy, batched_obs, discrete_params, discrete_states)
+    continuous_vals, _ = predict_values(continuous_policy, batched_obs, continuous_params, continuous_states)
     
     # Test evaluate_actions
-    discrete_eval_values, discrete_eval_log_probs, discrete_entropy, _ = DRiL.evaluate_actions(discrete_policy, obs, discrete_actions, discrete_params, discrete_states)
-    continuous_eval_values, continuous_eval_log_probs, continuous_entropy, _ = DRiL.evaluate_actions(continuous_policy, obs, continuous_actions, continuous_params, continuous_states)
+    discrete_eval_values, discrete_eval_log_probs, discrete_entropy, _ = DRiL.evaluate_actions(discrete_policy, batched_obs, discrete_actions, discrete_params, discrete_states)
+    continuous_eval_values, continuous_eval_log_probs, continuous_entropy, _ = DRiL.evaluate_actions(continuous_policy, batched_obs, reduce(hcat, continuous_actions), continuous_params, continuous_states)
     
     # Test that outputs have expected types and shapes
     @test discrete_actions isa AbstractArray{<:Integer}
@@ -274,12 +278,12 @@ end
     states = Lux.initialstates(rng, policy)
     
     obs = Float32[0.5]
-    
+    batched_obs = reduce(hcat, [obs])
     # Test that single action space works
-    actions, values, log_probs, _ = policy(obs, params, states; rng=rng)
+    actions, values, log_probs, _ = policy(batched_obs, params, states)
     @test actions[1] == 1  # Should always be 1 (1-based internally)
     
-    processed_action, _ = DRiL.predict_actions(policy, obs, params, states; rng=rng)
+    processed_action, _ = DRiL.predict_actions(policy, batched_obs, params, states)
     @test processed_action[1] == 0  # Should be 0 after processing
     
     # Test large action space
@@ -289,10 +293,10 @@ end
     large_params = Lux.initialparameters(rng, large_policy)
     large_states = Lux.initialstates(rng, large_policy)
     
-    large_actions, _, _, _ = large_policy(obs, large_params, large_states; rng=rng)
+    large_actions, _, _, _ = large_policy(batched_obs, large_params, large_states)
     @test 1 <= large_actions[1] <= 100  # Internal action should be in [1, 100]
     
-    large_processed, _ = DRiL.predict_actions(large_policy, obs, large_params, large_states; rng=rng)
+    large_processed, _ = DRiL.predict_actions(large_policy, batched_obs, large_params, large_states)
     @test 0 <= large_processed[1] <= 99  # Processed should be in [0, 99]
     
     # Test negative start action space
@@ -302,9 +306,9 @@ end
     neg_params = Lux.initialparameters(rng, neg_policy)
     neg_states = Lux.initialstates(rng, neg_policy)
     
-    neg_actions, _, _, _ = neg_policy(obs, neg_params, neg_states; rng=rng)
+    neg_actions, _, _, _ = neg_policy(batched_obs, neg_params, neg_states)
     @test 1 <= neg_actions[1] <= 5  # Internal should be [1, 5]
     
-    neg_processed, _ = DRiL.predict_actions(neg_policy, obs, neg_params, neg_states; rng=rng)
+    neg_processed, _ = DRiL.predict_actions(neg_policy, batched_obs, neg_params, neg_states)
     @test -2 <= neg_processed[1] <= 2  # Processed should be [-2, 2]
 end 

@@ -187,7 +187,8 @@ end
     @test final_obs != final_original
 
     # Test unnormalization 
-    unnorm_obs = unnormalize_obs(norm_env, final_obs)
+    unnorm_obs = copy(final_obs)
+    unnormalize_obs!(unnorm_obs, norm_env)
     @test all(abs.(unnorm_obs .- final_original) .< 1e-5)
 end
 
@@ -239,7 +240,8 @@ end
     actions = [rand(Float32) for _ in 1:2]
     last_rewards,_ = act!(norm_env, actions)
     last_original = get_original_rewards(norm_env)
-    unnorm_rewards = unnormalize_reward(norm_env, last_rewards)
+    unnorm_rewards = copy(last_rewards)
+    unnormalize_rewards!(unnorm_rewards, norm_env)
 
     @test all(abs.(unnorm_rewards .- last_original) .< 1e-4)
 end

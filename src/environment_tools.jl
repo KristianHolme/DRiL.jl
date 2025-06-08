@@ -167,6 +167,12 @@ struct ScalingWrapperEnv{E<:AbstractEnv,O<:AbstractSpace,A<:AbstractSpace} <: Ab
     action_space::A
     orig_observation_space::O
     orig_action_space::A
+    # Pre-computed scaling factors for observations
+    obs_scale_factor::Array{eltype(O)}
+    obs_offset::Array{eltype(O)}
+    # Pre-computed scaling factors for actions  
+    act_scale_factor::Array{eltype(A)}
+    act_offset::Array{eltype(A)}
 end
 
 function ScalingWrapperEnv(env::E) where {E<:AbstractEnv}
@@ -188,7 +194,18 @@ function ScalingWrapperEnv(env::E, original_obs_space::Box, original_act_space::
     scaled_act_space = @set original_act_space.low = -1 * ones(T_act, size(original_act_space.low))
     scaled_act_space = @set scaled_act_space.high = 1 * ones(T_act, size(original_act_space.high))
 
-    return ScalingWrapperEnv{E,Box,Box}(env, scaled_obs_space, scaled_act_space, original_obs_space, original_act_space)
+    # Pre-compute scaling factors for observations: scale = 2 / (high - low), offset = low
+    obs_range = original_obs_space.high .- original_obs_space.low
+    obs_scale_factor = 2 ./ obs_range
+    obs_offset = original_obs_space.low
+    
+    # Pre-compute scaling factors for actions
+    act_range = original_act_space.high .- original_act_space.low  
+    act_scale_factor = 2 ./ act_range
+    act_offset = original_act_space.low
+
+    return ScalingWrapperEnv{E,Box,Box}(env, scaled_obs_space, scaled_act_space, original_obs_space, original_act_space,
+                                        obs_scale_factor, obs_offset, act_scale_factor, act_offset)
 end
 #TODO:document/fix unwrap
 DRiL.unwrap(env::ScalingWrapperEnv) = env.env
@@ -206,49 +223,56 @@ function reset!(env::ScalingWrapperEnv)
     nothing
 end
 
-function scale(x, space::Box)
-    return 2 .* (x .- space.low) ./ (space.high .- space.low) .- 1
-end
-function unscale(x, space::Box)
-    return (x .+ 1) ./ 2 .* (space.high .- space.low) .+ space.low
-end
-
-function scale_observation(env::ScalingWrapperEnv{E,Box,Box}, observation) where E
-    #scale observation from original space to [-1, 1]
-    orig_space = observation_space(env.env)
-    return scale(observation, orig_space)
+# Fast in-place scaling functions using pre-computed factors
+# PERFORMANCE NOTES:
+# - Use the in-place versions (scale_observation!, unscale_action!, etc.) when possible
+# - Pre-allocate output buffers and reuse them across calls
+# - Scaling factors are pre-computed once during construction to avoid repeated calculations
+# - All operations use @. macro for vectorized, allocation-free broadcasting
+@inline function scale!(input, scale_factor, offset)
+    @. input = (input - offset) * scale_factor - 1
+    return nothing
 end
 
-function unscale_observation(env::ScalingWrapperEnv{E,Box,Box}, observation) where E
-    #unscale observation from [-1, 1] to original space
-    orig_space = observation_space(env.env)
-    return unscale(observation, orig_space)
+@inline function unscale!(input, scale_factor, offset) 
+    @. input = (input + 1) / scale_factor + offset
+    return nothing
 end
+
+# Allocating versions for compatibility
+function scale_observation!(observation, env::ScalingWrapperEnv{E,Box,Box}) where E
+    scale!(observation, env.obs_scale_factor, env.obs_offset)
+    return nothing
+end
+
+function unscale_observation!(observation, env::ScalingWrapperEnv{E,Box,Box}) where E
+    unscale!(observation, env.obs_scale_factor, env.obs_offset)
+    return nothing
+end
+
+
 
 function observe(env::ScalingWrapperEnv{E,Box,Box}) where E
     orig_obs = observe(env.env)
-    orig_space = observation_space(env.env)
-
-    # Scale observation from original space to [-1, 1]
-    scaled_obs = scale(orig_obs, orig_space)
-    return scaled_obs
+    # Scale observation from original space to [-1, 1] using pre-computed factors
+    scale_observation!(orig_obs, env)
+    return orig_obs
 end
 
-function scale_action(env::ScalingWrapperEnv{E,Box,Box}, action) where E
-    #scale action from original space to [-1, 1]
-    orig_space = action_space(env.env)
-    return scale(action, orig_space)
+
+function scale_action!(action, env::ScalingWrapperEnv{E,Box,Box}) where E
+    scale!(action, env.act_scale_factor, env.act_offset)
+    return nothing
 end
 
-function unscale_action(env::ScalingWrapperEnv{E,Box,Box}, action) where E
-    #unscale action from [-1, 1] to original space
-    orig_space = action_space(env.env)
-    return unscale(action, orig_space)
+function unscale_action!(action, env::ScalingWrapperEnv{E,Box,Box}) where E
+    unscale!(action, env.act_scale_factor, env.act_offset)
+    return nothing
 end
 
 function act!(env::ScalingWrapperEnv{E,Box,Box}, action) where E
-    orig_action = unscale_action(env, action)
-    return act!(env.env, orig_action)
+    unscale_action!(action, env)
+    return act!(env.env, action)
 end
 
 function terminated(env::ScalingWrapperEnv)
@@ -425,13 +449,14 @@ function reset!(env::NormalizeWrapperEnv{E,T}) where {E,T}
     reset!(env.env)
     obs = observe(env.env)
     
-    # Store original observations (concatenate for batch processing)
-    env.old_obs .= stack(obs)
+    # Store original observations BEFORE normalization
+    #should we also store rewards or something?
+    env.old_obs .= reduce(hcat, obs)
     env.returns .= zero(T)
 
     # Update observation statistics if in training mode
     if env.training && env.norm_obs
-        obs_batch = stack(obs)
+        obs_batch = reduce(hcat, obs)
         update!(env.obs_rms, obs_batch)
     end
 
@@ -442,15 +467,15 @@ function observe(env::NormalizeWrapperEnv{E,T}) where {E,T}
     obs = observe(env.env)
 
     # Store original observations and rewards for access
-    env.old_obs .= stack(obs)
+    env.old_obs .= reduce(hcat, obs)
 
     # Update observation statistics if in training mode
     if env.training && env.norm_obs
-        obs_batch = stack(obs)
+        obs_batch = reduce(hcat, obs)
         update!(env.obs_rms, obs_batch)
     end
-    normalized_obs = normalize_obs.(Ref(env), obs)
-    return normalized_obs
+    normalize_obs!.(obs, Ref(env))
+    return obs
 end
 
 function act!(env::NormalizeWrapperEnv{E,T}, actions::AbstractVector) where {E,T}
@@ -461,7 +486,7 @@ function act!(env::NormalizeWrapperEnv{E,T}, actions::AbstractVector) where {E,T
     if env.training && env.norm_reward
         update_reward_stats!(env, rewards)
     end
-    normalized_rewards = normalize_reward(env, rewards)
+    normalize_rewards!(rewards, env)
 
     # Reset returns for terminated environments
     dones = terminateds .| truncateds
@@ -473,11 +498,12 @@ function act!(env::NormalizeWrapperEnv{E,T}, actions::AbstractVector) where {E,T
     for i in findall(truncateds)
         if haskey(infos[i], "terminal_observation")
             term_obs = infos[i]["terminal_observation"]
-            infos[i]["terminal_observation"] = normalize_obs(env, term_obs)
+            normalize_obs!(term_obs, env)
+            infos[i]["terminal_observation"] = term_obs
         end
     end
 
-    return normalized_rewards, terminateds, truncateds, infos
+    return rewards, terminateds, truncateds, infos
 end
 
 function update_reward_stats!(env::NormalizeWrapperEnv{E,T}, rewards::Vector{T}) where {E,T}
@@ -486,38 +512,42 @@ function update_reward_stats!(env::NormalizeWrapperEnv{E,T}, rewards::Vector{T})
     update!(env.ret_rms, reshape(env.returns, 1, length(env.returns)))
 end
 
-function normalize_obs(env::NormalizeWrapperEnv{E,T}, obs::AbstractArray{T}) where {E,T}
+function normalize_obs!(obs, env::NormalizeWrapperEnv{E,T}) where {E,T}
     if !env.norm_obs
         return obs
     end
 
     # Normalize using running statistics
-    normalized = (obs .- env.obs_rms.mean) ./ sqrt.(env.obs_rms.var .+ env.epsilon)
-    return clamp.(normalized, -env.clip_obs, env.clip_obs)
+    @. obs = (obs .- env.obs_rms.mean) ./ sqrt.(env.obs_rms.var .+ env.epsilon)
+    clamp!(obs, -env.clip_obs, env.clip_obs)
+    return nothing
 end
 
-function normalize_reward(env::NormalizeWrapperEnv{E,T}, rewards::Vector{T}) where {E,T}
+function normalize_rewards!(rewards, env::NormalizeWrapperEnv{E,T}) where {E,T}
     if !env.norm_reward
         return rewards
     end
 
     # Normalize rewards using return statistics
-    normalized = rewards ./ sqrt(env.ret_rms.var[1] + env.epsilon)
-    return clamp.(normalized, -env.clip_reward, env.clip_reward)
+    @. rewards = rewards ./ sqrt(env.ret_rms.var[1] + env.epsilon)
+    clamp!(rewards, -env.clip_reward, env.clip_reward)
+    return nothing
 end
 
-function unnormalize_obs(env::NormalizeWrapperEnv{E,T}, obs::AbstractArray{T}) where {E,T}
+function unnormalize_obs!(obs, env::NormalizeWrapperEnv{E,T}) where {E,T}
     if !env.norm_obs
         return obs
     end
-    return obs .* sqrt.(env.obs_rms.var .+ env.epsilon) .+ env.obs_rms.mean
+    @. obs = obs .* sqrt.(env.obs_rms.var .+ env.epsilon) .+ env.obs_rms.mean
+    return nothing
 end
 
-function unnormalize_reward(env::NormalizeWrapperEnv{E,T}, rewards::Vector{T}) where {E,T}
+function unnormalize_rewards!(rewards, env::NormalizeWrapperEnv{E,T}) where {E,T}
     if !env.norm_reward
         return rewards
     end
-    return rewards .* sqrt(env.ret_rms.var[1] + env.epsilon)
+    @. rewards = rewards .* sqrt(env.ret_rms.var[1] + env.epsilon)
+    return nothing
 end
 
 # Get original (unnormalized) observations and rewards
@@ -536,7 +566,8 @@ function get_info(env::NormalizeWrapperEnv{E,T}) where {E,T}
     for i in findall(dones)
         if haskey(infos[i], "terminal_observation")
             term_obs = infos[i]["terminal_observation"]
-            infos[i]["terminal_observation"] = normalize_obs(env, term_obs)
+            normalize_obs!(term_obs, env)
+            infos[i]["terminal_observation"] = term_obs
         end
     end
     return infos

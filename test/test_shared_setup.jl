@@ -212,7 +212,7 @@
     function (policy::ConstantValuePolicy)(obs::AbstractArray, ps, st; rng::AbstractRNG=Random.default_rng())
         batch_size = size(obs)[end]
         # Random actions in action space bounds
-        actions = rand(rng, Float32, policy.action_space.shape..., batch_size) .* 2.0f0 .- 1.0f0
+        actions = rand(rng, action_space(policy), batch_size)
         values = fill(policy.constant_value, batch_size)
         logprobs = fill(0.0f0, batch_size)
         return actions, values, logprobs, st
@@ -221,7 +221,7 @@
     # Implement predict function
     function DRiL.predict_actions(policy::ConstantValuePolicy, obs::AbstractArray, ps, st; deterministic::Bool=false, rng::AbstractRNG=Random.default_rng())
         batch_size = size(obs)[end]
-        actions = rand(rng, Float32, policy.action_space.shape..., batch_size) .* 2.0f0 .- 1.0f0
+        actions = rand(rng, action_space(policy), batch_size)
         return actions, st
     end
 

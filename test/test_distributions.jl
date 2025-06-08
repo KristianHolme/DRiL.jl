@@ -1,6 +1,7 @@
 @testitem "DiagGaussian vs Distributions.MvNormal" begin
     using Random
     using Distributions
+    using DRiL.DRiLDistributions
 
     same_outputs = Bool[]
 
@@ -17,11 +18,11 @@
 
         flat_x = vec(x)
 
-        custom_logpdf = logpdf(d, x)
+        custom_logpdf = DRiLDistributions.logpdf(d, x)
         dist_logpdf = Distributions.logpdf(mvn, flat_x)
         push!(same_outputs, custom_logpdf ≈ dist_logpdf)
 
-        custom_entropy = entropy(d)
+        custom_entropy = DRiLDistributions.entropy(d)
         dist_entropy = Distributions.entropy(mvn)
         push!(same_outputs, custom_entropy ≈ dist_entropy)
     end
@@ -39,15 +40,15 @@ end
         p = rand(Float32, N)
         p = p ./ sum(p)
 
-        d = Categorical(p)
+        d = DRiLDistributions.Categorical(p)
 
         dist_d = Distributions.Categorical(p)
 
-        custom_logpdf = logpdf(d, 1)
+        custom_logpdf = DRiLDistributions.logpdf(d, 1)
         dist_logpdf = Distributions.logpdf(dist_d, 1)
         push!(same_outputs, custom_logpdf ≈ dist_logpdf)
 
-        custom_entropy = entropy(d)
+        custom_entropy = DRiLDistributions.entropy(d)
         dist_entropy = Distributions.entropy(dist_d)
         push!(same_outputs, custom_entropy ≈ dist_entropy)
     end
@@ -65,7 +66,7 @@ end
     @test_throws MethodError DiagGaussian([1.0], [2f0])
 
     d = DiagGaussian([1.0f0], [2f0])
-    @test_throws MethodError logpdf(d, [1.0])
+    @test_throws MethodError DRiLDistributions.logpdf(d, [1.0])
 
 
     mean_batch = rand(Float32, 2, 2, 7)
@@ -75,11 +76,16 @@ end
 
     @test begin
         ds = DiagGaussian.(eachslice(mean_batch, dims=ndims(mean_batch)), eachslice(std_batch, dims=ndims(std_batch)))
-        entropies = entropy.(ds)
-        logpdfs = logpdf.(ds, eachslice(x_batch, dims=ndims(x_batch)))
+        entropies = DRiLDistributions.entropy.(ds)
+        logpdfs = DRiLDistributions.logpdf.(ds, eachslice(x_batch, dims=ndims(x_batch)))
         true
     end
 
     single_std = rand(Float32, 2, 2)
-    ds = DiagGaussian.(eachslice(mean_batch, dims=ndims(mean_batch)), Ref(single_std))
+    @test begin
+        ds = DiagGaussian.(eachslice(mean_batch, dims=ndims(mean_batch)), Ref(single_std))
+        entropies = DRiLDistributions.entropy.(ds)
+        logpdfs = DRiLDistributions.logpdf.(ds, eachslice(x_batch, dims=ndims(x_batch)))
+        true
+    end
 end

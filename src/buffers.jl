@@ -17,16 +17,16 @@ Base.length(rb::RolloutBuffer) = rb.n_steps * rb.n_envs
 #TODO:fix types here
 function RolloutBuffer(observation_space::AbstractSpace, action_space::AbstractSpace, gae_lambda::T, gamma::T, n_steps::Int, n_envs::Int) where {T<:AbstractFloat}
     total_steps = n_steps * n_envs
-    obs_type = eltype(observation_space)
-    action_type = eltype(action_space)
-    observations = Array{obs_type}(undef, size(observation_space)..., total_steps)
-    actions = Array{action_type}(undef, size(action_space)..., total_steps)
+    obs_eltype = eltype(observation_space)
+    action_eltype = eltype(action_space)
+    observations = Array{obs_eltype}(undef, size(observation_space)..., total_steps)
+    actions = Array{action_eltype}(undef, size(action_space)..., total_steps)
     rewards = Vector{T}(undef, total_steps)
     advantages = Vector{T}(undef, total_steps)
     returns = Vector{T}(undef, total_steps)
     logprobs = Vector{T}(undef, total_steps)
     values = Vector{T}(undef, total_steps)
-    return RolloutBuffer{T,obs_type,action_type}(observations, actions, rewards, advantages, returns, logprobs, values, gae_lambda, gamma, n_steps, n_envs)
+    return RolloutBuffer{T,obs_eltype,action_eltype}(observations, actions, rewards, advantages, returns, logprobs, values, gae_lambda, gamma, n_steps, n_envs)
 end
 
 function reset!(rollout_buffer::RolloutBuffer)
@@ -41,8 +41,8 @@ function reset!(rollout_buffer::RolloutBuffer)
 end
 
 mutable struct Trajectory{T<:AbstractFloat,O,A}
-    observations::Vector{Array{O}}
-    actions::Vector{Array{A}}
+    observations::Vector{O}
+    actions::Vector{A}
     rewards::Vector{T}
     logprobs::Vector{T}
     values::Vector{T}
@@ -51,8 +51,8 @@ mutable struct Trajectory{T<:AbstractFloat,O,A}
     bootstrap_value::Union{Nothing,T}  # Value of the next state for truncated episodes
 end
 function Trajectory{T}(observation_space::AbstractSpace, action_space::AbstractSpace) where {T<:AbstractFloat}
-    obs_type = eltype(observation_space)
-    action_type = eltype(action_space)
+    obs_type = typeof(rand(observation_space))
+    action_type = typeof(rand(action_space))
     observations = Array{obs_type}[]
     actions = Array{action_type}[]
     rewards = T[]
@@ -138,8 +138,8 @@ function collect_rollouts!(rollout_buffer::RolloutBuffer, agent::ActorCriticAgen
     for (i, traj) in enumerate(trajectories)
         #transfer data to the Rolloutbuffer 
         traj_inds = positions[i]:positions[i+1]-1
-        selectdim(rollout_buffer.observations, length(size(obs_space)) + 1, traj_inds) .= stack(traj.observations)
-        selectdim(rollout_buffer.actions, length(size(act_space)) + 1, traj_inds) .= stack(traj.actions)
+        selectdim(rollout_buffer.observations, length(size(obs_space)) + 1, traj_inds) .= reduce(hcat, traj.observations)
+        selectdim(rollout_buffer.actions, length(size(act_space)) + 1, traj_inds) .= reduce(hcat, traj.actions)
         rollout_buffer.rewards[traj_inds] .= traj.rewards
         rollout_buffer.logprobs[traj_inds] .= traj.logprobs
         rollout_buffer.values[traj_inds] .= traj.values

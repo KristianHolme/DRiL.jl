@@ -20,27 +20,16 @@ also used for action spaces with only one action element
 
 struct Categorical{V<:AbstractVector{<:Real}} <: AbstractDiscreteDistribution
     probabilities::V
-    
-    # Inner constructor to ensure probabilities sum to 1
-    function Categorical(probabilities::V) where V <: AbstractVector{<:Real}
-        @assert all(probabilities .>= 0) "All probabilities must be non-negative"
-        @assert sum(probabilities) > 0 "Sum of probabilities must be positive"
-        
-        # Normalize probabilities
-        normalized_probs = probabilities ./ sum(probabilities)
-        new{V}(normalized_probs)
+    function Categorical(probs::V) where V <: AbstractVector{<:Real}
+        @assert sum(probs) ≈ 1 "Sum of probabilities must be 1"
+        return new{V}(probs)
     end
 end
 
-# Constructor from logits (more numerically stable)
-function Categorical(; logits::V) where V <: AbstractVector{<:Real}
-    # Use log-sum-exp trick for numerical stability
-    max_logit = maximum(logits)
-    exp_logits = exp.(logits .- max_logit)
-    probabilities = exp_logits ./ sum(exp_logits)
-    return Categorical(probabilities)
+function logpdf(d::Categorical, x::AbstractArray{<:Integer})
+    @assert length(x) == 1 "Categorical distribution only supports single actions"
+    return logpdf(d, x[1])
 end
-
 
 function logpdf(d::Categorical, x::Integer)
     return log(d.probabilities[x])

@@ -149,25 +149,23 @@ function Random.rand(rng::AbstractRNG, space::Box{T}) where T
     return unit_random .* (space.high .- space.low) .+ space.low
 end
 
-# Default RNG version
-Random.rand(space::Box) = rand(Random.default_rng(), space)
-
 # Multiple samples version
 """
     rand([rng], space::Box{T}, n::Integer)
 
 Sample `n` random values from the box space.
 
-Returns an array where the last dimension has size `n`.
+Returns a vector of length `n`.
 """
 function Random.rand(rng::AbstractRNG, space::Box{T}, n::Integer) where T
-    # Generate random values with an extra dimension for n samples
-    unit_random = rand(rng, T, space.shape..., n)
-    # Scale to [low, high] range element-wise
-    # Need to add dimensions to low/high to broadcast correctly
-    low_expanded = reshape(space.low, space.shape..., 1)
-    high_expanded = reshape(space.high, space.shape..., 1)
-    return unit_random .* (high_expanded .- low_expanded) .+ low_expanded
+    [rand(rng, space) for _ in 1:n]
+    # # Generate random values with an extra dimension for n samples
+    # unit_random = rand(rng, T, space.shape..., n)
+    # # Scale to [low, high] range element-wise
+    # # Need to add dimensions to low/high to broadcast correctly
+    # low_expanded = reshape(space.low, space.shape..., 1)
+    # high_expanded = reshape(space.high, space.shape..., 1)
+    # return unit_random .* (high_expanded .- low_expanded) .+ low_expanded
 end
 
 Random.rand(space::Box, n::Integer) = rand(Random.default_rng(), space, n)
@@ -215,7 +213,8 @@ function Base.in(sample, space::Box{T}) where T
 end
 
 # Helper function to process actions: ensure correct type and clipping for Box
-function process_action(action::AbstractArray{T}, action_space::Box{T}) where T
+#TODO performance
+function process_action(action, action_space::Box{T}) where T
     # First check if type conversion is needed
     if eltype(action) != T
         @warn "Action type mismatch: $(eltype(action)) != $T"
