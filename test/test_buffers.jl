@@ -306,7 +306,7 @@ end
     @test all(1 .<= policy_actions .<= 2)  # Should be 1-based
     
     # Processed actions for environment (0-based)
-    actions, _ = DRiL.predict(policy, stack(obs)[:,1:1], ps, st)
+    actions, _ = DRiL.predict_actions(policy, stack(obs)[:,1:1], ps, st)
     processed_actions = DRiL.process_action(actions, DRiL.action_space(env))
     @test processed_actions[1] ∈ DRiL.action_space(env)  # Should be 0 or 1
     

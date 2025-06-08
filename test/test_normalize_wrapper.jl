@@ -224,7 +224,7 @@ end
     # Collect rewards
     for i in 1:8
         actions = [rand(Float32) for _ in 1:2]
-        rewards = act!(norm_env, actions)
+        rewards,_ = act!(norm_env, actions)
         push!(all_rewards, rewards...)
         push!(original_rewards, get_original_rewards(norm_env)...)
     end
@@ -237,7 +237,7 @@ end
 
     # Test unnormalization
     actions = [rand(Float32) for _ in 1:2]
-    last_rewards = act!(norm_env, actions)
+    last_rewards,_ = act!(norm_env, actions)
     last_original = get_original_rewards(norm_env)
     unnorm_rewards = unnormalize_reward(norm_env, last_rewards)
 
@@ -413,7 +413,7 @@ end
             env.observations[i] = observe(e)
         end
 
-        return rewards
+        return rewards, terminated(env), truncated(env), env.infos
     end
 
     base_env = TerminalParallelEnv([TerminalEnv(2) for _ in 1:2])
@@ -422,15 +422,12 @@ end
     reset!(norm_env)
 
     # Step until termination
-    actions = [rand(Float32) for _ in 1:2]
-    rewards = act!(norm_env, actions)
-    terms = terminated(norm_env)
+    actions = [[rand(Float32)] for _ in 1:2]
+    rewards, terms, truncs, infos = act!(norm_env, actions)
     @test !any(terms)
 
-    actions = [rand(Float32) for _ in 1:2]
-    rewards = act!(norm_env, actions)
-    terms = terminated(norm_env)
-    infos = get_info(norm_env)
+    actions = [[rand(Float32)] for _ in 1:2]
+    rewards, terms, truncs, infos = act!(norm_env, actions)
     @test all(terms)
 
     # Check that terminal observations are normalized in info
@@ -494,17 +491,13 @@ end
     @test all(obs -> length(obs) == 2, current_obs)
 
     # Test act!
-    actions = [rand(Float32) for _ in 1:3]
-    rewards = act!(norm_env, actions)
+    actions = [[rand(Float32)] for _ in 1:3]
+    rewards, terms, truncs, infos = act!(norm_env, actions)
 
     @test length(rewards) == 3
     @test all(r -> r isa Float32, rewards)
     
     # Test other methods
-    terms = terminated(norm_env)
-    truncs = truncated(norm_env)
-    infos = get_info(norm_env)
-    
     @test length(terms) == 3
     @test length(truncs) == 3
     @test length(infos) == 3
@@ -513,12 +506,14 @@ end
     @test all(i -> i isa Dict, infos)
 
     # Test seeding
+    norm_env = set_training(norm_env, false)
     Random.seed!(norm_env, 42)
     reset!(norm_env)
     obs1 = observe(norm_env)
     Random.seed!(norm_env, 42)
     reset!(norm_env)
     obs2 = observe(norm_env)
+    @test all([isapprox(o1, o2) for (o1, o2) in zip(obs1, obs2)])
     # Note: Due to running statistics, perfect reproducibility is not expected
     # but the underlying environment should be seeded
 end

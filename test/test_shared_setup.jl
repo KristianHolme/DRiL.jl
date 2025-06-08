@@ -219,7 +219,7 @@
     end
 
     # Implement predict function
-    function DRiL.predict(policy::ConstantValuePolicy, obs::AbstractArray, ps, st; deterministic::Bool=false, rng::AbstractRNG=Random.default_rng())
+    function DRiL.predict_actions(policy::ConstantValuePolicy, obs::AbstractArray, ps, st; deterministic::Bool=false, rng::AbstractRNG=Random.default_rng())
         batch_size = size(obs)[end]
         actions = rand(rng, Float32, policy.action_space.shape..., batch_size) .* 2.0f0 .- 1.0f0
         return actions, st

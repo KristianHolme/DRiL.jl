@@ -5,18 +5,21 @@ using Base.Threads
 using ChainRulesCore
 using ComponentArrays
 using DataStructures
-using Distributions
 using LinearAlgebra
 using Logging
 using Lux
 using MLUtils
 using Optimisers
 using ProgressMeter
+using Reexport
 using Random
 using Statistics
 using TensorBoardLogger
 using FileIO
 using JLD2
+
+include("DRiLDistributions/DRiLDistributions.jl")
+@reexport using .DRiLDistributions
 
 include("types_and_interfaces.jl")
 export AbstractEnv, AbstractAgent, AbstractBuffer

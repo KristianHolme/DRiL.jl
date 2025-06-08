@@ -98,7 +98,8 @@ function predict_actions(agent::ActorCriticAgent, observations::AbstractVector; 
     policy = agent.policy
     ps = agent.train_state.parameters
     st = agent.train_state.states
-    actions, _ = predict(policy, stack(observations), ps, st; deterministic=deterministic, rng=rng)
+    actions, _ = predict_actions(policy, stack(observations), ps, st; deterministic=deterministic, rng=rng)
+    actions = process_action.(actions, action_space(policy))
     return eachcol(actions)
 end
 
@@ -141,6 +142,7 @@ function load_policy_params_and_state(agent::ActorCriticAgent, path::AbstractStr
     new_states = data["states"]
     new_optimizer = make_optimizer(agent.optimizer_type, agent.learning_rate)
     new_train_state = Lux.Training.TrainState(new_policy, new_parameters, new_states, new_optimizer)
+    #TODO: check if this is correct, probably it is not
     @reset agent.policy = new_policy
     @reset agent.train_state = new_train_state
     return agent
