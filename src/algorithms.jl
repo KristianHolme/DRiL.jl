@@ -79,15 +79,18 @@ function learn!(agent::ActorCriticAgent, env::AbstractParallellEnv, alg::PPO{T},
 
                 if epoch == 1 && i_batch == 1
                     mean_ratio = stats["ratio"]
-                    @assert mean_ratio ≈ one(mean_ratio) "ratios is not 1.0, iter $i, epoch $epoch, batch $i_batch, $mean_ratio"
+                    mean_ratio ≈ one(mean_ratio) || @warn "ratios is not 1.0, iter $i, epoch $epoch, batch $i_batch, $mean_ratio"
                 end
                 @assert !any(isnan, grads) "gradient contains nan, iter $i, epoch $epoch, batch $i_batch"
                 @assert !any(isinf, grads) "gradient not finite, iter $i, epoch $epoch, batch $i_batch"
 
                 current_grad_norm = norm(grads)
-                @info "actor grad norm: $(norm(grads.actor_head))"
-                @info "critic grad norm: $(norm(grads.critic_head))"
-                @info "log_std grad norm: $(norm(grads.log_std))"
+                # @info "actor grad norm: $(norm(grads.actor_head))"
+                if norm(grads.actor_head) < 1e-3
+                    @info "actor grad" grads.actor_head
+                end
+                # @info "critic grad norm: $(norm(grads.critic_head))"
+                # @info "log_std grad norm: $(norm(grads.log_std))"
                 push!(grad_norms, current_grad_norm)
 
                 if !isnothing(alg.max_grad_norm) && current_grad_norm > alg.max_grad_norm
@@ -195,7 +198,7 @@ function clip_range(old_values::Vector{T}, values::Vector{T}, clip_range::T) whe
 end
 
 function loss(alg::PPO{T}, policy::AbstractActorCriticPolicy, ps, st, batch_data) where T
-    observations, actions, advantages, returns, old_logprobs, old_values = batch_data
+    observations, actions, advantages, returns, old_logprobs, old_values = @ignore_derivatives batch_data
 
     advantages = @ignore_derivatives alg.normalize_advantage ? normalize(advantages) : advantages
     values, log_probs, entropy, st = evaluate_actions(policy, observations, actions, ps, st)

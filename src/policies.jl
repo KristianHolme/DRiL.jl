@@ -463,19 +463,62 @@ function predict_actions(policy::DiscreteActorCriticPolicy, obs::AbstractArray, 
     return actions, st
 end
 
+function calculate_log_probs(action_mean, log_std, action)
+    # Calculate log probability for diagonal Gaussian distribution
+    # action_mean: mean vector
+    # log_std: log standard deviation vector 
+    # action: action vector
+    
+    # Compute difference from mean
+    diff = action .- action_mean
+    mock_actions = similar(action).*0 .+ 1
+    action2 = @ignore_derivatives mock_actions
+    diff = mock_actions .- action_mean
+    diff = action2 .- action_mean
+    
+    # Calculate log probability components
+    log_2pi = Float32(log(2π))
+    variance_term = sum(2 .* log_std)
+    quadratic_term = sum((diff .* diff) )
+    
+    # Sum components for final log probability
+    log_prob = -0.5f0 * (log_2pi + variance_term + quadratic_term)
+    
+
+    log_prob = mean(diff.^2)
+    # Sum across action dimensions
+    @assert log_prob isa Float32
+    return log_prob
+end
+
+function calculate_entropy(log_std)
+    # Calculate entropy for diagonal Gaussian distribution
+    # log_std: log standard deviation vector
+    log_2pi = Float32(log(2π))
+    return sum(0.5f0 .* (log_2pi .+ 2 .* log_std))
+end
+
 function evaluate_actions(policy::ContinuousActorCriticPolicy, obs::AbstractArray, actions::AbstractArray, ps, st)
     feats, st = extract_features(policy, obs, ps, st)
     new_action_means, st = get_actions_from_features(policy, feats, ps, st)
     # @info "new_action_means: $(new_action_means)"
     # @info "actions: $(actions)"
     values, st = get_values_from_features(policy, feats, ps, st)
-    distributions = get_distributions(policy, new_action_means, ps.log_std)
-    @info "distributions: $(distributions)"
-    # Make sure actions are correctly shaped for log probability
-    # flattened_actions = reshape(actions, :, size(actions)[end])
 
-    log_probs = logpdf.(distributions, eachslice(actions, dims=ndims(actions)))
+    no_grad_actions = @ignore_derivatives actions
+
+    distributions = get_distributions(policy, new_action_means, ps.log_std)
+    log_probs = logpdf.(distributions, eachslice(no_grad_actions, dims=ndims(no_grad_actions)))
     entropies = entropy.(distributions)
+
+    # log_probs = calculate_log_probs.(eachslice(new_action_means, dims=ndims(new_action_means)), Ref(ps.log_std), eachslice(actions, dims=ndims(actions)))
+    # @assert length(log_probs) == size(actions, ndims(actions))
+    # ent = calculate_entropy(ps.log_std)
+    # entropies = [copy(ent) for _ in 1:size(actions, ndims(actions))]
+
+    # with this (WRONG), the gradient is not zero
+    # log_probs = vec(new_action_means)
+    # entropies = log_probs .* 0.5f0
     return vec(values), log_probs, entropies, st
 end
 
