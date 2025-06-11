@@ -470,10 +470,10 @@ function calculate_log_probs(action_mean, log_std, action)
     # action: action vector
     
     # Compute difference from mean
-    diff = action .- action_mean
-    mock_actions = similar(action).*0 .+ 1
-    action2 = @ignore_derivatives mock_actions
-    diff = mock_actions .- action_mean
+    # diff = action .- action_mean
+    # mock_actions = similar(action).*0 .+ 1
+    action2 = @ignore_derivatives copy(action)
+    # diff = mock_actions .- action_mean
     diff = action2 .- action_mean
     
     # Calculate log probability components
@@ -485,7 +485,7 @@ function calculate_log_probs(action_mean, log_std, action)
     log_prob = -0.5f0 * (log_2pi + variance_term + quadratic_term)
     
 
-    log_prob = mean(diff.^2)
+    # log_prob = mean(diff.*diff)
     # Sum across action dimensions
     @assert log_prob isa Float32
     return log_prob
@@ -505,11 +505,13 @@ function evaluate_actions(policy::ContinuousActorCriticPolicy, obs::AbstractArra
     # @info "actions: $(actions)"
     values, st = get_values_from_features(policy, feats, ps, st)
 
-    no_grad_actions = @ignore_derivatives actions
+    # no_grad_actions = @ignore_derivatives actions
 
     distributions = get_distributions(policy, new_action_means, ps.log_std)
-    log_probs = logpdf.(distributions, eachslice(no_grad_actions, dims=ndims(no_grad_actions)))
+    log_probs = logpdf.(distributions, eachslice(actions, dims=ndims(actions)))
     entropies = entropy.(distributions)
+
+    # return vec(values), mean.(mode.(distributions)), entropies, st
 
     # log_probs = calculate_log_probs.(eachslice(new_action_means, dims=ndims(new_action_means)), Ref(ps.log_std), eachslice(actions, dims=ndims(actions)))
     # @assert length(log_probs) == size(actions, ndims(actions))

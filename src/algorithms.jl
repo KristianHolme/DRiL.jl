@@ -205,6 +205,7 @@ function loss(alg::PPO{T}, policy::AbstractActorCriticPolicy, ps, st, batch_data
 
     values = !isnothing(alg.clip_range_vf) ? clip_range(old_values, values, alg.clip_range_vf) : values
 
+    # return mean(log_probs), st, Dict("policy_loss" => 0.0f0, "value_loss" => 0.0f0, "entropy_loss" => 0.0f0, "clip_fraction" => 0.0f0, "approx_kl_div" => 0.0f0, "entropy" => 0.0f0, "ratio" => 0.0f0)
     r = exp.(log_probs - old_logprobs)
     ratio_clipped = clamp.(r, 1 - alg.clip_range, 1 + alg.clip_range)
     p_loss = -mean(min.(r .* advantages, ratio_clipped .* advantages))
