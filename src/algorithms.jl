@@ -74,8 +74,7 @@ function learn!(agent::ActorCriticAgent, env::AbstractParallellEnv, alg::PPO{T},
         grad_norms = Float32[]
         for epoch in 1:agent.epochs
             for (i_batch, batch_data) in enumerate(data_loader)
-                alg_loss = (model, ps, st, data) -> loss(alg, model, ps, st, data)
-                grads, loss_val, stats, train_state = Lux.Training.compute_gradients(ad_type, alg_loss, batch_data, train_state)
+                grads, loss_val, stats, train_state = Lux.Training.compute_gradients(ad_type, alg, batch_data, train_state)
 
                 if epoch == 1 && i_batch == 1
                     mean_ratio = stats["ratio"]
@@ -194,25 +193,28 @@ function clip_range!(values::Vector{T}, old_values::Vector{T}, clip_range::T) wh
 end
 
 function clip_range(old_values::Vector{T}, values::Vector{T}, clip_range::T) where T
-    return old_values .+ clamp.(values .- old_values, -clip_range, clip_range)
+    return old_values .+ clamp(values .- old_values, -clip_range, clip_range)
 end
 
-function loss(alg::PPO{T}, policy::AbstractActorCriticPolicy, ps, st, batch_data) where T
-    observations, actions, advantages, returns, old_logprobs, old_values = @ignore_derivatives batch_data
+function (alg::PPO{T})(policy::AbstractActorCriticPolicy, ps, st, batch_data) where T
+    observations = batch_data[1]
+    actions = batch_data[2]
+    advantages = batch_data[3]
+    returns = batch_data[4]
+    old_logprobs = batch_data[5]
+    old_values = batch_data[6]
 
     advantages = @ignore_derivatives alg.normalize_advantage ? normalize(advantages) : advantages
+
     values, log_probs, entropy, st = evaluate_actions(policy, observations, actions, ps, st)
 
     values = !isnothing(alg.clip_range_vf) ? clip_range(old_values, values, alg.clip_range_vf) : values
 
-    # return mean(log_probs), st, Dict("policy_loss" => 0.0f0, "value_loss" => 0.0f0, "entropy_loss" => 0.0f0, "clip_fraction" => 0.0f0, "approx_kl_div" => 0.0f0, "entropy" => 0.0f0, "ratio" => 0.0f0)
     r = exp.(log_probs - old_logprobs)
     ratio_clipped = clamp.(r, 1 - alg.clip_range, 1 + alg.clip_range)
     p_loss = -mean(min.(r .* advantages, ratio_clipped .* advantages))
     ent_loss = -mean(entropy)
 
-    # @info "values: $values"
-    # @info "returns: $returns"
     v_loss = mean((values .- returns) .^ 2)
     loss = p_loss + alg.ent_coef * ent_loss + alg.vf_coef * v_loss
 

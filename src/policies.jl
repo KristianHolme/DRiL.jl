@@ -193,20 +193,6 @@ function ContinuousActorCriticPolicy(observation_space::Union{Discrete, Box{T}},
     critic_head = get_critic_head(latent_dim, hidden_dims, activation, bias_init, hidden_init, value_init)
     return ContinuousActorCriticPolicy{typeof(observation_space), typeof(action_space), StateIndependantNoise}(observation_space, action_space, feature_extractor, actor_head, critic_head, log_std_init, shared_features)
 end
-#TODO remove
-# function ContinuousActorCriticPolicy(observation_space::Discrete, action_space::Box{T}; log_std_init=T(0), hidden_dims=[64, 64], activation=tanh, shared_features::Bool=true) where T
-#     feature_extractor = get_feature_extractor(observation_space)
-#     latent_dim = size(observation_space) |> prod
-#     #TODO: make this bias init work for different types
-#     bias_init = zeros32
-
-#     hidden_init = OrthogonalInitializer{T}(sqrt(T(2)))
-#     actor_init = OrthogonalInitializer{T}(T(0.01))
-#     value_init = OrthogonalInitializer{T}(T(1.0))
-#     actor_head = get_actor_head(latent_dim, action_space, hidden_dims, activation, bias_init, hidden_init, actor_init)
-#     critic_head = get_critic_head(latent_dim, hidden_dims, activation, bias_init, hidden_init, value_init)
-#     return ContinuousActorCriticPolicy(observation_space, action_space, feature_extractor, actor_head, critic_head, log_std_init, shared_features, StateIndependantNoise())
-# end
 
 function DiscreteActorCriticPolicy(observation_space::Union{Discrete, Box}, action_space::Discrete; hidden_dims=[64, 64], activation=tanh, shared_features::Bool=true)
     feature_extractor = get_feature_extractor(observation_space)
@@ -222,28 +208,10 @@ function DiscreteActorCriticPolicy(observation_space::Union{Discrete, Box}, acti
     return DiscreteActorCriticPolicy(observation_space, action_space, feature_extractor, actor_head, critic_head, shared_features)
 end
 
-#TODO remove
-# function DiscreteActorCriticPolicy(observation_space::Discrete, action_space::Discrete; hidden_dims=[64, 64], activation=tanh, shared_features::Bool=true)
-#     feature_extractor = get_feature_extractor(observation_space)
-#     latent_dim = size(observation_space) |> prod
-#     #TODO: make this bias init work for different types
-#     bias_init = zeros32
-
-#     # For Discrete observation spaces, we'll use Float32 as the default type
-#     T = Float32
-#     hidden_init = OrthogonalInitializer{T}(sqrt(T(2)))
-#     actor_init = OrthogonalInitializer{T}(T(0.01))
-#     value_init = OrthogonalInitializer{T}(T(1.0))
-#     actor_head = get_actor_head(latent_dim, action_space, hidden_dims, activation, bias_init, hidden_init, actor_init)
-#     critic_head = get_critic_head(latent_dim, hidden_dims, activation, bias_init, hidden_init, value_init)
-#     return DiscreteActorCriticPolicy(observation_space, action_space, feature_extractor, actor_head, critic_head, shared_features, StateIndependantNoise())
-# end
 
 # Convenience constructors that maintain the old interface
 ActorCriticPolicy(observation_space::Union{Discrete, Box}, action_space::Box; kwargs...) = ContinuousActorCriticPolicy(observation_space, action_space; kwargs...)
 ActorCriticPolicy(observation_space::Union{Discrete, Box}, action_space::Discrete; kwargs...) = DiscreteActorCriticPolicy(observation_space, action_space; kwargs...)
-# ActorCriticPolicy(observation_space::Discrete, action_space::Box{T}; kwargs...) where T = ContinuousActorCriticPolicy(observation_space, action_space; kwargs...)
-# ActorCriticPolicy(observation_space::Discrete, action_space::Discrete; kwargs...) = DiscreteActorCriticPolicy(observation_space, action_space; kwargs...)
 
 function Lux.initialparameters(rng::AbstractRNG, policy::ContinuousActorCriticPolicy)
     params = ComponentArray(feature_extractor=Lux.initialparameters(rng, policy.feature_extractor),
@@ -286,7 +254,8 @@ function (policy::ContinuousActorCriticPolicy)(obs::AbstractArray, ps, st)
     values, st = get_values_from_features(policy, feats, ps, st)
     log_std = ps.log_std
     ds = get_distributions(policy, action_means, log_std)
-    actions = mode.(ds)
+    #random sample, as this is called during rollout collection
+    actions = rand.(ds)
     log_probs = logpdf.(ds, actions)
     return actions, vec(values), log_probs, st
 end
@@ -296,7 +265,8 @@ function (policy::DiscreteActorCriticPolicy)(obs::AbstractArray, ps, st)
     action_logits, st = get_actions_from_features(policy, feats, ps, st)  # For discrete, these are logits
     values, st = get_values_from_features(policy, feats, ps, st)
     ds = get_distributions(policy, action_logits)
-    actions = mode.(ds)
+    #random sample, as this is called during rollout collection
+    actions = rand.(ds)
     log_probs = logpdf.(ds, actions)
     return actions, vec(values), log_probs, st
 end
@@ -331,32 +301,6 @@ function get_distributions(policy::ContinuousActorCriticPolicy, action_means::Ab
         @assert size(log_std) == size(action_means) "log_std and action_means have different shapes"
         return DiagGaussian.(eachslice(action_means, dims=batch_dim), eachslice(log_std, dims=batch_dim))
     end
-
-    # if prod(policy.action_space.shape) > 1
-    #     # Multivariate case - use MvNormal
-        
-    #     # Batched observations
-    #     batch_size = size(action_means, ndims(action_means))
-    #     distributions = Vector{Distributions.MvNormal}(undef, batch_size)
-
-    #     for i in 1:batch_size
-    #         mean_i = action_means[:, i]
-    #         if static_std
-    #             cov = Diagonal(fill(std[1]^2, length(mean_i)))
-    #         else
-    #             cov = Diagonal((std[:, i]) .^ 2)
-    #         end
-    #         distributions[i] = Distributions.MvNormal(mean_i, cov)
-    #     end
-    #     return distributions
-    # else
-    #     # Univariate case - use Normal
-    #     if static_std
-    #         return Distributions.Normal.(action_means, Ref(std[1]))
-    #     else
-    #         return Distributions.Normal.(action_means, std)
-    #     end
-    # end
 end
 
 # For discrete action spaces
@@ -366,77 +310,7 @@ function get_distributions(::DiscreteActorCriticPolicy, action_logits::AbstractA
     probs = Lux.softmax(action_logits)
     batch_dim = ndims(action_logits)
     return Categorical.(eachslice(probs, dims=batch_dim))
-
-    # if ndims(action_logits) == 1
-    #     # Single observation
-    #     return Distributions.Categorical(Lux.softmax(action_logits))
-    # else
-    #     # Batched observations
-    #     batch_size = size(action_logits, ndims(action_logits))
-    #     probs = Lux.softmax(action_logits)
-    #     #TODO simplify this when PR is done https://github.com/JuliaStats/Distributions.jl/pull/1908
-    #     # distributions = Distributions.Categorical.(eachcol(probs))
-    #     vec_probs = eachcol(probs) .|> Vector
-    #     distributions = Distributions.Categorical.(vec_probs)
-    #     return distributions
-    # end
 end
-
-
-
-# function get_noisy_actions(policy::AbstractActorCriticPolicy, action_means::AbstractArray, std::AbstractArray, rng::AbstractRNG; log_probs::Bool=false)
-#     # Use reparameterization trick: sample noise from standard normal, then scale and shift
-#     # This keeps the operation differentiable through the random sampling
-#     act_shape = size(action_means)
-#     act_type = eltype(action_space(policy))
-#     #TODO is this correct? same noise for all actions?
-#     noise = @ignore_derivatives randn(rng, act_type, act_shape...)
-
-#     # Apply noise with std: action = mean + std * noise
-#     actions = action_means .+ std .* noise
-
-#     @assert size(actions) == size(action_means) "action_means and actions have different shapes"
-
-
-#     if log_probs
-#         # Still need distributions for calculating log probs and entropy
-#         distributions = get_distributions(policy, action_means, std)
-#         # Flattened actions for log probability calculation
-#         flattened_actions = reshape(actions, :, size(actions)[end])
-#         log_probs = loglikelihood.(distributions, flattened_actions)
-#         return actions, log_probs
-#     else
-#         return actions
-#     end
-# end
-
-# Action sampling for discrete action spaces
-# function get_discrete_actions(policy::DiscreteActorCriticPolicy, action_logits::AbstractArray, rng::AbstractRNG; log_probs::Bool=false, deterministic::Bool=false)
-#     if deterministic
-#         # For deterministic actions, take the action with highest probability
-#         # Batched observations - keep in 1-based indexing
-#         actions = argmax.(eachcol(action_logits))
-#     else
-#         # Stochastic sampling
-#         distributions = @ignore_derivatives get_distributions(policy, action_logits)
-#         # Batched observations - sampled actions are naturally 1-based
-#         actions = @ignore_derivatives rand.(rng, distributions)
-#     end
-#     if log_probs
-#         # Use broadcasting for log prob calculation
-#         log_probs_matrix = Lux.logsoftmax(action_logits)
-
-#         action_indices = Int.(actions)
-#         log_prob = getindex.(eachcol(log_probs_matrix), action_indices)
-
-#         actions = reshape(actions, (1, size(action_logits, 2)))
-#         log_prob = reshape(log_prob, (1, size(action_logits, 2)))
-#         return actions, log_prob
-#     else
-#         actions = reshape(actions, (1, size(action_logits, 2)))
-#         return actions
-#     end
-# end
 
 function predict_actions(policy::ContinuousActorCriticPolicy, obs::AbstractArray, ps, st; deterministic::Bool=false, rng::AbstractRNG=Random.default_rng())
     feats, st = extract_features(policy, obs, ps, st)
@@ -463,78 +337,17 @@ function predict_actions(policy::DiscreteActorCriticPolicy, obs::AbstractArray, 
     return actions, st
 end
 
-function calculate_log_probs(action_mean, log_std, action)
-    # Calculate log probability for diagonal Gaussian distribution
-    # action_mean: mean vector
-    # log_std: log standard deviation vector 
-    # action: action vector
-    
-    # Compute difference from mean
-    # diff = action .- action_mean
-    # mock_actions = similar(action).*0 .+ 1
-    action2 = @ignore_derivatives copy(action)
-    # diff = mock_actions .- action_mean
-    diff = action2 .- action_mean
-    
-    # Calculate log probability components
-    log_2pi = Float32(log(2π))
-    variance_term = sum(2 .* log_std)
-    quadratic_term = sum((diff .* diff) )
-    
-    # Sum components for final log probability
-    log_prob = -0.5f0 * (log_2pi + variance_term + quadratic_term)
-    
-
-    # log_prob = mean(diff.*diff)
-    # Sum across action dimensions
-    @assert log_prob isa Float32
-    return log_prob
-end
-
-function calculate_entropy(log_std)
-    # Calculate entropy for diagonal Gaussian distribution
-    # log_std: log standard deviation vector
-    log_2pi = Float32(log(2π))
-    return sum(0.5f0 .* (log_2pi .+ 2 .* log_std))
-end
-
 function evaluate_actions(policy::ContinuousActorCriticPolicy, obs::AbstractArray, actions::AbstractArray, ps, st)
     feats, st = extract_features(policy, obs, ps, st)
     new_action_means, st = get_actions_from_features(policy, feats, ps, st)
-    # @info "new_action_means: $(new_action_means)"
-    # @info "actions: $(actions)"
     values, st = get_values_from_features(policy, feats, ps, st)
-
-    # no_grad_actions = @ignore_derivatives actions
-
     distributions = get_distributions(policy, new_action_means, ps.log_std)
     log_probs = logpdf.(distributions, eachslice(actions, dims=ndims(actions)))
     entropies = entropy.(distributions)
-
-    # return vec(values), mean.(mode.(distributions)), entropies, st
-
-    # log_probs = calculate_log_probs.(eachslice(new_action_means, dims=ndims(new_action_means)), Ref(ps.log_std), eachslice(actions, dims=ndims(actions)))
-    # @assert length(log_probs) == size(actions, ndims(actions))
-    # ent = calculate_entropy(ps.log_std)
-    # entropies = [copy(ent) for _ in 1:size(actions, ndims(actions))]
-
-    # with this (WRONG), the gradient is not zero
-    # log_probs = vec(new_action_means)
-    # entropies = log_probs .* 0.5f0
     return vec(values), log_probs, entropies, st
 end
 
-# function get_discrete_logprobs_and_entropy(action_logits::AbstractArray, actions::AbstractArray{<:Int})
-#     log_probs_matrix = Lux.logsoftmax(action_logits)
-#     probs_matrix = Lux.softmax(action_logits)
-#     # batch_size = size(action_logits, 2)
-#     log_probs = getindex.(eachcol(log_probs_matrix), vec(actions))
-#     entropy = -vec(sum(probs_matrix .* log_probs_matrix, dims=1))
-#     return log_probs, entropy
-# end
-
 function evaluate_actions(policy::DiscreteActorCriticPolicy, obs::AbstractArray, actions::AbstractArray{<:Int}, ps, st)
-    # @info "in evaluate_actions"
     feats, st = extract_features(policy, obs, ps, st)
     new_action_logits, st = get_actions_from_features(policy, feats, ps, st)  # For discrete, these are logits
     values, st = get_values_from_features(policy, feats, ps, st)
@@ -542,11 +355,6 @@ function evaluate_actions(policy::DiscreteActorCriticPolicy, obs::AbstractArray,
     log_probs = logpdf.(ds, eachslice(actions, dims=ndims(actions)))
     entropies = entropy.(ds)
     return vec(values), log_probs, entropies, st
-    # # @info "gone through networks"
-    # # Fast path: compute log probs and entropy directly using broadcasting
-    # log_probs, entropy = get_discrete_logprobs_and_entropy(new_action_logits, actions)
-
-    # return values, log_probs, entropy, st
 end
 
 function predict_values(policy::AbstractActorCriticPolicy, obs::AbstractArray, ps, st)
