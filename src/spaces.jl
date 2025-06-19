@@ -307,11 +307,9 @@ end
 
 # Helper function to process actions: convert from 1-based indexing to action space range
 function process_action(action::Integer, action_space::Discrete)
-    # Convert from 1-based (Julia natural) indexing to action space indexing
-    action_space_action = action + (action_space.start - 1)
     # Clamp to valid range
-    #TODO: not necessary?
-    return clamp(action_space_action, action_space.start, action_space.start + action_space.n - 1)
+    @assert action_space.start ≤ action ≤ action_space.start + action_space.n - 1
+    return action
 end
 
 # Handle case where action might be in an array (for consistency with Box spaces)

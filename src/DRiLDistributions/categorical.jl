@@ -20,9 +20,10 @@ also used for action spaces with only one action element
 
 struct Categorical{V<:AbstractVector{<:Real}} <: AbstractDiscreteDistribution
     probabilities::V
-    function Categorical(probs::V) where V <: AbstractVector{<:Real}
+    start::Integer
+    function Categorical(probs::V, start::Integer=1) where V <: AbstractVector{<:Real}
         @assert sum(probs) ≈ 1 "Sum of probabilities must be 1"
-        return new{V}(probs)
+        return new{V}(probs, start)
     end
 end
 
@@ -32,7 +33,7 @@ function logpdf(d::Categorical, x::AbstractArray{<:Integer})
 end
 
 function logpdf(d::Categorical, x::Integer)
-    return log(d.probabilities[x])
+    return log(d.probabilities[x - d.start + 1])
 end
 
 function entropy(d::Categorical)
@@ -40,7 +41,7 @@ function entropy(d::Categorical)
 end
 
 function mode(d::Categorical)
-    return argmax(d.probabilities)
+    return argmax(d.probabilities) + d.start - 1
 end
 
 
@@ -48,7 +49,7 @@ function Random.rand(rng::AbstractRNG, d::Categorical)
     cumulative_probs = cumsum(d.probabilities)
     u = rand(rng)
     idx = findfirst(cumulative_probs .>= u)
-    return idx
+    return idx + d.start - 1
 end
 
 Random.rand(rng::AbstractRNG, d::Categorical, n::Integer) = [rand(rng, d) for _ in 1:n]

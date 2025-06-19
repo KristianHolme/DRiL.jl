@@ -304,12 +304,13 @@ function get_distributions(policy::ContinuousActorCriticPolicy, action_means::Ab
 end
 
 # For discrete action spaces
-function get_distributions(::DiscreteActorCriticPolicy, action_logits::AbstractArray)
+function get_distributions(policy::DiscreteActorCriticPolicy, action_logits::AbstractArray)
     # For discrete actions, action_logits are the raw outputs from the network
     # std is not used for discrete actions
     probs = Lux.softmax(action_logits)
     batch_dim = ndims(action_logits)
-    return Categorical.(eachslice(probs, dims=batch_dim))
+    start = action_space(policy).start
+    return Categorical.(eachslice(probs, dims=batch_dim), start)
 end
 
 function predict_actions(policy::ContinuousActorCriticPolicy, obs::AbstractArray, ps, st; deterministic::Bool=false, rng::AbstractRNG=Random.default_rng())
