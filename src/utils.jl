@@ -1,5 +1,8 @@
-function collect_trajectory(agent::ActorCriticAgent, env::AbstractEnv;
-    max_steps::Union{Int,Nothing}=nothing, norm_env::Union{NormalizeWrapperEnv,Nothing}=nothing)
+function collect_trajectory(agent::ActorCriticAgent,
+        env::AbstractEnv;
+        max_steps::Union{Int,Nothing}=nothing,
+        norm_env::Union{NormalizeWrapperEnv,Nothing}=nothing,
+        deterministic::Bool=true)
     reset!(env)
     original_training = is_training(env)
     env = set_training(env, false)
@@ -18,7 +21,7 @@ function collect_trajectory(agent::ActorCriticAgent, env::AbstractEnv;
             normalize_obs!(obs_to_agent, norm_env)
         end
 
-        agent_actions = predict_actions(agent, [obs_to_agent]; deterministic=true)
+        agent_actions = predict_actions(agent, [obs_to_agent]; deterministic)
         agent_action = first(agent_actions)
         if env isa ScalingWrapperEnv
             unscale_action!(agent_action, env)
