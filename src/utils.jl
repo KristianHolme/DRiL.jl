@@ -33,7 +33,10 @@ function collect_trajectory(agent::ActorCriticAgent, env::AbstractEnv;
             break
         end
     end
+    #collect the final observation
+    final_observation = observe(env)
+    push!(observations, final_observation)
     #FIXME this doesnt really work as expected, the change here is not affecting the real env
-    env = set_training(env, original_training) 
+    env = set_training(env, original_training)
     return observations, actions, rewards
 end
