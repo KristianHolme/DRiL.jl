@@ -7,15 +7,15 @@ function unwrap_all(env::AbstractEnv)
     return env
 end
 
-function observation_space(env::AbstractParallellEnv)
+function observation_space(env::AbstractParallelEnv)
     return observation_space(env.envs[1])
 end
 
-function action_space(env::AbstractParallellEnv)
+function action_space(env::AbstractParallelEnv)
     return action_space(env.envs[1])
 end
 
-struct MultiThreadedParallelEnv{E<:AbstractEnv} <: AbstractParallellEnv
+struct MultiThreadedParallelEnv{E<:AbstractEnv} <: AbstractParallelEnv
     envs::Vector{E}
     function MultiThreadedParallelEnv(envs::Vector{E}) where E<:AbstractEnv
         @assert all(env -> typeof(env) == E, envs) "All environments must be of the same type"
@@ -92,7 +92,7 @@ end
 
 number_of_envs(env::MultiThreadedParallelEnv) = length(env.envs)
 
-struct BroadcastedParallelEnv{E<:AbstractEnv} <: AbstractParallellEnv
+struct BroadcastedParallelEnv{E<:AbstractEnv} <: AbstractParallelEnv
     envs::Vector{E}
 
     function BroadcastedParallelEnv(envs::Vector{E}) where E<:AbstractEnv
@@ -392,12 +392,12 @@ function Random.seed!(env::AbstractEnv, seed::Integer)
 end
 
 """
-    Random.seed!(env::AbstractParallellEnv, seed::Integer)
+    Random.seed!(env::AbstractParallelEnv, seed::Integer)
 
 Seed all sub-environments in a parallel environment with incremented seeds.
 Each sub-environment gets seeded with `seed + i - 1` where `i` is the environment index.
 """
-function Random.seed!(env::AbstractParallellEnv, seed::Integer)
+function Random.seed!(env::AbstractParallelEnv, seed::Integer)
     for (i, sub_env) in enumerate(env.envs)
         Random.seed!(sub_env, seed + i - 1)
     end
@@ -476,7 +476,7 @@ function update_from_moments!(rms::RunningMeanStd{T}, batch_mean::AbstractArray{
     end
 end
 
-struct NormalizeWrapperEnv{E<:AbstractParallellEnv,T<:AbstractFloat} <: AbstractParallellEnvWrapper{E}
+struct NormalizeWrapperEnv{E<:AbstractParallelEnv,T<:AbstractFloat} <: AbstractParallelEnvWrapper{E}
     env::E
     obs_rms::RunningMeanStd{T}
     ret_rms::RunningMeanStd{T}
@@ -504,7 +504,7 @@ function NormalizeWrapperEnv{E,T}(
     clip_reward::T=T(10.0),
     gamma::T=T(0.99),
     epsilon::T=T(1e-8)
-) where {E<:AbstractParallellEnv,T<:AbstractFloat}
+) where {E<:AbstractParallelEnv,T<:AbstractFloat}
 
     obs_space = observation_space(env)
     n_envs = number_of_envs(env)
@@ -524,7 +524,7 @@ end
 DRiL.unwrap(env::NormalizeWrapperEnv) = env.env
 
 # Convenience constructor
-function NormalizeWrapperEnv(env::E; kwargs...) where {E<:AbstractParallellEnv}
+function NormalizeWrapperEnv(env::E; kwargs...) where {E<:AbstractParallelEnv}
     return NormalizeWrapperEnv{E,Float32}(env; kwargs...)
 end
 
@@ -735,14 +735,14 @@ function EpisodeStats{T}(stats_window::Int) where T
     return EpisodeStats{T}(CircularBuffer{T}(stats_window), CircularBuffer{Int}(stats_window))
 end
 
-struct MonitorWrapperEnv{E<:AbstractParallellEnv,T} <: AbstractParallellEnvWrapper{E} where T<:AbstractFloat
+struct MonitorWrapperEnv{E<:AbstractParallelEnv,T} <: AbstractParallelEnvWrapper{E} where T<:AbstractFloat
     env::E
     current_episode_lengths::Vector{Int}
     current_episode_returns::Vector{T}
     episode_stats::EpisodeStats{T}
 end
 
-function MonitorWrapperEnv(env::E, stats_window::Int=100) where E<:AbstractParallellEnv
+function MonitorWrapperEnv(env::E, stats_window::Int=100) where E<:AbstractParallelEnv
     T = eltype(observation_space(env))
     return MonitorWrapperEnv{E,T}(
         env,
@@ -796,7 +796,7 @@ function log_stats(env::MonitorWrapperEnv{E,T}, logger::TensorBoardLogger.TBLogg
     end
     nothing
 end
-function log_stats(env::AbstractParallellEnvWrapper, logger::AbstractLogger)
+function log_stats(env::AbstractParallelEnvWrapper, logger::AbstractLogger)
     log_stats(unwrap(env), logger)
 end
 
@@ -944,3 +944,4 @@ function Base.show(io::IO, ::MIME"text/plain", env::MonitorWrapperEnv{E,T}) wher
     print(io, "  wrapped environment: ")
     show(io, env.env)
 end
+

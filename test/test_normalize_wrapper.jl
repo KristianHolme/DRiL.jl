@@ -350,7 +350,7 @@ end
 
     # We need to implement act! for parallel environments since our wrapper expects parallel envs
     # Let's create a simple parallel version
-    mutable struct TerminalParallelEnv <: DRiL.AbstractParallellEnv
+    mutable struct TerminalParallelEnv <: DRiL.AbstractParallelEnv
         envs::Vector{TerminalEnv}
         infos::Vector{Dict{String,Any}}
         observations::Vector{Any}

@@ -1,5 +1,5 @@
 abstract type AbstractEnv end
-abstract type AbstractParallellEnv <: AbstractEnv end
+abstract type AbstractParallelEnv <: AbstractEnv end
 
 """
     reset!(env::AbstractEnv) -> Nothing
@@ -107,12 +107,12 @@ Get additional environment information (metadata, debug info, etc.).
 function get_info end
 
 """
-    number_of_envs(env::AbstractParallellEnv) -> Int
+    number_of_envs(env::AbstractParallelEnv) -> Int
 
 Get the number of parallel environments in a parallel environment wrapper.
 
 # Arguments
-- `env::AbstractParallellEnv`: The parallel environment
+- `env::AbstractParallelEnv`: The parallel environment
 
 # Returns
 - `Int`: Number of parallel environments
@@ -125,7 +125,7 @@ abstract type AbstractAgent end
 abstract type AbstractBuffer end
 
 abstract type AbstractEnvWrapper{E<:AbstractEnv} <: AbstractEnv end
-abstract type AbstractParallellEnvWrapper{E<:AbstractParallellEnv} <: AbstractParallellEnv end
+abstract type AbstractParallelEnvWrapper{E<:AbstractParallelEnv} <: AbstractParallelEnv end
 
 
 """
@@ -140,7 +140,7 @@ Check if an environment is a wrapper around another environment.
 - `Bool`: `true` if environment is a wrapper, `false` otherwise
 """
 is_wrapper(env::AbstractEnv) = env isa AbstractEnvWrapper
-is_wrapper(env::AbstractParallellEnv) = env isa AbstractParallellEnvWrapper
+is_wrapper(env::AbstractParallelEnv) = env isa AbstractParallelEnvWrapper
 
 """
     unwrap(env::AbstractEnvWrapper) -> AbstractEnv

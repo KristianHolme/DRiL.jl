@@ -1,6 +1,6 @@
-function is_monitored(env::AbstractParallellEnv)
+function is_monitored(env::AbstractParallelEnv)
     monitored = false
-    while env isa AbstractParallellEnvWrapper
+    while env isa AbstractParallelEnvWrapper
         monitored = env isa MonitorWrapperEnv
         env = unwrap(env)
     end
@@ -53,7 +53,7 @@ mean_reward, std_reward = evaluate_agent(agent, env;
 """
 function evaluate_agent(
     agent,
-    env::AbstractParallellEnv;
+    env::AbstractParallelEnv;
     n_eval_episodes::Int=10,
     deterministic::Bool=true,
     reward_threshold::Union{Nothing,Real}=nothing,

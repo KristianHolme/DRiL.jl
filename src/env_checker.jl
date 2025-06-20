@@ -169,7 +169,7 @@ function _check_step_functionality(env::AbstractEnv, obs_space, act_space; warn:
     # Generate a valid action
     action = rand(act_space)
 
-    if env isa AbstractParallellEnv
+    if env isa AbstractParallelEnv
         # Test parallel environment act!
         try
             rewards = act!(env, action)
@@ -231,7 +231,7 @@ function _check_space_constraints(env::AbstractEnv, obs_space, act_space; warn::
             # Take action and check if episode continues
             action = rand(act_space)
 
-            if env isa AbstractParallellEnv
+            if env isa AbstractParallelEnv
                 # For parallel envs, auto-reset happens
                 rewards = act!(env, [action])
                 terminateds = terminated(env)
