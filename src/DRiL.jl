@@ -25,6 +25,9 @@ include("types_and_interfaces.jl")
 export AbstractEnv, AbstractAgent, AbstractBuffer
 export reset!, act!, observe, terminated, truncated, action_space, observation_space, get_info, number_of_envs
 
+include("callbacks.jl")
+export AbstractCallback, on_training_start, on_training_end, on_rollout_start, on_rollout_end, on_step
+
 include("spaces.jl")
 export AbstractSpace, AbstractBox, UniformBox, Box, Discrete
 

@@ -1,6 +1,6 @@
 abstract type AbstractAlgorithm end
 
-
+#TODO make learning_rate part of algorithm?
 @kwdef struct PPO{T<:AbstractFloat} <: AbstractAlgorithm
     gamma::T = 0.99f0
     gae_lambda::T = 0.95f0
@@ -13,28 +13,26 @@ abstract type AbstractAlgorithm end
     normalize_advantage::Bool = true
 end
 
-# function PPO(; T::Type{<:AbstractFloat}=Float32, kwargs...)
-#     return PPO{T}(; kwargs...)
-# end
 #TODO make parameters n_steps, batch_size, epochs, max_steps kwargs, default to values from agent
-function learn!(agent::ActorCriticAgent, env::AbstractParallellEnv, alg::PPO{T}, ad_type::Lux.Training.AbstractADType=AutoZygote(); max_steps::Int) where T
+#TODO refactor, separate out learnig loop and logging
+function learn!(agent::ActorCriticAgent, env::AbstractParallelEnv, alg::PPO{T}, ad_type::Lux.Training.AbstractADType=AutoZygote(); max_steps::Int, callbacks::Vector{<:AbstractCallback}=[]) where T
     n_steps = agent.n_steps
     n_envs = number_of_envs(env)
     roll_buffer = RolloutBuffer(observation_space(env), action_space(env),
-        alg.gae_lambda, alg.gamma, n_steps, n_envs)
-
+    alg.gae_lambda, alg.gamma, n_steps, n_envs)
+    
     iterations = max_steps ÷ (n_steps * n_envs)
     total_steps = iterations * n_steps * n_envs
-
+    
     agent.verbose > 0 && @info "Training with total_steps: $total_steps, 
-        iterations: $iterations, n_steps: $n_steps, n_envs: $n_envs"
-
+    iterations: $iterations, n_steps: $n_steps, n_envs: $n_envs"
+    
     progress_meter = Progress(total_steps, desc="Training...",
-        showspeed=true, enabled=agent.verbose > 0
+    showspeed=true, enabled=agent.verbose > 0
     )
-
+    
     train_state = agent.train_state
-
+    
     total_entropy_losses = Float32[]
     learning_rates = Float32[]
     total_policy_losses = Float32[]
@@ -45,13 +43,31 @@ function learn!(agent::ActorCriticAgent, env::AbstractParallellEnv, alg::PPO{T},
     total_explained_variances = Float32[]
     total_fps = Float32[]
     total_grad_norms = Float32[]
+    
+    all_good = true
+    for callback in callbacks
+        callback_good = on_training_start(callback, agent, env, alg, iterations, total_steps)
+        all_good = all_good && callback_good
+    end
+    if !all_good
+        @warn "Training stopped due to callback failure"
+        return nothing
+    end
 
     for i in 1:iterations
         learning_rate = agent.learning_rate
         Optimisers.adjust!(agent.train_state, learning_rate)
         push!(learning_rates, learning_rate)
 
-        fps = collect_rollouts!(roll_buffer, agent, env, progress_meter)
+        for callback in callbacks
+            callback_good = on_rollout_start(callback, agent, env, roll_buffer)
+            all_good = all_good && callback_good
+        end
+        if !all_good
+            @warn "Training stopped due to callback failure"
+            return nothing
+        end
+        fps = collect_rollouts!(roll_buffer, agent, env, progress_meter; callbacks=callbacks)
         push!(total_fps, fps)
         add_step!(agent, n_steps * n_envs)
         if !isnothing(agent.logger)
@@ -59,6 +75,16 @@ function learn!(agent::ActorCriticAgent, env::AbstractParallellEnv, alg::PPO{T},
             log_value(agent.logger, "env/fps", fps)
             log_stats(env, agent.logger)
         end
+        
+        for callback in callbacks
+            callback_good = on_rollout_end(callback, agent, env, roll_buffer)
+            all_good = all_good && callback_good
+        end
+        if !all_good
+            @warn "Training stopped due to callback failure"
+            return nothing
+        end
+        
         data_loader = DataLoader((roll_buffer.observations, roll_buffer.actions,
                 roll_buffer.advantages, roll_buffer.returns,
                 roll_buffer.logprobs, roll_buffer.values),
@@ -172,6 +198,14 @@ function learn!(agent::ActorCriticAgent, env::AbstractParallellEnv, alg::PPO{T},
         "grad_norms" => total_grad_norms,
         "learning_rates" => learning_rates
     )
+    for callback in callbacks
+        callback_good = on_training_end(callback, agent, env, alg)
+        all_good = all_good && callback_good
+    end
+    if !all_good
+        @warn "Training stopped due to callback failure"
+        return nothing
+    end
     return learn_stats
 end
 
