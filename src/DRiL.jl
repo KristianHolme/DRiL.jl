@@ -22,11 +22,9 @@ include("DRiLDistributions/DRiLDistributions.jl")
 @reexport using .DRiLDistributions
 
 include("types_and_interfaces.jl")
-export AbstractEnv, AbstractAgent, AbstractBuffer
+export AbstractEnv, AbstractParallelEnv, AbstractAgent, AbstractBuffer, AbstractAlgorithm
 export reset!, act!, observe, terminated, truncated, action_space, observation_space, get_info, number_of_envs
 
-include("callbacks.jl")
-export AbstractCallback, on_training_start, on_training_end, on_rollout_start, on_rollout_end, on_step
 
 include("spaces.jl")
 export AbstractSpace, AbstractBox, UniformBox, Box, Discrete
@@ -39,6 +37,9 @@ export ActorCriticAgent, predict_actions, predict_values
 
 include("buffers.jl")
 export Trajectory, RolloutBuffer
+
+include("callbacks.jl")
+export AbstractCallback, on_training_start, on_training_end, on_rollout_start, on_rollout_end, on_step
 
 include("environment_tools.jl")
 export MultiThreadedParallelEnv, BroadcastedParallelEnv, ScalingWrapperEnv, NormalizeWrapperEnv, RunningMeanStd

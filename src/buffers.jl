@@ -29,6 +29,7 @@ function RolloutBuffer(observation_space::AbstractSpace, action_space::AbstractS
     return RolloutBuffer{T,obs_eltype,action_eltype}(observations, actions, rewards, advantages, returns, logprobs, values, gae_lambda, gamma, n_steps, n_envs)
 end
 
+
 function reset!(rollout_buffer::RolloutBuffer)
     rollout_buffer.observations .= 0
     rollout_buffer.actions .= 0
@@ -71,7 +72,7 @@ total_reward(trajectory::Trajectory) = sum(trajectory.rewards)
 
 
 function collect_trajectories(agent::ActorCriticAgent, env::AbstractParallelEnv, n_steps::Int,
-    progress_meter::Union{Progress,Nothing}=nothing; callbacks::Vector{<:AbstractCallback}=[])
+    progress_meter::Union{Progress,Nothing}=nothing; callbacks::Union{Vector{<:AbstractCallback},Nothing}=nothing)
     # reset!(env)
     trajectories = Trajectory[]
     obs_space = observation_space(env)
@@ -81,13 +82,15 @@ function collect_trajectories(agent::ActorCriticAgent, env::AbstractParallelEnv,
     new_obs = observe(env)
     for i in 1:n_steps
         all_good = true
-        for callback in callbacks
-            callback_good = on_step(callback, agent, env, current_trajectories, new_obs)
-            all_good = all_good && callback_good
-        end
-        if !all_good
-            @warn "Collecting trajectories stopped due to callback failure"
-            return trajectories
+        if !isnothing(callbacks)
+            for callback in callbacks
+                callback_good = on_step(callback, agent, env, current_trajectories, new_obs)
+                all_good = all_good && callback_good
+            end
+            if !all_good
+                @warn "Collecting trajectories stopped due to callback failure"
+                return trajectories
+            end
         end
         observations = new_obs
         actions, values, logprobs = get_action_and_values(agent, observations)
@@ -129,7 +132,7 @@ function collect_trajectories(agent::ActorCriticAgent, env::AbstractParallelEnv,
     return trajectories
 end
 
-function collect_rollouts!(rollout_buffer::RolloutBuffer, agent::ActorCriticAgent, env::AbstractEnv, progress_meter::Union{Progress,Nothing}=nothing; callbacks::Vector{<:AbstractCallback}=[])
+function collect_rollouts!(rollout_buffer::RolloutBuffer, agent::ActorCriticAgent, env::AbstractEnv, progress_meter::Union{Progress,Nothing}=nothing; callbacks::Union{Vector{<:AbstractCallback},Nothing}=nothing)
     # reset!(env) #we dont reset the, we continue from where we left off
     
     obs_space = observation_space(env)

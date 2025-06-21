@@ -174,3 +174,8 @@ function log_stats(env::AbstractEnv, logger::AbstractLogger)
     nothing
 end
 
+abstract type AbstractAlgorithm end
+
+abstract type AbstractCallback end
+
+

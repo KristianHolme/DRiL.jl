@@ -594,13 +594,13 @@ function act!(env::NormalizeWrapperEnv{E,T}, actions::AbstractVector) where {E,T
     return rewards, terminateds, truncateds, infos
 end
 
-function update_reward_stats!(env::NormalizeWrapperEnv{E,T}, rewards::Vector{T}) where {E,T}
+function update_reward_stats!(env::NormalizeWrapperEnv, rewards::Vector{T}) where T<:AbstractFloat
     env.returns .= env.returns .* env.gamma .+ rewards
     # Update return statistics (single value, so we reshape for consistency)
     update!(env.ret_rms, reshape(env.returns, 1, length(env.returns)))
 end
 
-function normalize_obs!(obs, env::NormalizeWrapperEnv{E,T}) where {E,T}
+function normalize_obs!(obs, env::NormalizeWrapperEnv)
     if !env.norm_obs
         return obs
     end
@@ -611,7 +611,7 @@ function normalize_obs!(obs, env::NormalizeWrapperEnv{E,T}) where {E,T}
     return nothing
 end
 
-function normalize_rewards!(rewards, env::NormalizeWrapperEnv{E,T}) where {E,T}
+function normalize_rewards!(rewards, env::NormalizeWrapperEnv)
     if !env.norm_reward
         return rewards
     end
@@ -622,7 +622,7 @@ function normalize_rewards!(rewards, env::NormalizeWrapperEnv{E,T}) where {E,T}
     return nothing
 end
 
-function unnormalize_obs!(obs, env::NormalizeWrapperEnv{E,T}) where {E,T}
+function unnormalize_obs!(obs, env::NormalizeWrapperEnv)
     if !env.norm_obs
         return obs
     end
@@ -630,7 +630,7 @@ function unnormalize_obs!(obs, env::NormalizeWrapperEnv{E,T}) where {E,T}
     return nothing
 end
 
-function unnormalize_rewards!(rewards, env::NormalizeWrapperEnv{E,T}) where {E,T}
+function unnormalize_rewards!(rewards, env::NormalizeWrapperEnv)
     if !env.norm_reward
         return rewards
     end
@@ -639,13 +639,13 @@ function unnormalize_rewards!(rewards, env::NormalizeWrapperEnv{E,T}) where {E,T
 end
 
 # Get original (unnormalized) observations and rewards
-get_original_obs(env::NormalizeWrapperEnv{E,T}) where {E,T} = copy(env.old_obs)
-get_original_rewards(env::NormalizeWrapperEnv{E,T}) where {E,T} = copy(env.old_rewards)
+get_original_obs(env::NormalizeWrapperEnv) = copy(env.old_obs)
+get_original_rewards(env::NormalizeWrapperEnv) = copy(env.old_rewards)
 
 # Forward other methods
-terminated(env::NormalizeWrapperEnv{E,T}) where {E,T} = terminated(env.env)
-truncated(env::NormalizeWrapperEnv{E,T}) where {E,T} = truncated(env.env)
-function get_info(env::NormalizeWrapperEnv{E,T}) where {E,T}
+terminated(env::NormalizeWrapperEnv) = terminated(env.env)
+truncated(env::NormalizeWrapperEnv) = truncated(env.env)
+function get_info(env::NormalizeWrapperEnv)
     infos = get_info(env.env)
     terminateds = terminated(env.env)
     truncateds = truncated(env.env)
@@ -679,7 +679,7 @@ is_training(env::NormalizeWrapperEnv{E,T}) where {E,T} = env.training
 
 Save the normalization statistics (running mean/std) to a file using JLD2.
 """
-function save_normalization_stats(env::NormalizeWrapperEnv{E,T}, filepath::String) where {E,T}
+function save_normalization_stats(env::NormalizeWrapperEnv, filepath::String)
     save(filepath, Dict(
         "obs_mean" => env.obs_rms.mean,
         "obs_var" => env.obs_rms.var,
@@ -699,7 +699,7 @@ end
 
 Load normalization statistics from a file into the environment using JLD2.
 """
-function load_normalization_stats!(env::NormalizeWrapperEnv{E,T}, filepath::String) where {E,T}
+function load_normalization_stats!(env::NormalizeWrapperEnv, filepath::String)
     stats = load(filepath)
 
     # Load observation statistics
@@ -716,7 +716,7 @@ function load_normalization_stats!(env::NormalizeWrapperEnv{E,T}, filepath::Stri
 end
 
 #syncs the eval env stats to be same as training env
-function sync_normalization_stats!(eval_env::NormalizeWrapperEnv{E,T}, train_env::NormalizeWrapperEnv{E,T}) where {E,T}
+function sync_normalization_stats!(eval_env::NormalizeWrapperEnv, train_env::NormalizeWrapperEnv)
     eval_env.obs_rms.mean .= train_env.obs_rms.mean
     eval_env.obs_rms.var .= train_env.obs_rms.var
     eval_env.obs_rms.count = train_env.obs_rms.count
