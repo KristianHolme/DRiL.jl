@@ -70,11 +70,7 @@ function learn!(agent::ActorCriticAgent, env::AbstractParallelEnv, alg::PPO{T}, 
                 return nothing
             end
         end
-        @info "collecting rollouts"
-        t_start = time()
         fps = collect_rollouts!(roll_buffer, agent, env, progress_meter; callbacks=callbacks)
-        t_end = time()
-        @info "rollout time: $(t_end - t_start), fps: $fps"
         push!(total_fps, fps)
         add_step!(agent, n_steps * n_envs)
         if !isnothing(agent.logger)
@@ -113,7 +109,7 @@ function learn!(agent::ActorCriticAgent, env::AbstractParallelEnv, alg::PPO{T}, 
 
                 if epoch == 1 && i_batch == 1
                     mean_ratio = stats["ratio"]
-                    mean_ratio ≈ one(mean_ratio) || @warn "ratios is not 1.0, iter $i, epoch $epoch, batch $i_batch, $mean_ratio"
+                    isapprox(mean_ratio-one(mean_ratio), zero(mean_ratio), atol=eps(typeof(mean_ratio))) || @warn "ratios is not 1.0, iter $i, epoch $epoch, batch $i_batch, $mean_ratio"
                 end
                 @assert !any(isnan, grads) "gradient contains nan, iter $i, epoch $epoch, batch $i_batch"
                 @assert !any(isinf, grads) "gradient not finite, iter $i, epoch $epoch, batch $i_batch"
@@ -252,7 +248,6 @@ function (alg::PPO{T})(policy::AbstractActorCriticPolicy, ps, st, batch_data) wh
     advantages = @ignore_derivatives alg.normalize_advantage ? normalize(advantages) : advantages
 
     values, log_probs, entropy, st = evaluate_actions(policy, observations, actions, ps, st)
-
     values = !isnothing(alg.clip_range_vf) ? clip_range(old_values, values, alg.clip_range_vf) : values
 
     r = exp.(log_probs - old_logprobs)
