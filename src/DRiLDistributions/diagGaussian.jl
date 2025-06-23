@@ -26,37 +26,14 @@ function logpdf(d::DiagGaussian{T, M, S}, x::AbstractArray{T}) where {T, M, S}
     k = length(d.mean)
     log_std_sum = sum(d.log_std)
 
-
-    # x = similar(x).*0 .+ 1         # gives nonzero gradients
     diff = x - d.mean
     var_inv = exp.(-2 .* d.log_std)
-    # mult = diff .* var_inv         # gives nonzero gradients (but wrong)
-    # mult = diff .* diff .* var_inv # gives zero gradients
-    mult = diff .^2 .* var_inv       # gives zero gradients 
-    diff_squared_sum = sum(mult)
+    diff_squared_sum = sum(diff .^2 .* var_inv)
 
-
-    result = -0.5 * (2 * log_std_sum + diff_squared_sum + k * log2π)
+    result = -T(0.5) * (2 * log_std_sum + diff_squared_sum + k * T(log2π))
 
     return result
 end
-
-    # Use mapreduce to fuse operations and avoid intermediate arrays
-    # diff_squared_sum = mapreduce(+, eachindex(x)) do i
-    #     diff = x[i] - d.mean[i]
-    #     var_inv = exp(-2 * d.log_std[i])
-    #     diff^2 * var_inv
-    # end
-
-# function logpdf(d::DiagGaussian{T, M, S}, x::AbstractArray{T}) where {T, M, S}
-#     @assert size(x) == size(d.mean) "x and d.mean have different shapes"
-#     k = length(d.mean)
-#     log_std_sum = sum(d.log_std)
-#     var_inv = exp.(-2 * d.log_std)
-#     diff_squared_sum = sum((x - d.mean) .^ 2 .* var_inv)
-#     result = -T(0.5) * (2 * log_std_sum + diff_squared_sum + k * T(log2π))
-#     return result
-# end
 
 function entropy(d::DiagGaussian{T, M, S}) where {T, M, S}
     k = length(d.mean)
