@@ -1,4 +1,4 @@
-struct RolloutBuffer{T<:AbstractFloat,O,A}
+struct RolloutBuffer{T<:AbstractFloat,O,A} <: AbstractBuffer
     observations::Array{O}
     actions::Array{A}
     rewards::Vector{T}
@@ -134,7 +134,7 @@ end
 
 function collect_rollouts!(rollout_buffer::RolloutBuffer, agent::ActorCriticAgent, env::AbstractEnv, progress_meter::Union{Progress,Nothing}=nothing; callbacks::Union{Vector{<:AbstractCallback},Nothing}=nothing)
     # reset!(env) #we dont reset the, we continue from where we left off
-    
+
     obs_space = observation_space(env)
     act_space = action_space(env)
 
