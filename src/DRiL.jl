@@ -33,7 +33,7 @@ include("policies.jl")
 export AbstractActorCriticPolicy, ActorCriticPolicy, ContinuousActorCriticPolicy, DiscreteActorCriticPolicy, AbstractPolicy, AbstractWeightInitializer, OrthogonalInitializer
 
 include("agents.jl")
-export ActorCriticAgent, predict_actions, predict_values
+export ActorCriticAgent, predict_actions, predict_values, steps_taken
 
 include("buffers.jl")
 export Trajectory, RolloutBuffer

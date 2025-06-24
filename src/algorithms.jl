@@ -19,19 +19,19 @@ function learn!(agent::ActorCriticAgent, env::AbstractParallelEnv, alg::PPO{T}, 
     roll_buffer = RolloutBuffer(observation_space(env), action_space(env),
         alg.gae_lambda, alg.gamma, n_steps, n_envs
     )
-    
+
     iterations = max_steps ÷ (n_steps * n_envs)
     total_steps = iterations * n_steps * n_envs
-    
+
     agent.verbose > 0 && @info "Training with total_steps: $total_steps, 
     iterations: $iterations, n_steps: $n_steps, n_envs: $n_envs"
-    
+
     progress_meter = Progress(total_steps, desc="Training...",
-    showspeed=true, enabled=agent.verbose > 0
+        showspeed=true, enabled=agent.verbose > 0
     )
-    
+
     train_state = agent.train_state
-    
+
     total_entropy_losses = Float32[]
     learning_rates = Float32[]
     total_policy_losses = Float32[]
@@ -42,7 +42,7 @@ function learn!(agent::ActorCriticAgent, env::AbstractParallelEnv, alg::PPO{T}, 
     total_explained_variances = Float32[]
     total_fps = Float32[]
     total_grad_norms = Float32[]
-    
+
     all_good = true
     if !isnothing(callbacks)
         for callback in callbacks
@@ -78,7 +78,7 @@ function learn!(agent::ActorCriticAgent, env::AbstractParallelEnv, alg::PPO{T}, 
             log_value(agent.logger, "env/fps", fps)
             log_stats(env, agent.logger)
         end
-        
+
         if !isnothing(callbacks)
             for callback in callbacks
                 callback_good = on_rollout_end(callback, agent, env, roll_buffer)
@@ -89,7 +89,7 @@ function learn!(agent::ActorCriticAgent, env::AbstractParallelEnv, alg::PPO{T}, 
                 return nothing
             end
         end
-        
+
         data_loader = DataLoader((roll_buffer.observations, roll_buffer.actions,
                 roll_buffer.advantages, roll_buffer.returns,
                 roll_buffer.logprobs, roll_buffer.values),
@@ -109,7 +109,7 @@ function learn!(agent::ActorCriticAgent, env::AbstractParallelEnv, alg::PPO{T}, 
 
                 if epoch == 1 && i_batch == 1
                     mean_ratio = stats["ratio"]
-                    isapprox(mean_ratio-one(mean_ratio), zero(mean_ratio), atol=eps(typeof(mean_ratio))) || @warn "ratios is not 1.0, iter $i, epoch $epoch, batch $i_batch, $mean_ratio"
+                    isapprox(mean_ratio - one(mean_ratio), zero(mean_ratio), atol=eps(typeof(mean_ratio))) || @warn "ratios is not 1.0, iter $i, epoch $epoch, batch $i_batch, $mean_ratio"
                 end
                 @assert !any(isnan, grads) "gradient contains nan, iter $i, epoch $epoch, batch $i_batch"
                 @assert !any(isinf, grads) "gradient not finite, iter $i, epoch $epoch, batch $i_batch"

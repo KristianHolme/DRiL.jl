@@ -95,10 +95,7 @@ function evaluate_agent(
         actions = predict_actions(agent, observations; deterministic, rng)
 
         # Take step in environment
-        step_rewards = act!(env, actions)
-        terminateds = terminated(env)
-        truncateds = truncated(env)
-        infos = get_info(env)
+        step_rewards, terminateds, truncateds, infos = act!(env, actions)
         current_rewards .+= step_rewards
         current_lengths .+= 1
         observations = observe(env)
