@@ -63,30 +63,30 @@ end
 
 function act!(env::MultiThreadedParallelEnv{E}, actions::AbstractVector) where E<:AbstractEnv
     @assert length(actions) == length(env.envs) "Number of actions ($(length(actions))) must match number of environments ($(length(env.envs)))"
-    
+
     T = eltype(observation_space(env))
     rewards = Vector{T}(undef, length(env.envs))
     terminateds = Vector{Bool}(undef, length(env.envs))
     truncateds = Vector{Bool}(undef, length(env.envs))
     infos = Vector{Dict{String,Any}}(undef, length(env.envs))
-    
+
     @threads for i in 1:length(env.envs)
         rewards[i] = act!(env.envs[i], actions[i])
-        
+
         # Capture termination status BEFORE reset
         terminateds[i] = terminated(env.envs[i])
         truncateds[i] = truncated(env.envs[i])
         infos[i] = get_info(env.envs[i])
-        
+
         if truncateds[i]
             infos[i]["terminal_observation"] = observe(env.envs[i])
         end
-        
+
         if terminateds[i] || truncateds[i]
             reset!(env.envs[i])
         end
     end
-    
+
     return rewards, terminateds, truncateds, infos
 end
 
@@ -134,28 +134,28 @@ end
 
 function act!(env::BroadcastedParallelEnv{E}, actions::AbstractVector) where E<:AbstractEnv
     @assert length(actions) == length(env.envs) "Number of actions ($(length(actions))) must match number of environments ($(length(env.envs)))"
-    
+
     # Use broadcasting for the main operations
     rewards = act!.(env.envs, actions)
-    
+
     # Capture termination status BEFORE reset
     terminateds = terminated.(env.envs)
     truncateds = truncated.(env.envs)
-    
+
     # Update infos using broadcasting
     infos = get_info.(env.envs)
-    
+
     # Handle terminal observations for truncated environments
     for i in 1:length(env.envs)
         if truncateds[i]
             infos[i]["terminal_observation"] = observe(env.envs[i])
         end
-        
+
         if terminateds[i] || truncateds[i]
             reset!(env.envs[i])
         end
     end
-    
+
     return rewards, terminateds, truncateds, infos
 end
 
@@ -165,17 +165,17 @@ struct MultiAgentParallelEnv{E<:AbstractParallelEnv} <: AbstractParallelEnv
     envs::Vector{E}
     env_counts::Vector{Int}  # Number of sub-envs in each parallel env
     total_envs::Int          # Sum of all env_counts
-    
+
     function MultiAgentParallelEnv(envs::Vector{E}) where E<:AbstractParallelEnv
         @assert !isempty(envs) "Must provide at least one parallel environment"
-        
+
         # All sub-environments must have the same observation and action spaces
         @assert all(env -> isequal(observation_space(env), observation_space(envs[1])), envs) "All sub-environments must have the same observation space"
         @assert all(env -> isequal(action_space(env), action_space(envs[1])), envs) "All sub-environments must have the same action space"
-        
+
         env_counts = [number_of_envs(env) for env in envs]
         total_envs = sum(env_counts)
-        
+
         return new{E}(envs, env_counts, total_envs)
     end
 end
@@ -212,11 +212,11 @@ end
 
 function act!(env::MultiAgentParallelEnv{E}, actions::AbstractVector) where E<:AbstractParallelEnv
     @assert length(actions) == env.total_envs "Number of actions ($(length(actions))) must match total number of environments ($(env.total_envs))"
-    
+
     # Split actions into chunks for each sub-parallel-env
     idxs = cumsum([1; env.env_counts])
     action_chunks = [actions[idxs[i]:idxs[i+1]-1] for i in 1:length(env.envs)]
-    
+
     # Execute actions on each sub-parallel-env and collect results
     all_returns = act!.(env.envs, action_chunks)
     batched_rewards = getindex.(all_returns, 1)
@@ -228,7 +228,7 @@ function act!(env::MultiAgentParallelEnv{E}, actions::AbstractVector) where E<:A
     stacked_terminated = vcat(batched_terminated...)
     stacked_truncated = vcat(batched_truncated...)
     stacked_infos = vcat(batched_infos...)
-    
+
     return stacked_rewards, stacked_terminated, stacked_truncated, stacked_infos
 end
 
@@ -286,14 +286,14 @@ function ScalingWrapperEnv(env::E, original_obs_space::Box, original_act_space::
     obs_range = original_obs_space.high .- original_obs_space.low
     obs_scale_factor = 2 ./ obs_range
     obs_offset = original_obs_space.low
-    
+
     # Pre-compute scaling factors for actions
-    act_range = original_act_space.high .- original_act_space.low  
+    act_range = original_act_space.high .- original_act_space.low
     act_scale_factor = 2 ./ act_range
     act_offset = original_act_space.low
 
     return ScalingWrapperEnv{E,Box,Box}(env, scaled_obs_space, scaled_act_space, original_obs_space, original_act_space,
-                                        obs_scale_factor, obs_offset, act_scale_factor, act_offset)
+        obs_scale_factor, obs_offset, act_scale_factor, act_offset)
 end
 #TODO:document/fix unwrap
 DRiL.unwrap(env::ScalingWrapperEnv) = env.env
@@ -322,7 +322,7 @@ end
     return nothing
 end
 
-@inline function unscale!(input, scale_factor, offset) 
+@inline function unscale!(input, scale_factor, offset)
     @. input = (input + 1) / scale_factor + offset
     return nothing
 end
@@ -536,7 +536,7 @@ number_of_envs(env::NormalizeWrapperEnv) = number_of_envs(env.env)
 function reset!(env::NormalizeWrapperEnv{E,T}) where {E,T}
     reset!(env.env)
     obs = observe(env.env)
-    
+
     # Store original observations BEFORE normalization
     #should we also store rewards or something?
     env.old_obs .= reduce(hcat, obs)
@@ -569,7 +569,7 @@ end
 function act!(env::NormalizeWrapperEnv{E,T}, actions::AbstractVector) where {E,T}
     rewards, terminateds, truncateds, infos = act!(env.env, actions)
     env.old_rewards .= rewards
-    
+
     # Update reward statistics and normalize
     if env.training && env.norm_reward
         update_reward_stats!(env, rewards)
@@ -650,7 +650,7 @@ function get_info(env::NormalizeWrapperEnv)
     terminateds = terminated(env.env)
     truncateds = truncated(env.env)
     dones = terminateds .| truncateds
-    
+
     for i in findall(dones)
         if haskey(infos[i], "terminal_observation")
             term_obs = infos[i]["terminal_observation"]
@@ -771,11 +771,11 @@ end
 
 function act!(monitor_env::MonitorWrapperEnv{E,T}, actions::AbstractVector) where {E,T}
     rewards, terminateds, truncateds, infos = act!(monitor_env.env, actions)
-    
+
     monitor_env.current_episode_returns .+= rewards
     monitor_env.current_episode_lengths .+= 1
     dones = terminateds .| truncateds
-    
+
     for i in findall(dones)
         push!(monitor_env.episode_stats.episode_returns, monitor_env.current_episode_returns[i])
         push!(monitor_env.episode_stats.episode_lengths, monitor_env.current_episode_lengths[i])
@@ -783,7 +783,7 @@ function act!(monitor_env::MonitorWrapperEnv{E,T}, actions::AbstractVector) wher
         monitor_env.current_episode_returns[i] = 0
         monitor_env.current_episode_lengths[i] = 0
     end
-    
+
     return rewards, terminateds, truncateds, infos
 end
 
@@ -850,7 +850,7 @@ function Base.show(io::IO, ::MIME"text/plain", env::MultiAgentParallelEnv{E}) wh
     act_space = action_space(env)
     println(io, "  - Observation space: ", obs_space)
     println(io, "  - Action space: ", act_space)
-    
+
     for (i, sub_env) in enumerate(env.envs)
         println(io, "  - Parallel env ", i, " (", env.env_counts[i], " envs): ")
         show(io, sub_env)

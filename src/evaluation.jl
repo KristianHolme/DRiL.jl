@@ -89,7 +89,6 @@ function evaluate_agent(
     observations = observe(env)
 
     p = Progress(n_eval_episodes; enabled=show_progress)
-
     while length(episode_rewards) < n_eval_episodes
         # Get actions from agent
         actions = predict_actions(agent, observations; deterministic, rng)
