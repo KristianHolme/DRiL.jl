@@ -160,6 +160,7 @@ function act!(env::BroadcastedParallelEnv{E}, actions::AbstractVector) where E<:
 end
 
 number_of_envs(env::BroadcastedParallelEnv) = length(env.envs)
+unwrap_all(env::BroadcastedParallelEnv) = env.envs
 
 struct MultiAgentParallelEnv{E<:AbstractParallelEnv} <: AbstractParallelEnv
     envs::Vector{E}
@@ -248,6 +249,7 @@ function Random.seed!(env::MultiAgentParallelEnv, seed::Integer)
     end
     return env
 end
+unwrap_all(env::MultiAgentParallelEnv) = env.envs
 
 struct ScalingWrapperEnv{E<:AbstractEnv,O<:AbstractSpace,A<:AbstractSpace} <: AbstractEnvWrapper{E}
     env::E
