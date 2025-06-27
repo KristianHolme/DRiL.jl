@@ -17,11 +17,10 @@ also used for action spaces with only one action element
 """
 
 
-
 struct Categorical{V<:AbstractVector{<:Real}} <: AbstractDiscreteDistribution
     probabilities::V
     start::Integer
-    function Categorical(probs::V, start::Integer=1) where V <: AbstractVector{<:Real}
+    function Categorical(probs::V, start::Integer=1) where V<:AbstractVector{<:Real}
         @assert sum(probs) ≈ 1 "Sum of probabilities must be 1"
         return new{V}(probs, start)
     end
@@ -33,7 +32,7 @@ function logpdf(d::Categorical, x::AbstractArray{<:Integer})
 end
 
 function logpdf(d::Categorical, x::Integer)
-    return log(d.probabilities[x - d.start + 1])
+    return log(d.probabilities[x-d.start+1])
 end
 
 function entropy(d::Categorical)
