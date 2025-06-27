@@ -1,6 +1,7 @@
 @testitem "DiagGaussian vs Distributions.MvNormal" begin
     using Random
     using Distributions
+    using LinearAlgebra
     using DRiL.DRiLDistributions
 
     same_outputs = Bool[]
@@ -11,7 +12,7 @@
 
         flat_mean = vec(mean)
         flat_log_std = vec(log_std)
-        mvn = MvNormal(flat_mean, exp.(flat_log_std))
+        mvn = MvNormal(flat_mean, LinearAlgebra.Diagonal(map(abs2, exp.(flat_log_std))))
 
         d = DiagGaussian(mean, log_std)
         x = rand(Float32, 2, 2)

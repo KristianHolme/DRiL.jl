@@ -119,7 +119,7 @@ end
 
     # Test that actions are valid indices (1-based for internal use)
     @test actions[1] isa Integer
-    @test 1 <= actions[1] <= action_space.n
+    @test 0 <= actions[1] <= action_space.n - 1
 
     # Evaluate the same actions
     eval_values, eval_log_probs, entropy, _ = DRiL.evaluate_actions(policy, batched_obs, actions, params, states)
