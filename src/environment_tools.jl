@@ -542,12 +542,6 @@ function reset!(env::NormalizeWrapperEnv{E,T}) where {E,T}
     env.old_obs .= reduce(hcat, obs)
     env.returns .= zero(T)
 
-    # Update observation statistics if in training mode
-    if env.training && env.norm_obs
-        obs_batch = reduce(hcat, obs)
-        update!(env.obs_rms, obs_batch)
-    end
-
     return nothing
 end
 
@@ -639,8 +633,8 @@ function unnormalize_rewards!(rewards, env::NormalizeWrapperEnv)
 end
 
 # Get original (unnormalized) observations and rewards
-get_original_obs(env::NormalizeWrapperEnv) = copy(env.old_obs)
-get_original_rewards(env::NormalizeWrapperEnv) = copy(env.old_rewards)
+get_original_obs(env::NormalizeWrapperEnv) = eachslice(env.old_obs, dims=ndims(env.old_obs))
+get_original_rewards(env::NormalizeWrapperEnv) = env.old_rewards
 
 # Forward other methods
 terminated(env::NormalizeWrapperEnv) = terminated(env.env)
@@ -699,7 +693,7 @@ end
 
 Load normalization statistics from a file into the environment using JLD2.
 """
-function load_normalization_stats!(env::NormalizeWrapperEnv, filepath::String)
+function load_normalization_stats!(env::NormalizeWrapperEnv{E,T}, filepath::String) where {E,T<:AbstractFloat}
     stats = load(filepath)
 
     # Load observation statistics

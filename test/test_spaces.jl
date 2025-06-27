@@ -276,17 +276,20 @@ end
     # Test rand(rng, space, n) - multiple samples
     n = 5
     samples = rand(rng, space, n)
-    @test size(samples) == (2, n)
-    for i in 1:n
-        @test low[1] ≤ samples[1, i] ≤ high[1]
-        @test low[2] ≤ samples[2, i] ≤ high[2]
-    end
-    @test eltype(samples) == Float32
+    @test size(samples) == (n,)
+    @test all(map(action -> all(low .≤ action .≤ high), samples))
+    # for i in 1:n
+    #     @test low[1] ≤ samples[1, i] ≤ high[1]
+    #     @test low[2] ≤ samples[2, i] ≤ high[2]
+    # end
+    @test eltype(samples) == Vector{Float32}
 
     # Test rand(space, n) - multiple samples with default RNG
     samples2 = rand(space, n)
-    @test size(samples2) == (2, n)
-    @test eltype(samples2) == Float32
+    @test size(samples2) == (n,)
+    @test size(samples2[1]) == (2,)
+    @test eltype(samples2) == Vector{Float32}
+    @test all(map(action -> eltype(action) == Float32, samples2))
 end
 
 @testitem "Box containment checking" tags = [:spaces, :containment, :box] begin
@@ -417,10 +420,10 @@ end
     # Multiple sample methods
     s3 = rand(rng, space, 3)
     s4 = rand(space, 3)
-    @test size(s3) == (2, 3)
-    @test size(s4) == (2, 3)
-    @test all(s3[:, i] ∈ space for i in 1:3)
-    @test all(s4[:, i] ∈ space for i in 1:3)
+    @test size(s3) == (3,)
+    @test size(s4) == (3,)
+    @test all(map(s -> s ∈ space, s3))
+    @test all(map(s -> s ∈ space, s4))
 end
 
 # Tests for Discrete action spaces
@@ -447,7 +450,7 @@ end
     space2 = Discrete(5, 0)
     space3 = Discrete(5, 1)
     space4 = Discrete(4, 0)
-    
+
     @test isequal(space1, space2)
     @test !isequal(space1, space3)  # Different start
     @test !isequal(space1, space4)  # Different n
@@ -457,7 +460,7 @@ end
     using Random
 
     # Test 0-based discrete space (default)
-    space_0 = Discrete(5,0)  # Values: 0, 1, 2, 3, 4
+    space_0 = Discrete(5, 0)  # Values: 0, 1, 2, 3, 4
     rng = MersenneTwister(42)
 
     # Test rand(rng, space)
@@ -501,7 +504,7 @@ end
 
 @testitem "Discrete containment checking" tags = [:spaces, :containment, :discrete] begin
     # Test 0-based discrete space
-    space_0 = Discrete(5,0)  # Values: 0, 1, 2, 3, 4
+    space_0 = Discrete(5, 0)  # Values: 0, 1, 2, 3, 4
 
     # Test valid values
     valid_values = [0, 1, 2, 3, 4]
@@ -532,65 +535,35 @@ end
 
 @testitem "Discrete action processing" tags = [:spaces, :discrete, :action_processing] begin
     using DRiL: process_action
-
     # Test process_action for different discrete spaces
 
     # Test 0-based space (Gymnasium style)
     space_0 = Discrete(5, 0)  # Valid actions: 0, 1, 2, 3, 4
 
     # Test basic conversion from 1-based to 0-based
-    @test process_action(1, space_0) == 0  # Julia 1-based → space 0-based
-    @test process_action(2, space_0) == 1
-    @test process_action(3, space_0) == 2
-    @test process_action(4, space_0) == 3
-    @test process_action(5, space_0) == 4
+    @test all(process_action(0:4, space_0) .== 0:4)  # Julia 1-based → space 0-based
 
     # Test clamping for out-of-bounds actions
     @test process_action(0, space_0) == 0    # Below valid range, clamp to min
-    @test process_action(6, space_0) == 4    # Above valid range, clamp to max
-    @test process_action(10, space_0) == 4   # Far above valid range
+    @test_throws AssertionError process_action(10, space_0)   # above valid range
+    @test_throws AssertionError process_action(-1, space_0)   # below valid range
+    @test_throws MethodError process_action(1.0, space_0)   # not an integer
+    @test_throws MethodError process_action(1f0, space_0)   # not an integer
 
-    # Test 1-based space (natural Julia style)
     space_1 = Discrete(3, 1)  # Valid actions: 1, 2, 3
 
     @test process_action(1, space_1) == 1  # 1-based → 1-based (no change)
-    @test process_action(2, space_1) == 2
-    @test process_action(3, space_1) == 3
-
-    # Test clamping
-    @test process_action(0, space_1) == 1    # Below valid range
-    @test process_action(4, space_1) == 3    # Above valid range
+    @test_throws AssertionError process_action(4, space_1)   # above valid range
+    @test_throws AssertionError process_action(0, space_1)   # below valid range
 
     # Test custom start space
     space_custom = Discrete(4, -1)  # Valid actions: -1, 0, 1, 2
-
-    @test process_action(1, space_custom) == -1  # Julia 1-based → space start -1
-    @test process_action(2, space_custom) == 0   # Julia 2-based → space 0
-    @test process_action(3, space_custom) == 1   # Julia 3-based → space 1
-    @test process_action(4, space_custom) == 2   # Julia 4-based → space 2
-
-    # Test clamping for custom space
-    @test process_action(0, space_custom) == -1   # Below valid range
-    @test process_action(5, space_custom) == 2    # Above valid range
+    @test_throws AssertionError process_action(5, space_custom)   # above valid range
+    @test_throws AssertionError process_action(-2, space_custom)   # below valid range
+    @test_throws MethodError process_action(1.0, space_custom)   # not an integer
+    @test_throws MethodError process_action(1f0, space_custom)   # not an integer
 end
 
-@testitem "Discrete action processing array inputs" tags = [:spaces, :discrete, :action_processing, :arrays] begin
-    using DRiL: process_action
-    space_0 = Discrete(3, 0)  # Valid actions: 0, 1, 2
-
-    # Test single element array input
-    @test process_action([2], space_0)[1] == 1  # Julia 2 → space 1
-
-    # Test batched actions (Vector{Int})
-    actions_batch = [1, 2, 3]
-    expected_batch = [0, 1, 2]  # Julia 1-based → space 0-based
-    @test process_action(actions_batch, space_0) == expected_batch
-
-    # Test batched actions with clamping
-    actions_with_bounds = [0, 1, 2, 3, 4]
-    expected_with_bounds = [0, 0, 1, 2, 2]  # Clamped to [0, 2]
-    @test process_action(actions_with_bounds, space_0) == expected_with_bounds
-end
 
 @testitem "Discrete space interface completeness" tags = [:spaces, :interface, :discrete] begin
     using Random
@@ -642,17 +615,20 @@ end
     @test !(1 ∈ space_single)
     @test !(-1 ∈ space_single)
 
+    @test_throws AssertionError Discrete(-1)
+    @test_throws AssertionError Discrete(0)
+
     # Test process_action with single action space
-    @test process_action(1, space_single) == 0  # Only valid action
-    @test process_action(0, space_single) == 0  # Clamped
-    @test process_action(5, space_single) == 0  # Clamped
+    @test process_action(0, space_single) == 0  # Only valid action
+    @test_throws AssertionError process_action(1, space_single)  # out of bounds
+    @test_throws AssertionError process_action(-1, space_single)  # out of bounds
 
     # Test single action space with different start
     space_single_1 = Discrete(1, 5)  # Only action: 5
     @test 5 ∈ space_single_1
     @test !(4 ∈ space_single_1)
     @test !(6 ∈ space_single_1)
-    @test process_action(1, space_single_1) == 5
+    @test_throws AssertionError process_action(1, space_single_1) == 5
 
     # Test large action space
     space_large = Discrete(1000, 0)
@@ -675,8 +651,8 @@ end
     @test !((-5) ∈ space_neg)
 
     # Test process_action with negative start
-    @test process_action(1, space_neg) == -10  # Julia 1 → space start -10
-    @test process_action(5, space_neg) == -6   # Julia 5 → space end -6
-    @test process_action(0, space_neg) == -10  # Clamped to min
-    @test process_action(6, space_neg) == -6   # Clamped to max
+    @test_throws AssertionError process_action(1, space_neg)
+    @test_throws AssertionError process_action(5, space_neg)
+    @test_throws AssertionError process_action(0, space_neg)
+    @test_throws AssertionError process_action(6, space_neg)
 end

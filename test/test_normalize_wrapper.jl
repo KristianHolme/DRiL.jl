@@ -225,7 +225,7 @@ end
     # Collect rewards
     for i in 1:8
         actions = [rand(Float32) for _ in 1:2]
-        rewards,_ = act!(norm_env, actions)
+        rewards, _ = act!(norm_env, actions)
         push!(all_rewards, rewards...)
         push!(original_rewards, get_original_rewards(norm_env)...)
     end
@@ -238,7 +238,7 @@ end
 
     # Test unnormalization
     actions = [rand(Float32) for _ in 1:2]
-    last_rewards,_ = act!(norm_env, actions)
+    last_rewards, _ = act!(norm_env, actions)
     last_original = get_original_rewards(norm_env)
     unnorm_rewards = copy(last_rewards)
     unnormalize_rewards!(unnorm_rewards, norm_env)
@@ -306,6 +306,7 @@ end
     initial_count = norm_env.obs_rms.count
     actions = [rand(Float32) for _ in 1:2]
     act!(norm_env, actions)
+    obs = observe(norm_env) # update stats
     training_count = norm_env.obs_rms.count
     @test training_count > initial_count
 
@@ -313,6 +314,7 @@ end
     norm_env = set_training(norm_env, false)
     actions = [rand(Float32) for _ in 1:2]
     act!(norm_env, actions)
+    obs = observe(norm_env) # should now not update stats
     eval_count = norm_env.obs_rms.count
 
     # Statistics should not update in evaluation mode
@@ -336,89 +338,15 @@ end
         env.steps += 1
         return Float32(env.steps)
     end
-    function DRiL.get_info(env::TerminalEnv)
-        if terminated(env)
-            return Dict("terminal_observation" => Float32[env.steps+10.0])  # Distinct terminal obs
-        else
-            return Dict()
-        end
-    end
+    DRiL.get_info(::TerminalEnv) = Dict{String,Any}()
     function DRiL.reset!(env::TerminalEnv)
         env.steps = 0
         nothing
     end
 
-    # We need to implement act! for parallel environments since our wrapper expects parallel envs
-    # Let's create a simple parallel version
-    mutable struct TerminalParallelEnv <: DRiL.AbstractParallelEnv
-        envs::Vector{TerminalEnv}
-        infos::Vector{Dict{String,Any}}
-        observations::Vector{Any}
-        
-        function TerminalParallelEnv(envs::Vector{TerminalEnv})
-            infos = [get_info(e) for e in envs]
-            observations = [observe(e) for e in envs]
-            return new(envs, infos, observations)
-        end
-    end
 
-    DRiL.observation_space(env::TerminalParallelEnv) = observation_space(env.envs[1])
-    DRiL.action_space(env::TerminalParallelEnv) = action_space(env.envs[1])
-    DRiL.number_of_envs(env::TerminalParallelEnv) = length(env.envs)
 
-    function DRiL.observe(env::TerminalParallelEnv)
-        for i in 1:length(env.envs)
-            env.observations[i] = observe(env.envs[i])
-        end
-        return env.observations
-    end
-
-    function DRiL.reset!(env::TerminalParallelEnv)
-        for e in env.envs
-            reset!(e)
-        end
-        for i in 1:length(env.envs)
-            env.observations[i] = observe(env.envs[i])
-        end
-        nothing
-    end
-
-    function DRiL.terminated(env::TerminalParallelEnv)
-        return terminated.(env.envs)
-    end
-
-    function DRiL.truncated(env::TerminalParallelEnv)
-        return truncated.(env.envs)
-    end
-
-    function DRiL.get_info(env::TerminalParallelEnv)
-        return get_info.(env.envs)
-    end
-
-    function DRiL.act!(env::TerminalParallelEnv, actions::Vector)
-        rewards = Float32[]
-
-        for (i, (e, action)) in enumerate(zip(env.envs, actions))
-            reward = act!(e, action)
-            push!(rewards, reward)
-            
-            term = terminated(e)
-            trunc = truncated(e)
-            env.infos[i] = get_info(e)
-
-            # Auto-reset if terminated or truncated
-            if term || trunc
-                reset!(e)
-            end
-            
-            # Update cached observation
-            env.observations[i] = observe(e)
-        end
-
-        return rewards, terminated(env), truncated(env), env.infos
-    end
-
-    base_env = TerminalParallelEnv([TerminalEnv(2) for _ in 1:2])
+    base_env = BroadcastedParallelEnv([TerminalEnv(2) for _ in 1:2])
     norm_env = NormalizeWrapperEnv(base_env; training=true)
 
     reset!(norm_env)
@@ -426,10 +354,12 @@ end
     # Step until termination
     actions = [[rand(Float32)] for _ in 1:2]
     rewards, terms, truncs, infos = act!(norm_env, actions)
+    obs = observe(norm_env)
     @test !any(terms)
 
     actions = [[rand(Float32)] for _ in 1:2]
     rewards, terms, truncs, infos = act!(norm_env, actions)
+    obs = observe(norm_env)
     @test all(terms)
 
     # Check that terminal observations are normalized in info
@@ -439,8 +369,8 @@ end
             @test terminal_obs isa Vector{Float32}
             @test length(terminal_obs) == 1
             # Terminal observation should be normalized (different from raw value)
-            # The raw terminal observation would be [12.0] or [13.0], normalized should be different
-            @test abs(terminal_obs[1]) ≤ 10.0f0  # Should be normalized
+            # The raw terminal observation would be [2f0], normalized should be different
+            @test abs(terminal_obs[1]) ≤ 2.0f0  # Should be normalized
         end
     end
 end
@@ -449,17 +379,19 @@ end
     using Random
 
     # Simple test environment
-    struct SimpleTestEnv <: AbstractEnv end
+    struct SimpleTestEnv <: AbstractEnv
+        rng::Random.AbstractRNG
+    end
     DRiL.observation_space(::SimpleTestEnv) = Box(Float32[0.0, 0.0], Float32[1.0, 1.0])
     DRiL.action_space(::SimpleTestEnv) = Box(Float32[-1.0], Float32[1.0])
-    DRiL.observe(::SimpleTestEnv) = rand(Float32, 2)
+    DRiL.observe(env::SimpleTestEnv) = rand(env.rng, Float32, 2)
     DRiL.terminated(::SimpleTestEnv) = false
     DRiL.truncated(::SimpleTestEnv) = false
-    DRiL.act!(::SimpleTestEnv, action) = rand(Float32)
+    DRiL.act!(env::SimpleTestEnv, action) = rand(env.rng, Float32)
     DRiL.get_info(::SimpleTestEnv) = Dict()
     DRiL.reset!(::SimpleTestEnv) = nothing
 
-    base_env = MultiThreadedParallelEnv([SimpleTestEnv() for _ in 1:3])
+    base_env = MultiThreadedParallelEnv([SimpleTestEnv(Random.MersenneTwister(i)) for i in 1:3])
     norm_env = NormalizeWrapperEnv(base_env)
 
     # Test that all required interface methods exist and work
@@ -493,12 +425,12 @@ end
     @test all(obs -> length(obs) == 2, current_obs)
 
     # Test act!
-    actions = [[rand(Float32)] for _ in 1:3]
+    actions = rand(action_space(norm_env), 3)
     rewards, terms, truncs, infos = act!(norm_env, actions)
 
     @test length(rewards) == 3
     @test all(r -> r isa Float32, rewards)
-    
+
     # Test other methods
     @test length(terms) == 3
     @test length(truncs) == 3

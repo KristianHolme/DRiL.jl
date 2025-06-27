@@ -229,10 +229,11 @@ end
 struct Discrete{T<:Integer} <: AbstractSpace
     n::T
     start::T
+    function Discrete(n::T, start::T=1) where T<:Integer
+        @assert n > 0 "n must be positive"
+        return new{T}(n, start)
+    end
 end
-
-# Convenience constructor - default start at 1
-Discrete(n::T) where T<:Integer = Discrete(n, 1)
 
 Base.ndims(::Discrete) = 0  # Discrete spaces are 0-dimensional (single values)
 Base.eltype(::Discrete{T}) where T = T
