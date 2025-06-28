@@ -212,23 +212,36 @@ function get_info(env::MultiAgentParallelEnv{E}) where E<:AbstractParallelEnv
 end
 
 function act!(env::MultiAgentParallelEnv{E}, actions::AbstractVector) where E<:AbstractParallelEnv
-    @assert length(actions) == env.total_envs "Number of actions ($(length(actions))) must match total number of environments ($(env.total_envs))"
+    @assert length(actions) == number_of_envs(env) "Number of actions ($(length(actions))) must match total number of environments ($(number_of_envs(env)))"
 
     # Split actions into chunks for each sub-parallel-env
     idxs = cumsum([1; env.env_counts])
-    action_chunks = [actions[idxs[i]:idxs[i+1]-1] for i in 1:length(env.envs)]
+    chunk_indices = [idxs[i]:idxs[i+1]-1 for i in 1:length(env.envs)]
+    action_chunks = [actions[chunk_indices[i]] for i in 1:length(env.envs)]
 
     # Execute actions on each sub-parallel-env and collect results
-    all_returns = act!.(env.envs, action_chunks)
-    batched_rewards = getindex.(all_returns, 1)
-    batched_terminated = getindex.(all_returns, 2)
-    batched_truncated = getindex.(all_returns, 3)
-    batched_infos = getindex.(all_returns, 4)
+    stacked_rewards = Vector{Float32}(undef, number_of_envs(env))
+    stacked_terminated = Vector{Bool}(undef, number_of_envs(env))
+    stacked_truncated = Vector{Bool}(undef, number_of_envs(env))
+    stacked_infos = Vector{Dict{String,Any}}(undef, number_of_envs(env))
 
-    stacked_rewards = vcat(batched_rewards...)
-    stacked_terminated = vcat(batched_terminated...)
-    stacked_truncated = vcat(batched_truncated...)
-    stacked_infos = vcat(batched_infos...)
+    @threads for i in eachindex(env.envs)
+        rewards, terminateds, truncateds, infos = act!(env.envs[i], action_chunks[i])
+        stacked_rewards[chunk_indices[i]] .= rewards
+        stacked_terminated[chunk_indices[i]] .= terminateds
+        stacked_truncated[chunk_indices[i]] .= truncateds
+        stacked_infos[chunk_indices[i]] .= infos
+    end
+
+    # batched_rewards = getindex.(all_returns, 1)
+    # batched_terminated = getindex.(all_returns, 2)
+    # batched_truncated = getindex.(all_returns, 3)
+    # batched_infos = getindex.(all_returns, 4)
+
+    # stacked_rewards = vcat(batched_rewards...)
+    # stacked_terminated = vcat(batched_terminated...)
+    # stacked_truncated = vcat(batched_truncated...)
+    # stacked_infos = vcat(batched_infos...)
 
     return stacked_rewards, stacked_terminated, stacked_truncated, stacked_infos
 end
