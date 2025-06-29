@@ -433,7 +433,7 @@ end
     @test space_default.n == 5
     @test space_default.start == 1
     @test eltype(space_default) == Int
-    @test ndims(space_default) == 0
+    @test ndims(space_default) == 1
 
     # Test Discrete creation with custom start (1-based)
     space_custom = Discrete(3, 1)
@@ -600,7 +600,7 @@ end
 
     # Size and properties
     @test size(space) == (1,)
-    @test ndims(space) == 0
+    @test ndims(space) == 1
     @test eltype(space) == Int
 end
 

@@ -78,7 +78,7 @@ end
 
     # Test single observation prediction (with batch dimension)
     obs = Float32[0.5, -0.3]  # Single observation as column vector
-    batched_obs = reduce(hcat, [obs])
+    batched_obs = stack([obs])
     actions, new_states = DRiL.predict_actions(policy, batched_obs, params, states; deterministic=false, rng=rng)
 
     # Actions should be in environment action space after processing
@@ -114,7 +114,7 @@ end
     obs = Float32[0.5, -0.3]
 
     # Get action from policy (this will be in 1-based Julia indexing internally)
-    batched_obs = reduce(hcat, [obs])
+    batched_obs = stack([obs])
     actions, values, log_probs, _ = policy(batched_obs, params, states)
 
     # Test that actions are valid indices (1-based for internal use)
@@ -166,7 +166,7 @@ end
         states = Lux.initialstates(rng, policy)
 
         obs = Float32[0.5, -0.3]
-        batched_obs = reduce(hcat, [obs])
+        batched_obs = stack([obs])
 
         # Test that policy actions (before processing) are in 1-based indexing
         actions, _, _, _ = policy(batched_obs, params, states)
@@ -206,7 +206,7 @@ end
     continuous_states = Lux.initialstates(rng, continuous_policy)
 
     obs = Float32[0.5, -0.3]
-    batched_obs = reduce(hcat, [obs])
+    batched_obs = stack([obs])
 
     # Test that both implement the same methods
     discrete_actions, discrete_values, discrete_log_probs, _ = discrete_policy(batched_obs, discrete_params, discrete_states)
@@ -222,7 +222,7 @@ end
 
     # Test evaluate_actions
     discrete_eval_values, discrete_eval_log_probs, discrete_entropy, _ = DRiL.evaluate_actions(discrete_policy, batched_obs, discrete_actions, discrete_params, discrete_states)
-    continuous_eval_values, continuous_eval_log_probs, continuous_entropy, _ = DRiL.evaluate_actions(continuous_policy, batched_obs, reduce(hcat, continuous_actions), continuous_params, continuous_states)
+    continuous_eval_values, continuous_eval_log_probs, continuous_entropy, _ = DRiL.evaluate_actions(continuous_policy, batched_obs, stack(continuous_actions), continuous_params, continuous_states)
 
     # Test that outputs have expected types and shapes
     @test discrete_actions isa Vector{<:Integer}
@@ -248,7 +248,7 @@ end
     states = Lux.initialstates(rng, policy)
 
     obs = Float32[0.5]
-    batched_obs = reduce(hcat, [obs])
+    batched_obs = stack([obs])
     # Test that single action space works
     actions, values, log_probs, _ = policy(batched_obs, params, states)
     @test actions[1] == 0

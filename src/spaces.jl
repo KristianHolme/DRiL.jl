@@ -235,7 +235,7 @@ struct Discrete{T<:Integer} <: AbstractSpace
     end
 end
 
-Base.ndims(::Discrete) = 0  # Discrete spaces are 0-dimensional (single values)
+Base.ndims(::Discrete) = 1  # Discrete spaces are 1-dimensional even though they are single values, to work with batch dim
 Base.eltype(::Discrete{T}) where T = T
 
 function Base.isequal(disc1::Discrete, disc2::Discrete)
@@ -322,3 +322,13 @@ end
 Base.size(space::Discrete) = (1,)
 Base.size(space::Box) = space.shape
 Base.size(space::UniformBox) = space.shape
+
+"""
+    batch(x::AbstractArray, space::AbstractSpace)
+
+Batch an array of observations or actions.
+"""
+function batch end
+
+batch(x::AbstractArray, space::Box) = stack(x)
+batch(x::AbstractVector, space::Discrete) = reshape(x, 1, :)

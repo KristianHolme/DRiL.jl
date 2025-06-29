@@ -4,31 +4,38 @@
     using LinearAlgebra
     using DRiL.DRiLDistributions
 
-    same_outputs = Bool[]
+    
+    shapes = [(1,), (1,1), (2,), (2,3), (2,3,1), (2,3,4)]
+    for shape in shapes
+        low = rand(Float32, shape...) .- 1f0
+        high = rand(Float32, shape...) .+ 1f0
+        action_space = Box(low, high, shape)
+        
+        same_outputs = Bool[]
+        for i in 1:100
+            mean = rand(action_space)
+            log_std = rand(action_space)
 
-    for i in 1:100
-        mean = rand(Float32, 2, 2)
-        log_std = rand(Float32, 2, 2)
+            flat_mean = vec(mean)
+            flat_log_std = vec(log_std)
+            mvn = MvNormal(flat_mean, LinearAlgebra.Diagonal(map(abs2, exp.(flat_log_std))))
 
-        flat_mean = vec(mean)
-        flat_log_std = vec(log_std)
-        mvn = MvNormal(flat_mean, LinearAlgebra.Diagonal(map(abs2, exp.(flat_log_std))))
+            d = DiagGaussian(mean, log_std)
+            x = rand(action_space)
 
-        d = DiagGaussian(mean, log_std)
-        x = rand(Float32, 2, 2)
+            flat_x = vec(x)
 
-        flat_x = vec(x)
+            custom_logpdf = DRiLDistributions.logpdf(d, x)
+            dist_logpdf = Distributions.logpdf(mvn, flat_x)
+            push!(same_outputs, custom_logpdf ≈ dist_logpdf)
 
-        custom_logpdf = DRiLDistributions.logpdf(d, x)
-        dist_logpdf = Distributions.logpdf(mvn, flat_x)
-        push!(same_outputs, custom_logpdf ≈ dist_logpdf)
-
-        custom_entropy = DRiLDistributions.entropy(d)
-        dist_entropy = Distributions.entropy(mvn)
-        push!(same_outputs, custom_entropy ≈ dist_entropy)
+            custom_entropy = DRiLDistributions.entropy(d)
+            dist_entropy = Distributions.entropy(mvn)
+            push!(same_outputs, custom_entropy ≈ dist_entropy)
+        end
+        @test all(same_outputs)
     end
 
-    @test all(same_outputs)
 end
 
 @testitem "Categorical vs Distributions.Categorical" begin

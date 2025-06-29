@@ -554,7 +554,7 @@ function reset!(env::NormalizeWrapperEnv{E,T}) where {E,T}
 
     # Store original observations BEFORE normalization
     #should we also store rewards or something?
-    env.old_obs .= reduce(hcat, obs)
+    env.old_obs .= batch(obs, observation_space(env))
     env.returns .= zero(T)
 
     return nothing
@@ -564,11 +564,11 @@ function observe(env::NormalizeWrapperEnv{E,T}) where {E,T}
     obs = observe(env.env)
 
     # Store original observations and rewards for access
-    env.old_obs .= reduce(hcat, obs)
+    env.old_obs .= batch(obs, observation_space(env))
 
     # Update observation statistics if in training mode
     if env.training && env.norm_obs
-        obs_batch = reduce(hcat, obs)
+        obs_batch = batch(obs, observation_space(env))
         update!(env.obs_rms, obs_batch)
     end
     normalize_obs!.(obs, Ref(env))

@@ -290,4 +290,31 @@
     function DRiL.observe(wrapper::ConstantObsWrapper)
         return copy(wrapper.constant_obs)
     end
+
+
+    struct CustomShapedBoxEnv <: AbstractEnv
+        shape::Tuple{Int, Vararg{Int}}
+    end
+    DRiL.reset!(env::CustomShapedBoxEnv) = nothing
+    DRiL.act!(env::CustomShapedBoxEnv, action::AbstractArray) = rand(Float32)
+    DRiL.observe(env::CustomShapedBoxEnv) = randn(Float32, env.shape...)
+    DRiL.observation_space(env::CustomShapedBoxEnv) = Box(Float32[-1.0], Float32[1.0], env.shape)
+    DRiL.action_space(env::CustomShapedBoxEnv) = Box(Float32[-1.0], Float32[1.0], env.shape)
+    DRiL.terminated(env::CustomShapedBoxEnv) = false
+    DRiL.truncated(env::CustomShapedBoxEnv) = false
+    DRiL.get_info(env::CustomShapedBoxEnv) = Dict{String,Any}()
+
+
+    struct RandomDiscreteEnv <: AbstractEnv
+        obs_space::Box
+        act_space::Discrete
+    end
+    DRiL.reset!(env::RandomDiscreteEnv) = nothing
+    DRiL.act!(env::RandomDiscreteEnv, action::AbstractArray) = randn(Float32)
+    DRiL.observe(env::RandomDiscreteEnv) = rand(env.obs_space)
+    DRiL.observation_space(env::RandomDiscreteEnv) = env.obs_space
+    DRiL.action_space(env::RandomDiscreteEnv) = env.act_space
+    DRiL.terminated(env::RandomDiscreteEnv) = false
+    DRiL.truncated(env::RandomDiscreteEnv) = false
+    DRiL.get_info(env::RandomDiscreteEnv) = Dict{String,Any}()
 end

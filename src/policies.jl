@@ -278,6 +278,7 @@ function extract_features(policy::AbstractActorCriticPolicy, obs::AbstractArray,
 end
 
 function get_actions_from_features(policy::AbstractActorCriticPolicy, feats::AbstractArray, ps, st)
+    @debug "feats: $(typeof(feats)) $(size(feats))"    
     actions, actor_st = policy.actor_head(feats, ps.actor_head, st.actor_head)
     st = merge(st, (; actor_head=actor_st))
     return actions, st
@@ -296,6 +297,8 @@ function get_distributions(policy::ContinuousActorCriticPolicy, action_means::Ab
     batch_dim = ndims(action_means) 
     noise_type = noise(policy)
     if noise_type == StateIndependantNoise()
+        @debug "action_means: $(typeof(action_means)) $(size(action_means))"
+        @debug "log_std: $(typeof(log_std)) $(size(log_std))"
         return DiagGaussian.(eachslice(action_means, dims=batch_dim), Ref(log_std))
     else
         @assert size(log_std) == size(action_means) "log_std and action_means have different shapes"

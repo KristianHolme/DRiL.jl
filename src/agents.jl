@@ -94,7 +94,7 @@ function get_action_and_values(agent::ActorCriticAgent, observations::AbstractVe
     ps = agent.train_state.parameters
     st = agent.train_state.states
     # Convert observations vector to batched matrix for policy
-    batched_obs = reduce(hcat, observations)
+    batched_obs = batch(observations, observation_space(policy))
     actions, values, logprobs, st = policy(batched_obs, ps, st)
     #does this reset work?, probably not
     @reset agent.train_state.states = st
@@ -118,7 +118,7 @@ function predict_values(agent::ActorCriticAgent, observations::AbstractVector)
     ps = agent.train_state.parameters
     st = agent.train_state.states
     # Convert observations vector to batched matrix for policy
-    batched_obs = reduce(hcat, observations)
+    batched_obs = batch(observations, observation_space(policy))
     values, st = predict_values(policy, batched_obs, ps, st)
     #FIXME: this does not work?
     @reset agent.train_state.states = st
@@ -144,7 +144,7 @@ function predict_actions(agent::ActorCriticAgent, observations::AbstractVector; 
     ps = agent.train_state.parameters
     st = agent.train_state.states
     # Convert observations vector to batched matrix for policy
-    batched_obs = reduce(hcat, observations)
+    batched_obs = batch(observations, observation_space(policy))
     actions, _ = predict_actions(policy, batched_obs, ps, st; deterministic=deterministic, rng=rng)
     # Process actions for environment use (e.g., convert 1-based to 0-based for Discrete)
     actions = process_action.(actions, Ref(action_space(policy)))

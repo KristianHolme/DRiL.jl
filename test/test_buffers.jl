@@ -273,3 +273,66 @@ end
     @test isapprox(vec(discrete_buffer.logprobs), vec(discrete_eval_logprobs); atol=1e-5, rtol=1e-5)
     @test isapprox(vec(continuous_buffer.logprobs), vec(continuous_eval_logprobs); atol=1e-5, rtol=1e-5)
 end
+
+@testitem "RolloutBuffer with different box shapes" tags = [:buffers, :rollouts] setup = [SharedTestSetup] begin
+    using Random
+    n_steps = 8
+
+    function get_rollout(env::AbstractEnv)
+        obs_space = DRiL.observation_space(env)
+        act_space = DRiL.action_space(env)
+        #TODO: use a simpler random agent/policy instead?
+        policy = ActorCriticPolicy(obs_space, act_space)
+        agent = ActorCriticAgent(policy; verbose=0)
+        alg = PPO()
+        roll_buffer = RolloutBuffer(obs_space, act_space, alg.gae_lambda, alg.gamma, n_steps, DRiL.number_of_envs(env))
+        DRiL.collect_rollouts!(roll_buffer, agent, env)
+        return roll_buffer
+    end
+    function test_rollout(roll_buffer::RolloutBuffer, env::AbstractEnv)
+        act_space = DRiL.action_space(env)
+        obs_space = DRiL.observation_space(env)
+        act_shape = size(act_space)
+        obs_shape = size(obs_space)
+        n_envs = DRiL.number_of_envs(env)
+        @test size(roll_buffer.observations) == (obs_shape..., n_steps * n_envs)
+        @test size(roll_buffer.actions) == (act_shape..., n_steps * n_envs)
+        @test length(roll_buffer.rewards) == n_steps * n_envs
+        @test length(roll_buffer.advantages) == n_steps * n_envs
+        @test length(roll_buffer.returns) == n_steps * n_envs
+        @test length(roll_buffer.logprobs) == n_steps * n_envs
+    end
+    shapes = [(1,), (1,1), (2,), (2,3), (2,3,1), (2,3,4)]
+    for shape in shapes
+        env = BroadcastedParallelEnv([SharedTestSetup.CustomShapedBoxEnv(shape) for _ in 1:2])
+        roll_buffer = get_rollout(env)
+        test_rollout(roll_buffer, env)
+    end
+end
+
+@testitem "RolloutBuffer with discrete actions" tags = [:buffers, :rollouts, :discrete] setup = [SharedTestSetup] begin
+    using ClassicControlEnvironments
+    using Random
+
+    n_envs = 4
+    n_steps = 8
+    # Test: RolloutBuffer works correctly with discrete action spaces
+    cartpole_env() = CartPoleEnv()
+    env = MultiThreadedParallelEnv([cartpole_env() for _ in 1:n_envs])
+    policy = DiscreteActorCriticPolicy(DRiL.observation_space(env), DRiL.action_space(env))
+    agent = ActorCriticAgent(policy; n_steps=n_steps, batch_size=n_steps, epochs=1, verbose=0)
+    alg = PPO()
+    roll_buffer = RolloutBuffer(DRiL.observation_space(env), DRiL.action_space(env), alg.gae_lambda, alg.gamma, n_steps, n_envs)
+
+    # Test rollout collection
+    DRiL.collect_rollouts!(roll_buffer, agent, env)
+
+    @test roll_buffer.observations |> size == (4, n_steps * n_envs)
+    @test roll_buffer.actions |> size == (1, n_steps * n_envs)
+    @test roll_buffer.rewards |> size == (n_steps * n_envs,)
+    @test roll_buffer.advantages |> size == (n_steps * n_envs,)
+    @test roll_buffer.returns |> size == (n_steps * n_envs,)
+    @test roll_buffer.logprobs |> size == (n_steps * n_envs,)
+    @test roll_buffer.values |> size == (n_steps * n_envs,)
+    
+end
