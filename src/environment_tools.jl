@@ -193,7 +193,7 @@ function observe(env::MultiAgentParallelEnv{E}) where E<:AbstractParallelEnv
 end
 
 function terminated(env::MultiAgentParallelEnv{E}) where E<:AbstractParallelEnv
-    all_terminated = Bool[]
+    # all_terminated = Bool[]
     batch_terminated = terminated.(env.envs)
     stacked_terminated = vcat(batch_terminated...)
     return stacked_terminated
