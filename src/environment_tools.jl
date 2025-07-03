@@ -810,8 +810,6 @@ function log_stats(env::AbstractParallelEnvWrapper, logger::AbstractLogger)
     log_stats(unwrap(env), logger)
 end
 
-# Fallback for environments without monitoring
-log_stats(env::AbstractParallelEnv, logger::AbstractLogger) = nothing
 
 # ==============================================================================
 # Show methods for nice environment display
