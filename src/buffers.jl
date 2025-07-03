@@ -151,7 +151,7 @@ function collect_rollouts!(rollout_buffer::RolloutBuffer, agent::ActorCriticAgen
     for (i, traj) in enumerate(trajectories)
         #transfer data to the Rolloutbuffer 
         traj_inds = positions[i]:positions[i+1]-1
-        @debug "traj_inds: $(traj_inds)"
+        # @debug "traj_inds: $(traj_inds)"
         selectdim(rollout_buffer.observations, ndims(obs_space) + 1, traj_inds) .= batch(traj.observations, obs_space)
         selectdim(rollout_buffer.actions, ndims(act_space) + 1, traj_inds) .= batch(traj.actions, act_space)
         rollout_buffer.rewards[traj_inds] .= traj.rewards

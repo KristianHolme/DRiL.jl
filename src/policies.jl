@@ -97,7 +97,7 @@ struct NoNoise <: AbstractNoise end
 
 abstract type AbstractActorCriticPolicy <: AbstractPolicy end
 
-struct ContinuousActorCriticPolicy{O<:AbstractSpace,A<:Box, N<:AbstractNoise} <: AbstractActorCriticPolicy
+struct ContinuousActorCriticPolicy{O<:AbstractSpace,A<:Box,N<:AbstractNoise} <: AbstractActorCriticPolicy
     observation_space::O
     action_space::A
     feature_extractor::AbstractLuxLayer
@@ -116,8 +116,8 @@ struct DiscreteActorCriticPolicy{O<:AbstractSpace,A<:Discrete} <: AbstractActorC
     shared_features::Bool
 end
 
-noise(policy::ContinuousActorCriticPolicy{<:Any, <:Any, N}) where N <: AbstractNoise = N()
-noise(policy::DiscreteActorCriticPolicy{<:Any, <:Any})  = NoNoise()
+noise(policy::ContinuousActorCriticPolicy{<:Any,<:Any,N}) where N<:AbstractNoise = N()
+noise(policy::DiscreteActorCriticPolicy{<:Any,<:Any}) = NoNoise()
 
 
 observation_space(policy::AbstractActorCriticPolicy) = policy.observation_space
@@ -180,7 +180,7 @@ function get_critic_head(laten_dim::Int, hidden_dims::Vector{Int}, activation::F
     return Chain(layers...)
 end
 
-function ContinuousActorCriticPolicy(observation_space::Union{Discrete, Box{T}}, action_space::Box{T}; log_std_init=T(0), hidden_dims=[64, 64], activation=tanh, shared_features::Bool=true) where T
+function ContinuousActorCriticPolicy(observation_space::Union{Discrete,Box{T}}, action_space::Box{T}; log_std_init=T(0), hidden_dims=[64, 64], activation=tanh, shared_features::Bool=true) where T
     feature_extractor = get_feature_extractor(observation_space)
     latent_dim = size(observation_space) |> prod
     #TODO: make this bias init work for different types
@@ -191,10 +191,10 @@ function ContinuousActorCriticPolicy(observation_space::Union{Discrete, Box{T}},
     value_init = OrthogonalInitializer{T}(T(1.0))
     actor_head = get_actor_head(latent_dim, action_space, hidden_dims, activation, bias_init, hidden_init, actor_init)
     critic_head = get_critic_head(latent_dim, hidden_dims, activation, bias_init, hidden_init, value_init)
-    return ContinuousActorCriticPolicy{typeof(observation_space), typeof(action_space), StateIndependantNoise}(observation_space, action_space, feature_extractor, actor_head, critic_head, log_std_init, shared_features)
+    return ContinuousActorCriticPolicy{typeof(observation_space),typeof(action_space),StateIndependantNoise}(observation_space, action_space, feature_extractor, actor_head, critic_head, log_std_init, shared_features)
 end
 
-function DiscreteActorCriticPolicy(observation_space::Union{Discrete, Box}, action_space::Discrete; hidden_dims=[64, 64], activation=tanh, shared_features::Bool=true)
+function DiscreteActorCriticPolicy(observation_space::Union{Discrete,Box}, action_space::Discrete; hidden_dims=[64, 64], activation=tanh, shared_features::Bool=true)
     feature_extractor = get_feature_extractor(observation_space)
     latent_dim = size(observation_space) |> prod
     #TODO: make this bias init work for different types
@@ -210,8 +210,8 @@ end
 
 
 # Convenience constructors that maintain the old interface
-ActorCriticPolicy(observation_space::Union{Discrete, Box}, action_space::Box; kwargs...) = ContinuousActorCriticPolicy(observation_space, action_space; kwargs...)
-ActorCriticPolicy(observation_space::Union{Discrete, Box}, action_space::Discrete; kwargs...) = DiscreteActorCriticPolicy(observation_space, action_space; kwargs...)
+ActorCriticPolicy(observation_space::Union{Discrete,Box}, action_space::Box; kwargs...) = ContinuousActorCriticPolicy(observation_space, action_space; kwargs...)
+ActorCriticPolicy(observation_space::Union{Discrete,Box}, action_space::Discrete; kwargs...) = DiscreteActorCriticPolicy(observation_space, action_space; kwargs...)
 
 function Lux.initialparameters(rng::AbstractRNG, policy::ContinuousActorCriticPolicy)
     params = ComponentArray(feature_extractor=Lux.initialparameters(rng, policy.feature_extractor),
@@ -278,7 +278,6 @@ function extract_features(policy::AbstractActorCriticPolicy, obs::AbstractArray,
 end
 
 function get_actions_from_features(policy::AbstractActorCriticPolicy, feats::AbstractArray, ps, st)
-    @debug "feats: $(typeof(feats)) $(size(feats))"    
     actions, actor_st = policy.actor_head(feats, ps.actor_head, st.actor_head)
     st = merge(st, (; actor_head=actor_st))
     return actions, st
@@ -294,11 +293,9 @@ end
 #TODO: dispatch in noise type?
 function get_distributions(policy::ContinuousActorCriticPolicy, action_means::AbstractArray, log_std::AbstractArray)
     # static_std = !(size(std) == size(action_means))
-    batch_dim = ndims(action_means) 
+    batch_dim = ndims(action_means)
     noise_type = noise(policy)
     if noise_type == StateIndependantNoise()
-        @debug "action_means: $(typeof(action_means)) $(size(action_means))"
-        @debug "log_std: $(typeof(log_std)) $(size(log_std))"
         return DiagGaussian.(eachslice(action_means, dims=batch_dim), Ref(log_std))
     else
         @assert size(log_std) == size(action_means) "log_std and action_means have different shapes"
