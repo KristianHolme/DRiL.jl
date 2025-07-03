@@ -13,7 +13,7 @@ end
 
 #TODO make parameters n_steps, batch_size, epochs, max_steps kwargs, default to values from agent
 #TODO refactor, separate out learnig loop and logging
-function learn!(agent::ActorCriticAgent, env::AbstractParallelEnv, alg::PPO{T}, ad_type::Lux.Training.AbstractADType=AutoZygote(); max_steps::Int, callbacks::Union{Vector{<:AbstractCallback},Nothing}=nothing) where T
+function learn!(agent::ActorCriticAgent, env::AbstractParallelEnv, alg::PPO{T}, max_steps::Int; ad_type::Lux.Training.AbstractADType=AutoZygote(), callbacks::Union{Vector{<:AbstractCallback},Nothing}=nothing) where T
     n_steps = agent.n_steps
     n_envs = number_of_envs(env)
     roll_buffer = RolloutBuffer(observation_space(env), action_space(env),
