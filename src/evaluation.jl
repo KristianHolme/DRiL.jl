@@ -1,6 +1,6 @@
-function is_monitored(env::AbstractParallellEnv)
+function is_monitored(env::AbstractParallelEnv)
     monitored = false
-    while env isa AbstractParallellEnvWrapper
+    while env isa AbstractParallelEnvWrapper
         monitored = env isa MonitorWrapperEnv
         env = unwrap(env)
     end
@@ -53,7 +53,7 @@ mean_reward, std_reward = evaluate_agent(agent, env;
 """
 function evaluate_agent(
     agent,
-    env::AbstractParallellEnv;
+    env::AbstractParallelEnv;
     n_eval_episodes::Int=10,
     deterministic::Bool=true,
     reward_threshold::Union{Nothing,Real}=nothing,
@@ -89,13 +89,12 @@ function evaluate_agent(
     observations = observe(env)
 
     p = Progress(n_eval_episodes; enabled=show_progress)
-
     while length(episode_rewards) < n_eval_episodes
         # Get actions from agent
         actions = predict_actions(agent, observations; deterministic, rng)
 
         # Take step in environment
-        step_rewards, terminateds, truncateds, infos = step!(env, actions)
+        step_rewards, terminateds, truncateds, infos = act!(env, actions)
         current_rewards .+= step_rewards
         current_lengths .+= 1
         observations = observe(env)

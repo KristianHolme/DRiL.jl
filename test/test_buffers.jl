@@ -172,41 +172,41 @@ end
     policy = DiscreteActorCriticPolicy(DRiL.observation_space(env), DRiL.action_space(env))
     agent = ActorCriticAgent(policy; n_steps=8, batch_size=8, epochs=1, verbose=0)
     alg = PPO()
-    
+
     n_steps = agent.n_steps
     n_envs = DRiL.number_of_envs(env)
     roll_buffer = RolloutBuffer(DRiL.observation_space(env), DRiL.action_space(env), alg.gae_lambda, alg.gamma, n_steps, n_envs)
 
     # Test rollout collection
     DRiL.collect_rollouts!(roll_buffer, agent, env)
-    
+
     # Check that actions are stored as 1-based indices (raw policy output)
     actions = roll_buffer.actions
-    @test all(1 .<= actions .<= DRiL.action_space(env).n)  # Should be in [1, n]
+    @test all(map(a -> a ∈ DRiL.action_space(env), actions))
     @test eltype(actions) <: Integer
-    
+
     # Check observations are valid
     obs = roll_buffer.observations
     obs_space = DRiL.observation_space(env)
-    @test size(obs) == (obs_space.shape..., n_steps*n_envs)
+    @test size(obs) == (obs_space.shape..., n_steps * n_envs)
     @test eltype(obs) == Float32
-    
+
     # Check that rewards are reasonable
     rewards = roll_buffer.rewards
     @test all(rewards .>= 0.0f0)  # CartPole gives positive rewards
-    @test size(rewards) == (n_steps*n_envs, )
-    
+    @test size(rewards) == (n_steps * n_envs,)
+
     # Check that log probabilities are consistent
     logprobs = roll_buffer.logprobs
     values = roll_buffer.values
-    @test size(logprobs) == (n_steps*n_envs, )
-    @test size(values) == (n_steps*n_envs, )
-    
+    @test size(logprobs) == (n_steps * n_envs,)
+    @test size(values) == (n_steps * n_envs,)
+
     # Test action evaluation consistency
     ps = agent.train_state.parameters
     st = agent.train_state.states
     eval_values, eval_logprobs, entropy, _ = DRiL.evaluate_actions(policy, obs, actions, ps, st)
-    
+
     @test isapprox(vec(values), vec(eval_values); atol=1e-5, rtol=1e-5)
     @test isapprox(vec(logprobs), vec(eval_logprobs); atol=1e-5, rtol=1e-5)
     @test all(entropy .>= 0.0f0)  # Entropy should be non-negative
@@ -217,56 +217,56 @@ end
     using Random
 
     # Test: Compare buffer behavior between discrete and continuous action spaces
-    
+
     # Discrete environment (CartPole)
     discrete_env = MultiThreadedParallelEnv([CartPoleEnv() for _ in 1:2])
     discrete_policy = DiscreteActorCriticPolicy(DRiL.observation_space(discrete_env), DRiL.action_space(discrete_env))
     discrete_agent = ActorCriticAgent(discrete_policy; n_steps=4, batch_size=4, epochs=1, verbose=0)
-    
+
     # Continuous environment (Pendulum)
     continuous_env = MultiThreadedParallelEnv([PendulumEnv() for _ in 1:2])
     continuous_policy = ContinuousActorCriticPolicy(DRiL.observation_space(continuous_env), DRiL.action_space(continuous_env))
     continuous_agent = ActorCriticAgent(continuous_policy; n_steps=4, batch_size=4, epochs=1, verbose=0)
-    
+
     alg = PPO()
-    
+
     # Create buffers
     discrete_buffer = RolloutBuffer(DRiL.observation_space(discrete_env), DRiL.action_space(discrete_env), alg.gae_lambda, alg.gamma, 4, 2)
     continuous_buffer = RolloutBuffer(DRiL.observation_space(continuous_env), DRiL.action_space(continuous_env), alg.gae_lambda, alg.gamma, 4, 2)
-    
+
     # Collect rollouts
     DRiL.collect_rollouts!(discrete_buffer, discrete_agent, discrete_env)
     DRiL.collect_rollouts!(continuous_buffer, continuous_agent, continuous_env)
-    
+
     # Test discrete actions are integers
     discrete_actions = discrete_buffer.actions
     @test eltype(discrete_actions) <: Integer
-    @test all(1 .<= discrete_actions .<= 2)  # CartPole has 2 actions
-    
+    @test all(map(a -> a ∈ DRiL.action_space(discrete_env), discrete_actions))
+
     # Test continuous actions are floats
     continuous_actions = continuous_buffer.actions
     @test eltype(continuous_actions) <: AbstractFloat
-    @test size(continuous_actions) == (1, 4*2)  # (action_dim, n_steps*n_envs)
-    
+    @test size(continuous_actions) == (1, 4 * 2)  # (action_dim, n_steps*n_envs)
+
     # Test that both have same buffer structure otherwise
     @test size(discrete_buffer.rewards) == size(continuous_buffer.rewards)
     @test size(discrete_buffer.logprobs) == size(continuous_buffer.logprobs)
     @test size(discrete_buffer.values) == size(continuous_buffer.values)
-    
+
     # Test that evaluation works for both
     discrete_ps = discrete_agent.train_state.parameters
     discrete_st = discrete_agent.train_state.states
     continuous_ps = continuous_agent.train_state.parameters
     continuous_st = continuous_agent.train_state.states
-    
+
     # Discrete evaluation
     discrete_eval_values, discrete_eval_logprobs, discrete_entropy, _ = DRiL.evaluate_actions(
         discrete_policy, discrete_buffer.observations, discrete_buffer.actions, discrete_ps, discrete_st)
-    
+
     # Continuous evaluation
     continuous_eval_values, continuous_eval_logprobs, continuous_entropy, _ = DRiL.evaluate_actions(
         continuous_policy, continuous_buffer.observations, continuous_buffer.actions, continuous_ps, continuous_st)
-    
+
     # Test evaluation consistency
     @test isapprox(vec(discrete_buffer.values), vec(discrete_eval_values); atol=1e-5, rtol=1e-5)
     @test isapprox(vec(continuous_buffer.values), vec(continuous_eval_values); atol=1e-5, rtol=1e-5)
@@ -274,55 +274,65 @@ end
     @test isapprox(vec(continuous_buffer.logprobs), vec(continuous_eval_logprobs); atol=1e-5, rtol=1e-5)
 end
 
-@testitem "Discrete action indexing in buffers" tags = [:buffers, :discrete, :indexing] setup = [SharedTestSetup] begin
+@testitem "RolloutBuffer with different box shapes" tags = [:buffers, :rollouts] setup = [SharedTestSetup] begin
+    using Random
+    n_steps = 8
+
+    function get_rollout(env::AbstractEnv)
+        obs_space = DRiL.observation_space(env)
+        act_space = DRiL.action_space(env)
+        #TODO: use a simpler random agent/policy instead?
+        policy = ActorCriticPolicy(obs_space, act_space)
+        agent = ActorCriticAgent(policy; verbose=0)
+        alg = PPO()
+        roll_buffer = RolloutBuffer(obs_space, act_space, alg.gae_lambda, alg.gamma, n_steps, DRiL.number_of_envs(env))
+        DRiL.collect_rollouts!(roll_buffer, agent, env)
+        return roll_buffer
+    end
+    function test_rollout(roll_buffer::RolloutBuffer, env::AbstractEnv)
+        act_space = DRiL.action_space(env)
+        obs_space = DRiL.observation_space(env)
+        act_shape = size(act_space)
+        obs_shape = size(obs_space)
+        n_envs = DRiL.number_of_envs(env)
+        @test size(roll_buffer.observations) == (obs_shape..., n_steps * n_envs)
+        @test size(roll_buffer.actions) == (act_shape..., n_steps * n_envs)
+        @test length(roll_buffer.rewards) == n_steps * n_envs
+        @test length(roll_buffer.advantages) == n_steps * n_envs
+        @test length(roll_buffer.returns) == n_steps * n_envs
+        @test length(roll_buffer.logprobs) == n_steps * n_envs
+    end
+    shapes = [(1,), (1,1), (2,), (2,3), (2,3,1), (2,3,4)]
+    for shape in shapes
+        env = BroadcastedParallelEnv([SharedTestSetup.CustomShapedBoxEnv(shape) for _ in 1:2])
+        roll_buffer = get_rollout(env)
+        test_rollout(roll_buffer, env)
+    end
+end
+
+@testitem "RolloutBuffer with discrete actions" tags = [:buffers, :rollouts, :discrete] setup = [SharedTestSetup] begin
     using ClassicControlEnvironments
     using Random
 
-    # Test: Verify that discrete action indexing is consistent throughout the pipeline
-    
-    # Create CartPole environment with 0-based action space
-    env = MultiThreadedParallelEnv([CartPoleEnv() for _ in 1:2])
+    n_envs = 4
+    n_steps = 8
+    # Test: RolloutBuffer works correctly with discrete action spaces
+    cartpole_env() = CartPoleEnv()
+    env = MultiThreadedParallelEnv([cartpole_env() for _ in 1:n_envs])
     policy = DiscreteActorCriticPolicy(DRiL.observation_space(env), DRiL.action_space(env))
-    agent = ActorCriticAgent(policy; n_steps=4, batch_size=4, epochs=1, verbose=0)
+    agent = ActorCriticAgent(policy; n_steps=n_steps, batch_size=n_steps, epochs=1, verbose=0)
     alg = PPO()
-    
-    # Create buffer
-    roll_buffer = RolloutBuffer(DRiL.observation_space(env), DRiL.action_space(env), alg.gae_lambda, alg.gamma, 4, 2)
-    
-    # Collect rollouts
+    roll_buffer = RolloutBuffer(DRiL.observation_space(env), DRiL.action_space(env), alg.gae_lambda, alg.gamma, n_steps, n_envs)
+
+    # Test rollout collection
     DRiL.collect_rollouts!(roll_buffer, agent, env)
+
+    @test roll_buffer.observations |> size == (4, n_steps * n_envs)
+    @test roll_buffer.actions |> size == (1, n_steps * n_envs)
+    @test roll_buffer.rewards |> size == (n_steps * n_envs,)
+    @test roll_buffer.advantages |> size == (n_steps * n_envs,)
+    @test roll_buffer.returns |> size == (n_steps * n_envs,)
+    @test roll_buffer.logprobs |> size == (n_steps * n_envs,)
+    @test roll_buffer.values |> size == (n_steps * n_envs,)
     
-    # Actions in buffer should be 1-based (raw policy outputs before processing)
-    stored_actions = roll_buffer.actions
-    @test all(1 .<= stored_actions .<= 2)  # Should be 1 or 2 (1-based)
-    
-    # Test manual action prediction and processing
-    obs = DRiL.observe(env)  # Get current observations
-    ps = agent.train_state.parameters
-    st = agent.train_state.states
-    
-    # Policy output (1-based)
-    policy_actions, _, _, _ = policy(obs[:, 1:1], ps, st)  # Single observation
-    @test all(1 .<= policy_actions .<= 2)  # Should be 1-based
-    
-    # Processed actions for environment (0-based)
-    actions, _ = DRiL.predict(policy, obs[:, 1:1], ps, st)
-    processed_actions = DRiL.process_action(actions, DRiL.action_space(env))
-    @test processed_actions[1] ∈ DRiL.action_space(env)  # Should be 0 or 1
-    
-    # Verify that evaluate_actions works with stored (1-based) actions
-    eval_values, eval_logprobs, entropy, _ = DRiL.evaluate_actions(
-        policy, roll_buffer.observations, stored_actions, ps, st)
-    
-    @test size(eval_values) == (1, 4*2)
-    @test size(eval_logprobs) == (4*2,)
-    @test all(entropy .>= 0.0f0)
-    
-    # Test that the indexing conversion is correct
-    action_space = DRiL.action_space(env)
-    for stored_action in unique(stored_actions)
-        processed = DRiL.process_action(stored_action, action_space)
-        @test processed ∈ action_space
-        @test processed == stored_action + (action_space.start - 1)  # 1-based to 0-based
-    end
 end

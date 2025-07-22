@@ -14,7 +14,7 @@ using TestItems
     @test hasmethod(DRiL.get_info, (typeof(env),))
     @test hasmethod(DRiL.reset!, (typeof(env),))
     @test hasmethod(DRiL.act!, (typeof(env), AbstractArray))
-    @test hasmethod(DRiL.step!, (typeof(env), AbstractArray))
+
     @test hasmethod(DRiL.observe, (typeof(env),))
 
     # Test space properties
@@ -35,17 +35,17 @@ using TestItems
     @test !DRiL.terminated(env)
     @test !DRiL.truncated(env)
 
-    # Test action and step functionality
+    # Test action functionality
     action = rand(Float32, 2) .* 2.0f0 .- 1.0f0
     reward = DRiL.act!(env, action)
     @test reward isa Float32
     @test reward ≥ 0.0f0
 
-    next_obs, step_reward, term, trunc, info = DRiL.step!(env, action)
-    @test step_reward == reward
-    @test term == DRiL.terminated(env)
-    @test trunc == DRiL.truncated(env)
-    @test info == DRiL.get_info(env)
+    # Test individual interface methods
+    next_obs = DRiL.observe(env)
+    term = DRiL.terminated(env)
+    trunc = DRiL.truncated(env)
+    info = DRiL.get_info(env)
     @test length(next_obs) == 2
 
     # Test observe
@@ -103,8 +103,9 @@ end
         @test !DRiL.terminated(env)  # Never terminates
         @test !DRiL.truncated(env)   # Never truncates
 
-        obs, step_reward, term, trunc, info = DRiL.step!(env, action)
-        @test step_reward ≈ 1.0f0
+        obs = DRiL.observe(env)
+        term = DRiL.terminated(env)
+        trunc = DRiL.truncated(env)
         @test !term
         @test !trunc
         @test length(obs) == 1
@@ -135,11 +136,11 @@ end
     reward = DRiL.act!(wrapped_env, action)
     @test reward isa Float32
 
-    next_obs, step_reward, term, trunc, info = DRiL.step!(wrapped_env, action)
+    next_obs = DRiL.observe(wrapped_env)
+    term = DRiL.terminated(wrapped_env)
+    trunc = DRiL.truncated(wrapped_env)
+    info = DRiL.get_info(wrapped_env)
     @test next_obs == constant_obs  # Observation should be constant
-    @test step_reward == reward
-    @test term == DRiL.terminated(wrapped_env)
-    @test trunc == DRiL.truncated(wrapped_env)
 
     # Test observe returns constant observation
     obs = DRiL.observe(wrapped_env)
@@ -166,10 +167,8 @@ end
         # Test observations during episode
         action = rand(Float32, act_space.shape...) .* 2.0f0 .- 1.0f0
         for step in 1:3
-            next_obs, _, _, _, _ = DRiL.step!(env, action)
-            @test length(next_obs) == obs_space.shape[1]
-            @test next_obs ∈ obs_space
-
+            DRiL.act!(env, action)
+            
             current_obs = DRiL.observe(env)
             @test length(current_obs) == obs_space.shape[1]
             @test current_obs ∈ obs_space
@@ -198,7 +197,10 @@ end
 
     action = [0.5f0, -0.2f0]
     for i in 1:max_steps
-        obs, reward, term, trunc, info = DRiL.step!(env1, action)
+        reward = DRiL.act!(env1, action)
+        obs = DRiL.observe(env1)
+        term = DRiL.terminated(env1)
+        trunc = DRiL.truncated(env1)
         push!(results1, (copy(obs), reward, term, trunc))
         if term || trunc
             break
@@ -214,7 +216,10 @@ end
     push!(results2, copy(obs2))
 
     for i in 1:max_steps
-        obs, reward, term, trunc, info = DRiL.step!(env2, action)
+        reward = DRiL.act!(env2, action)
+        obs = DRiL.observe(env2)
+        term = DRiL.terminated(env2)
+        trunc = DRiL.truncated(env2)
         push!(results2, (copy(obs), reward, term, trunc))
         if term || trunc
             break
@@ -225,12 +230,9 @@ end
     @test length(results1) == length(results2)
     @test results1[1] ≈ results2[1]  # Initial observations
 
-    for i in eachindex(results1)[2:end]
+    @test all(i -> begin
         obs1, reward1, term1, trunc1 = results1[i]
         obs2, reward2, term2, trunc2 = results2[i]
-        @test obs1 ≈ obs2
-        @test reward1 ≈ reward2
-        @test term1 == term2
-        @test trunc1 == trunc2
-    end
+        obs1 ≈ obs2 && reward1 ≈ reward2 && term1 == term2 && trunc1 == trunc2
+    end, eachindex(results1)[2:end])
 end

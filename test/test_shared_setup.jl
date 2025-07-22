@@ -56,15 +56,6 @@
         return reward
     end
 
-    function DRiL.step!(env::CustomEnv, action::AbstractArray)
-        reward = DRiL.act!(env, action)
-
-        # Random next observation using env's RNG
-        next_obs = rand(env.rng, Float32, 2) .* 2.0f0 .- 1.0f0
-
-        return next_obs, reward, env._terminated, env._truncated, env._info
-    end
-
     function DRiL.observe(env::CustomEnv)
         return rand(env.rng, Float32, 2) .* 2.0f0 .- 1.0f0  # Use env's RNG
     end
@@ -118,15 +109,6 @@
         env._info = Dict{String,Any}()
 
         return reward
-    end
-
-    function DRiL.step!(env::InfiniteHorizonEnv, action::AbstractArray)
-        reward = DRiL.act!(env, action)
-
-        # Return current state as observation
-        next_obs = [env.current_state]
-
-        return next_obs, reward, env._terminated, env._truncated, env._info
     end
 
     function DRiL.observe(env::InfiniteHorizonEnv)
@@ -183,15 +165,6 @@
         return reward
     end
 
-    function DRiL.step!(env::SimpleRewardEnv, action::AbstractArray)
-        reward = DRiL.act!(env, action)
-
-        # Random next observation using env's RNG
-        next_obs = rand(env.rng, Float32, 2) .* 2.0f0 .- 1.0f0
-
-        return next_obs, reward, env._terminated, env._truncated, env._info
-    end
-
     function DRiL.observe(env::SimpleRewardEnv)
         return rand(env.rng, Float32, 2) .* 2.0f0 .- 1.0f0  # Use env's RNG
     end
@@ -239,16 +212,16 @@
     function (policy::ConstantValuePolicy)(obs::AbstractArray, ps, st; rng::AbstractRNG=Random.default_rng())
         batch_size = size(obs)[end]
         # Random actions in action space bounds
-        actions = rand(rng, Float32, policy.action_space.shape..., batch_size) .* 2.0f0 .- 1.0f0
+        actions = rand(rng, action_space(policy), batch_size)
         values = fill(policy.constant_value, batch_size)
         logprobs = fill(0.0f0, batch_size)
         return actions, values, logprobs, st
     end
 
     # Implement predict function
-    function DRiL.predict(policy::ConstantValuePolicy, obs::AbstractArray, ps, st; deterministic::Bool=false, rng::AbstractRNG=Random.default_rng())
+    function DRiL.predict_actions(policy::ConstantValuePolicy, obs::AbstractArray, ps, st; deterministic::Bool=false, rng::AbstractRNG=Random.default_rng())
         batch_size = size(obs)[end]
-        actions = rand(rng, Float32, policy.action_space.shape..., batch_size) .* 2.0f0 .- 1.0f0
+        actions = rand(rng, action_space(policy), batch_size)
         return actions, st
     end
 
@@ -314,13 +287,34 @@
         return DRiL.act!(wrapper.env, action)
     end
 
-    function DRiL.step!(wrapper::ConstantObsWrapper, action::AbstractArray)
-        next_obs, reward, terminated, truncated, info = DRiL.step!(wrapper.env, action)
-        # Return constant observation instead of the environment's observation
-        return copy(wrapper.constant_obs), reward, terminated, truncated, info
-    end
-
     function DRiL.observe(wrapper::ConstantObsWrapper)
         return copy(wrapper.constant_obs)
     end
+
+
+    struct CustomShapedBoxEnv <: AbstractEnv
+        shape::Tuple{Int, Vararg{Int}}
+    end
+    DRiL.reset!(env::CustomShapedBoxEnv) = nothing
+    DRiL.act!(env::CustomShapedBoxEnv, action::AbstractArray) = rand(Float32)
+    DRiL.observe(env::CustomShapedBoxEnv) = randn(Float32, env.shape...)
+    DRiL.observation_space(env::CustomShapedBoxEnv) = Box(Float32[-1.0], Float32[1.0], env.shape)
+    DRiL.action_space(env::CustomShapedBoxEnv) = Box(Float32[-1.0], Float32[1.0], env.shape)
+    DRiL.terminated(env::CustomShapedBoxEnv) = false
+    DRiL.truncated(env::CustomShapedBoxEnv) = false
+    DRiL.get_info(env::CustomShapedBoxEnv) = Dict{String,Any}()
+
+
+    struct RandomDiscreteEnv <: AbstractEnv
+        obs_space::Box
+        act_space::Discrete
+    end
+    DRiL.reset!(env::RandomDiscreteEnv) = nothing
+    DRiL.act!(env::RandomDiscreteEnv, action::AbstractArray) = randn(Float32)
+    DRiL.observe(env::RandomDiscreteEnv) = rand(env.obs_space)
+    DRiL.observation_space(env::RandomDiscreteEnv) = env.obs_space
+    DRiL.action_space(env::RandomDiscreteEnv) = env.act_space
+    DRiL.terminated(env::RandomDiscreteEnv) = false
+    DRiL.truncated(env::RandomDiscreteEnv) = false
+    DRiL.get_info(env::RandomDiscreteEnv) = Dict{String,Any}()
 end

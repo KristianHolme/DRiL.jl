@@ -1,5 +1,8 @@
-function collect_trajectory(agent::ActorCriticAgent, env::AbstractEnv;
-    max_steps::Union{Int,Nothing}=nothing, norm_env::Union{NormalizeWrapperEnv,Nothing}=nothing)
+function collect_trajectory(agent::ActorCriticAgent,
+        env::AbstractEnv;
+        max_steps::Union{Int,Nothing}=nothing,
+        norm_env::Union{NormalizeWrapperEnv,Nothing}=nothing,
+        deterministic::Bool=true)
     reset!(env)
     original_training = is_training(env)
     env = set_training(env, false)
@@ -8,24 +11,22 @@ function collect_trajectory(agent::ActorCriticAgent, env::AbstractEnv;
     rewards = []
     while !(terminated(env) || truncated(env))
         observation = observe(env)
+        obs_to_agent = copy(observation)
         if env isa ScalingWrapperEnv
-            original_observation = unscale_observation(env, observation)
-        else
-            original_observation = observation
+            unscale_observation!(observation, env)
         end
+        original_observation = observation
         push!(observations, original_observation)
-        observation = reshape(observation, size(observation)..., 1)
         if norm_env !== nothing
-            observation = normalize_obs(norm_env, observation)
+            normalize_obs!(obs_to_agent, norm_env)
         end
 
-        agent_action = predict_actions(agent, observation, deterministic=true)
-        agent_action = selectdim(agent_action, ndims(agent_action), 1)
+        agent_actions = predict_actions(agent, [obs_to_agent]; deterministic)
+        agent_action = first(agent_actions)
         if env isa ScalingWrapperEnv
-            env_action = unscale_action(env, agent_action)
-        else
-            env_action = agent_action
+            unscale_action!(agent_action, env)
         end
+        env_action = agent_action
         push!(actions, env_action)
         reward = act!(env, agent_action)
 
@@ -35,7 +36,10 @@ function collect_trajectory(agent::ActorCriticAgent, env::AbstractEnv;
             break
         end
     end
+    #collect the final observation
+    final_observation = observe(env)
+    push!(observations, final_observation)
     #FIXME this doesnt really work as expected, the change here is not affecting the real env
-    env = set_training(env, original_training) 
+    env = set_training(env, original_training)
     return observations, actions, rewards
 end

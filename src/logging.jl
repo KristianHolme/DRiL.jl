@@ -10,6 +10,7 @@ function TensorBoardLogger.write_hparams!(logger::TBLogger, agent::AbstractAgent
     nothing
 end
 
+#FIXME: is this piracy?
 function TensorBoardLogger.write_hparams!(logger::TBLogger, alg::AbstractAlgorithm, agent::AbstractAgent, metrics::AbstractArray{String})
     hparams = merge(get_hparams(alg), get_hparams(agent))
     TensorBoardLogger.write_hparams!(logger, hparams, metrics)

@@ -1,86 +1,123 @@
 abstract type AbstractEnv end
-abstract type AbstractParallellEnv <: AbstractEnv end
+abstract type AbstractParallelEnv <: AbstractEnv end
 
 """
-reset!(env::AbstractEnv)
-- reset the environment to the initial state
+    reset!(env::AbstractEnv) -> Nothing
+
+Reset the environment to its initial state.
+
+# Arguments
+- `env::AbstractEnv`: The environment to reset
+
+# Returns
+- `Nothing`
 """
-function reset!(env::AbstractEnv)
-    error("reset! not implemented for $(typeof(env))")
-end
+function reset! end
 
 """
-act!(env::AbstractEnv, action)
-- take an action in the environment, return reward
--mandatory for single envs
+    act!(env::AbstractEnv, action) -> reward
+
+Take an action in the environment and return the reward.
+
+# Arguments
+- `env::AbstractEnv`: The environment to act in
+- `action`: The action to take (type depends on environment's action space)
+
+# Returns
+- `reward`: Numerical reward from taking the action
 """
-function act!(env::AbstractEnv, action)
-    error("act! not implemented for $(typeof(env))")
-end
+function act! end
 
 """
-step!(env::AbstractParallellEnv, action)
-- take an action in the environment, return reward, terminated, truncated, info
-- auto reset individual environments when they are terminated or truncated
-    - when truncated, the last observation is given as info["terminal_observation"]
--for parallell envs
+    observe(env::AbstractEnv) -> observation
+
+Get the current observation from the environment.
+
+# Arguments
+- `env::AbstractEnv`: The environment to observe
+
+# Returns
+- `observation`: Current state observation (type/shape depends on environment's observation space)
 """
-function step!(env::AbstractParallellEnv, action)
-    error("step! not implemented for $(typeof(env))")
-end
+function observe end
 
 """
-observe(env::AbstractEnv)
-- observe the environment, return observation
+    terminated(env::AbstractEnv) -> Bool
+
+Check if the environment episode has terminated due to reaching a terminal state.
+
+# Arguments
+- `env::AbstractEnv`: The environment to check
+
+# Returns
+- `Bool`: `true` if episode is terminated, `false` otherwise
 """
-function observe(env::AbstractEnv)
-    error("observe not implemented for $(typeof(env))")
-end
+function terminated end
 
 """
-terminated(env::AbstractEnv)
-- check if the environment is terminated
+    truncated(env::AbstractEnv) -> Bool
+
+Check if the environment episode has been truncated (e.g., time limit reached).
+
+# Arguments
+- `env::AbstractEnv`: The environment to check
+
+# Returns
+- `Bool`: `true` if episode is truncated, `false` otherwise
 """
-function terminated(env::AbstractEnv)
-    error("terminated not implemented for $(typeof(env))")
-end
+function truncated end
 
 """
-truncated(env::AbstractEnv)
-- check if the environment is truncated
+    action_space(env::AbstractEnv) -> AbstractSpace
+
+Get the action space specification for the environment.
+
+# Arguments
+- `env::AbstractEnv`: The environment
+
+# Returns
+- `AbstractSpace`: The action space (e.g., Box, Discrete)
 """
-function truncated(env::AbstractEnv)
-    error("truncated not implemented for $(typeof(env))")
-end
+function action_space end
 
 """
-action_space(env::AbstractEnv)
-- return the action space of the environment
+    observation_space(env::AbstractEnv) -> AbstractSpace
+
+Get the observation space specification for the environment.
+
+# Arguments
+- `env::AbstractEnv`: The environment
+
+# Returns
+- `AbstractSpace`: The observation space (e.g., Box, Discrete)
 """
-function action_space(env::AbstractEnv)
-    error("action_space not implemented for $(typeof(env))")
-end
+function observation_space end
 
 """
-observation_space(env::AbstractEnv)
-- return the observation space of the environment
+    get_info(env::AbstractEnv) -> Dict
+
+Get additional environment information (metadata, debug info, etc.).
+
+# Arguments
+- `env::AbstractEnv`: The environment
+
+# Returns
+- `Dict`: Dictionary containing environment-specific information
 """
-function observation_space(env::AbstractEnv)
-    error("observation_space not implemented for $(typeof(env))")
-end
+function get_info end
 
 """
-get_info(env::AbstractEnv)
-- return the info of the environment
--for single env
-"""
-function get_info(env::AbstractEnv)
-    error("get_info not implemented for $(typeof(env))")
-end
+    number_of_envs(env::AbstractParallelEnv) -> Int
 
-function number_of_envs(env::AbstractParallellEnv)::Int
-    error("number_of_envs not implemented for $(typeof(env))")
-end
+Get the number of parallel environments in a parallel environment wrapper.
+
+# Arguments
+- `env::AbstractParallelEnv`: The parallel environment
+
+# Returns
+- `Int`: Number of parallel environments
+"""
+function number_of_envs end
 
 
 abstract type AbstractAgent end
@@ -88,21 +125,57 @@ abstract type AbstractAgent end
 abstract type AbstractBuffer end
 
 abstract type AbstractEnvWrapper{E<:AbstractEnv} <: AbstractEnv end
-abstract type AbstractParallellEnvWrapper{E<:AbstractParallellEnv} <: AbstractParallellEnv end
+abstract type AbstractParallelEnvWrapper{E<:AbstractParallelEnv} <: AbstractParallelEnv end
 
 
+"""
+    is_wrapper(env::AbstractEnv) -> Bool
+
+Check if an environment is a wrapper around another environment.
+
+# Arguments
+- `env::AbstractEnv`: The environment to check
+
+# Returns
+- `Bool`: `true` if environment is a wrapper, `false` otherwise
+"""
 is_wrapper(env::AbstractEnv) = env isa AbstractEnvWrapper
-is_wrapper(env::AbstractParallellEnv) = env isa AbstractParallellEnvWrapper
+is_wrapper(env::AbstractParallelEnv) = env isa AbstractParallelEnvWrapper
 
-function unwrap(env::AbstractEnvWrapper)
-    error("unwrap not implemented for $(typeof(env))")
-end
+"""
+    unwrap(env::AbstractEnvWrapper) -> AbstractEnv
 
-function unwrap(env::AbstractParallellEnvWrapper)
-    error("unwrap not implemented for $(typeof(env))")
-end
+Unwrap one layer of environment wrapper to access the underlying environment.
 
+# Arguments
+- `env::AbstractEnvWrapper`: The wrapped environment
+
+# Returns
+- `AbstractEnv`: The underlying environment (may still be wrapped)
+"""
+function unwrap end
+
+"""
+    log_stats(env::AbstractEnv, logger::AbstractLogger) -> Nothing
+
+Log environment-specific statistics to a logger (optional interface).
+
+# Arguments
+- `env::AbstractEnv`: The environment
+- `logger::AbstractLogger`: The logger to write to
+
+# Returns
+- `Nothing`
+
+# Notes
+Default implementation does nothing. Environments can override to log custom metrics.
+"""
 function log_stats(env::AbstractEnv, logger::AbstractLogger)
     nothing
 end
+
+abstract type AbstractAlgorithm end
+
+abstract type AbstractCallback end
+
 

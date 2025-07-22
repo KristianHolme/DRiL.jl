@@ -73,29 +73,81 @@ function ActorCriticAgent(policy::AbstractActorCriticPolicy;
         logger, verbose, rng, AgentStats(0, 0))
 end
 
-function get_action_and_values(agent::ActorCriticAgent, observations::AbstractArray)
+#takes vector of observations
+#TODO: adjust name?
+"""
+    get_action_and_values(agent::ActorCriticAgent, observations::AbstractVector) -> (actions, values, logprobs)
+
+Get actions, values, and log probabilities for a vector of observations.
+
+# Arguments
+- `agent::ActorCriticAgent`: The agent
+- `observations::AbstractVector`: Vector of observations
+
+# Returns  
+- `actions`: Vector of actions (processed for environment use)
+- `values`: Vector of value estimates
+- `logprobs`: Vector of log probabilities
+"""
+function get_action_and_values(agent::ActorCriticAgent, observations::AbstractVector)
     policy = agent.policy
     ps = agent.train_state.parameters
     st = agent.train_state.states
-    actions, values, logprobs, st = policy(observations, ps, st; rng=agent.rng)
+    # Convert observations vector to batched matrix for policy
+    batched_obs = batch(observations, observation_space(policy))
+    actions, values, logprobs, st = policy(batched_obs, ps, st)
+    #does this reset work?, probably not
     @reset agent.train_state.states = st
     return actions, values, logprobs
 end
 
-function predict_values(agent::ActorCriticAgent, observations::AbstractArray)
+"""
+    predict_values(agent::ActorCriticAgent, observations::AbstractVector) -> Vector
+
+Predict value estimates for a vector of observations.
+
+# Arguments
+- `agent::ActorCriticAgent`: The agent
+- `observations::AbstractVector`: Vector of observations
+
+# Returns
+- `Vector`: Value estimates for each observation
+"""
+function predict_values(agent::ActorCriticAgent, observations::AbstractVector)
     policy = agent.policy
     ps = agent.train_state.parameters
     st = agent.train_state.states
-    values, st = predict_values(policy, observations, ps, st)
+    # Convert observations vector to batched matrix for policy
+    batched_obs = batch(observations, observation_space(policy))
+    values, st = predict_values(policy, batched_obs, ps, st)
+    #FIXME: this does not work?
     @reset agent.train_state.states = st
     return values
 end
 
-function predict_actions(agent::ActorCriticAgent, observations::AbstractArray; deterministic::Bool=false, rng::AbstractRNG=agent.rng)
+"""
+    predict_actions(agent::ActorCriticAgent, observations::AbstractVector; kwargs...) -> Vector
+
+Predict actions for a vector of observations, processed for environment use.
+
+# Arguments
+- `agent::ActorCriticAgent`: The agent
+- `observations::AbstractVector`: Vector of observations
+- `deterministic::Bool=false`: Whether to use deterministic actions
+- `rng::AbstractRNG=agent.rng`: Random number generator
+
+# Returns
+- `Vector`: Actions processed for environment use (e.g., 0-based for Discrete spaces)
+"""
+function predict_actions(agent::ActorCriticAgent, observations::AbstractVector; deterministic::Bool=false, rng::AbstractRNG=agent.rng)
     policy = agent.policy
     ps = agent.train_state.parameters
     st = agent.train_state.states
-    actions, _ = predict(policy, observations, ps, st; deterministic=deterministic, rng=rng)
+    # Convert observations vector to batched matrix for policy
+    batched_obs = batch(observations, observation_space(policy))
+    actions, _ = predict_actions(policy, batched_obs, ps, st; deterministic=deterministic, rng=rng)
+    # Process actions for environment use (e.g., convert 1-based to 0-based for Discrete)
+    actions = process_action.(actions, Ref(action_space(policy)))
     return actions
 end
 
@@ -108,7 +160,7 @@ function load_policy_params_and_state(agent::AbstractAgent, path::AbstractString
     error("load_policy_params_and_state not implemented for $(typeof(agent))")
 end
 
-# Add a helper function for optimizer creation
+# Add a helper function for optimizer crtion
 function make_optimizer(optimizer_type::Type{<:Optimisers.AbstractRule}, learning_rate::Float32)
     if optimizer_type == Optimisers.Adam
         return optimizer_type(eta=learning_rate, epsilon=1f-5)
@@ -138,6 +190,7 @@ function load_policy_params_and_state(agent::ActorCriticAgent, path::AbstractStr
     new_states = data["states"]
     new_optimizer = make_optimizer(agent.optimizer_type, agent.learning_rate)
     new_train_state = Lux.Training.TrainState(new_policy, new_parameters, new_states, new_optimizer)
+    #TODO: check if this is correct, probably it is not
     @reset agent.policy = new_policy
     @reset agent.train_state = new_train_state
     return agent

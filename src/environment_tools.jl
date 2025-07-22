@@ -7,15 +7,15 @@ function unwrap_all(env::AbstractEnv)
     return env
 end
 
-function observation_space(env::AbstractParallellEnv)
+function observation_space(env::AbstractParallelEnv)
     return observation_space(env.envs[1])
 end
 
-function action_space(env::AbstractParallellEnv)
+function action_space(env::AbstractParallelEnv)
     return action_space(env.envs[1])
 end
 
-struct MultiThreadedParallelEnv{E<:AbstractEnv} <: AbstractParallellEnv
+struct MultiThreadedParallelEnv{E<:AbstractEnv} <: AbstractParallelEnv
     envs::Vector{E}
     function MultiThreadedParallelEnv(envs::Vector{E}) where E<:AbstractEnv
         @assert all(env -> typeof(env) == E, envs) "All environments must be of the same type"
@@ -26,19 +26,17 @@ struct MultiThreadedParallelEnv{E<:AbstractEnv} <: AbstractParallellEnv
 end
 
 function reset!(env::MultiThreadedParallelEnv{E}) where E<:AbstractEnv
-    @threads for env in env.envs
-        reset!(env)
+    @threads for sub_env in env.envs
+        reset!(sub_env)
     end
     nothing
 end
 
 #TODO: check if this typing is correct
 function observe(env::MultiThreadedParallelEnv{E}) where E<:AbstractEnv
-    obs_space = observation_space(env)
-    type = eltype(obs_space)
-    observations = Array{type,length(size(obs_space)) + 1}(undef, (size(obs_space)..., length(env.envs)))
+    observations = Vector{Array{eltype(observation_space(env)),length(size(observation_space(env)))}}(undef, length(env.envs))
     @threads for i in 1:length(env.envs)
-        selectdim(observations, length(size(obs_space)) + 1, i) .= observe(env.envs[i])
+        observations[i] = observe(env.envs[i])
     end
     return observations
 end
@@ -63,35 +61,208 @@ function get_info(env::MultiThreadedParallelEnv{E}) where E<:AbstractEnv
     return get_info.(env.envs)
 end
 
-function step!(env::MultiThreadedParallelEnv{E}, action) where E<:AbstractEnv
-    # @show action
-    type = eltype(observation_space(env))
-    rewards = Vector{type}(undef, length(env.envs))
+function act!(env::MultiThreadedParallelEnv{E}, actions::AbstractVector) where E<:AbstractEnv
+    @assert length(actions) == length(env.envs) "Number of actions ($(length(actions))) must match number of environments ($(length(env.envs)))"
+
+    T = eltype(observation_space(env))
+    rewards = Vector{T}(undef, length(env.envs))
     terminateds = Vector{Bool}(undef, length(env.envs))
     truncateds = Vector{Bool}(undef, length(env.envs))
     infos = Vector{Dict{String,Any}}(undef, length(env.envs))
-    action_dims = length(size(action_space(env)))
-    @assert size(action) == (size(action_space(env))..., length(env.envs)) "Action must be of shape $((size(action_space(env))..., length(env.envs))), got $(size(action))"
+
     @threads for i in 1:length(env.envs)
-        # @info "Stepping env $i"
-        local_action = selectdim(action, action_dims + 1, i)
-        # @show local_action i
-        rewards[i] = act!(env.envs[i], local_action)
-        # @info "Reward: $rewards[i]"
+        rewards[i] = act!(env.envs[i], actions[i])
+
+        # Capture termination status BEFORE reset
         terminateds[i] = terminated(env.envs[i])
         truncateds[i] = truncated(env.envs[i])
         infos[i] = get_info(env.envs[i])
+
         if truncateds[i]
             infos[i]["terminal_observation"] = observe(env.envs[i])
         end
+
         if terminateds[i] || truncateds[i]
             reset!(env.envs[i])
         end
     end
+
     return rewards, terminateds, truncateds, infos
 end
 
 number_of_envs(env::MultiThreadedParallelEnv) = length(env.envs)
+
+struct BroadcastedParallelEnv{E<:AbstractEnv} <: AbstractParallelEnv
+    envs::Vector{E}
+
+    function BroadcastedParallelEnv(envs::Vector{E}) where E<:AbstractEnv
+        @assert all(env -> typeof(env) == E, envs) "All environments must be of the same type"
+        @assert all(env -> isequal(observation_space(env), observation_space(envs[1])), envs) "All environments must have the same observation space"
+        @assert all(env -> isequal(action_space(env), action_space(envs[1])), envs) "All environments must have the same action space"
+        return new{E}(envs)
+    end
+end
+
+function reset!(env::BroadcastedParallelEnv{E}) where E<:AbstractEnv
+    reset!.(env.envs)
+    nothing
+end
+
+function observe(env::BroadcastedParallelEnv{E}) where E<:AbstractEnv
+    return observe.(env.envs)
+end
+
+function terminated(env::BroadcastedParallelEnv{E}) where E<:AbstractEnv
+    return terminated.(env.envs)
+end
+
+function truncated(env::BroadcastedParallelEnv{E}) where E<:AbstractEnv
+    return truncated.(env.envs)
+end
+
+function action_space(env::BroadcastedParallelEnv{E}) where E<:AbstractEnv
+    return action_space(env.envs[1])
+end
+
+function observation_space(env::BroadcastedParallelEnv{E}) where E<:AbstractEnv
+    return observation_space(env.envs[1])
+end
+
+function get_info(env::BroadcastedParallelEnv{E}) where E<:AbstractEnv
+    return get_info.(env.envs)
+end
+
+function act!(env::BroadcastedParallelEnv{E}, actions::AbstractVector) where E<:AbstractEnv
+    @assert length(actions) == length(env.envs) "Number of actions ($(length(actions))) must match number of environments ($(length(env.envs)))"
+
+    # Use broadcasting for the main operations
+    rewards = act!.(env.envs, actions)
+
+    # Capture termination status BEFORE reset
+    terminateds = terminated.(env.envs)
+    truncateds = truncated.(env.envs)
+
+    # Update infos using broadcasting
+    infos = get_info.(env.envs)
+
+    # Handle terminal observations for truncated environments
+    for i in 1:length(env.envs)
+        if truncateds[i]
+            infos[i]["terminal_observation"] = observe(env.envs[i])
+        end
+
+        if terminateds[i] || truncateds[i]
+            reset!(env.envs[i])
+        end
+    end
+
+    return rewards, terminateds, truncateds, infos
+end
+
+number_of_envs(env::BroadcastedParallelEnv) = length(env.envs)
+unwrap_all(env::BroadcastedParallelEnv) = env.envs
+
+struct MultiAgentParallelEnv{E<:AbstractParallelEnv} <: AbstractParallelEnv
+    envs::Vector{E}
+    env_counts::Vector{Int}  # Number of sub-envs in each parallel env
+    total_envs::Int          # Sum of all env_counts
+
+    function MultiAgentParallelEnv(envs::Vector{E}) where E<:AbstractParallelEnv
+        @assert !isempty(envs) "Must provide at least one parallel environment"
+
+        # All sub-environments must have the same observation and action spaces
+        @assert all(env -> isequal(observation_space(env), observation_space(envs[1])), envs) "All sub-environments must have the same observation space"
+        @assert all(env -> isequal(action_space(env), action_space(envs[1])), envs) "All sub-environments must have the same action space"
+
+        env_counts = [number_of_envs(env) for env in envs]
+        total_envs = sum(env_counts)
+
+        return new{E}(envs, env_counts, total_envs)
+    end
+end
+
+function reset!(env::MultiAgentParallelEnv{E}) where E<:AbstractParallelEnv
+    reset!.(env.envs)
+    nothing
+end
+
+function observe(env::MultiAgentParallelEnv{E}) where E<:AbstractParallelEnv
+    observations = observe.(env.envs)
+    stacked_observations = vcat(observations...)
+    return stacked_observations
+end
+
+function terminated(env::MultiAgentParallelEnv{E}) where E<:AbstractParallelEnv
+    # all_terminated = Bool[]
+    batch_terminated = terminated.(env.envs)
+    stacked_terminated = vcat(batch_terminated...)
+    return stacked_terminated
+end
+
+function truncated(env::MultiAgentParallelEnv{E}) where E<:AbstractParallelEnv
+    batch_truncated = truncated.(env.envs)
+    stacked_truncated = vcat(batch_truncated...)
+    return stacked_truncated
+end
+
+function get_info(env::MultiAgentParallelEnv{E}) where E<:AbstractParallelEnv
+    batch_infos = get_info.(env.envs)
+    stacked_infos = vcat(batch_infos...)
+    return stacked_infos
+end
+
+function act!(env::MultiAgentParallelEnv{E}, actions::AbstractVector) where E<:AbstractParallelEnv
+    @assert length(actions) == number_of_envs(env) "Number of actions ($(length(actions))) must match total number of environments ($(number_of_envs(env)))"
+
+    # Split actions into chunks for each sub-parallel-env
+    idxs = cumsum([1; env.env_counts])
+    chunk_indices = [idxs[i]:idxs[i+1]-1 for i in 1:length(env.envs)]
+    action_chunks = [actions[chunk_indices[i]] for i in 1:length(env.envs)]
+
+    # Execute actions on each sub-parallel-env and collect results
+    stacked_rewards = Vector{Float32}(undef, number_of_envs(env))
+    stacked_terminated = Vector{Bool}(undef, number_of_envs(env))
+    stacked_truncated = Vector{Bool}(undef, number_of_envs(env))
+    stacked_infos = Vector{Dict{String,Any}}(undef, number_of_envs(env))
+
+    @threads for i in eachindex(env.envs)
+        rewards, terminateds, truncateds, infos = act!(env.envs[i], action_chunks[i])
+        stacked_rewards[chunk_indices[i]] .= rewards
+        stacked_terminated[chunk_indices[i]] .= terminateds
+        stacked_truncated[chunk_indices[i]] .= truncateds
+        stacked_infos[chunk_indices[i]] .= infos
+    end
+
+    # batched_rewards = getindex.(all_returns, 1)
+    # batched_terminated = getindex.(all_returns, 2)
+    # batched_truncated = getindex.(all_returns, 3)
+    # batched_infos = getindex.(all_returns, 4)
+
+    # stacked_rewards = vcat(batched_rewards...)
+    # stacked_terminated = vcat(batched_terminated...)
+    # stacked_truncated = vcat(batched_truncated...)
+    # stacked_infos = vcat(batched_infos...)
+
+    return stacked_rewards, stacked_terminated, stacked_truncated, stacked_infos
+end
+
+function observation_space(env::MultiAgentParallelEnv{E}) where E<:AbstractParallelEnv
+    return observation_space(env.envs[1])
+end
+
+function action_space(env::MultiAgentParallelEnv{E}) where E<:AbstractParallelEnv
+    return action_space(env.envs[1])
+end
+
+number_of_envs(env::MultiAgentParallelEnv) = env.total_envs
+
+function Random.seed!(env::MultiAgentParallelEnv, seed::Integer)
+    for (i, sub_env) in enumerate(env.envs)
+        Random.seed!(sub_env, seed + i - 1)
+    end
+    return env
+end
+unwrap_all(env::MultiAgentParallelEnv) = env.envs
 
 struct ScalingWrapperEnv{E<:AbstractEnv,O<:AbstractSpace,A<:AbstractSpace} <: AbstractEnvWrapper{E}
     env::E
@@ -99,6 +270,12 @@ struct ScalingWrapperEnv{E<:AbstractEnv,O<:AbstractSpace,A<:AbstractSpace} <: Ab
     action_space::A
     orig_observation_space::O
     orig_action_space::A
+    # Pre-computed scaling factors for observations
+    obs_scale_factor::Array{eltype(O)}
+    obs_offset::Array{eltype(O)}
+    # Pre-computed scaling factors for actions  
+    act_scale_factor::Array{eltype(A)}
+    act_offset::Array{eltype(A)}
 end
 
 function ScalingWrapperEnv(env::E) where {E<:AbstractEnv}
@@ -120,7 +297,18 @@ function ScalingWrapperEnv(env::E, original_obs_space::Box, original_act_space::
     scaled_act_space = @set original_act_space.low = -1 * ones(T_act, size(original_act_space.low))
     scaled_act_space = @set scaled_act_space.high = 1 * ones(T_act, size(original_act_space.high))
 
-    return ScalingWrapperEnv{E,Box,Box}(env, scaled_obs_space, scaled_act_space, original_obs_space, original_act_space)
+    # Pre-compute scaling factors for observations: scale = 2 / (high - low), offset = low
+    obs_range = original_obs_space.high .- original_obs_space.low
+    obs_scale_factor = 2 ./ obs_range
+    obs_offset = original_obs_space.low
+
+    # Pre-compute scaling factors for actions
+    act_range = original_act_space.high .- original_act_space.low
+    act_scale_factor = 2 ./ act_range
+    act_offset = original_act_space.low
+
+    return ScalingWrapperEnv{E,Box,Box}(env, scaled_obs_space, scaled_act_space, original_obs_space, original_act_space,
+        obs_scale_factor, obs_offset, act_scale_factor, act_offset)
 end
 #TODO:document/fix unwrap
 DRiL.unwrap(env::ScalingWrapperEnv) = env.env
@@ -138,49 +326,56 @@ function reset!(env::ScalingWrapperEnv)
     nothing
 end
 
-function scale(x, space::Box)
-    return 2 .* (x .- space.low) ./ (space.high .- space.low) .- 1
-end
-function unscale(x, space::Box)
-    return (x .+ 1) ./ 2 .* (space.high .- space.low) .+ space.low
-end
-
-function scale_observation(env::ScalingWrapperEnv{E,Box,Box}, observation) where E
-    #scale observation from original space to [-1, 1]
-    orig_space = observation_space(env.env)
-    return scale(observation, orig_space)
+# Fast in-place scaling functions using pre-computed factors
+# PERFORMANCE NOTES:
+# - Use the in-place versions (scale_observation!, unscale_action!, etc.) when possible
+# - Pre-allocate output buffers and reuse them across calls
+# - Scaling factors are pre-computed once during construction to avoid repeated calculations
+# - All operations use @. macro for vectorized, allocation-free broadcasting
+@inline function scale!(input, scale_factor, offset)
+    @. input = (input - offset) * scale_factor - 1
+    return nothing
 end
 
-function unscale_observation(env::ScalingWrapperEnv{E,Box,Box}, observation) where E
-    #unscale observation from [-1, 1] to original space
-    orig_space = observation_space(env.env)
-    return unscale(observation, orig_space)
+@inline function unscale!(input, scale_factor, offset)
+    @. input = (input + 1) / scale_factor + offset
+    return nothing
 end
+
+# Allocating versions for compatibility
+function scale_observation!(observation, env::ScalingWrapperEnv{E,Box,Box}) where E
+    scale!(observation, env.obs_scale_factor, env.obs_offset)
+    return nothing
+end
+
+function unscale_observation!(observation, env::ScalingWrapperEnv{E,Box,Box}) where E
+    unscale!(observation, env.obs_scale_factor, env.obs_offset)
+    return nothing
+end
+
+
 
 function observe(env::ScalingWrapperEnv{E,Box,Box}) where E
     orig_obs = observe(env.env)
-    orig_space = observation_space(env.env)
-
-    # Scale observation from original space to [-1, 1]
-    scaled_obs = scale(orig_obs, orig_space)
-    return scaled_obs
+    # Scale observation from original space to [-1, 1] using pre-computed factors
+    scale_observation!(orig_obs, env)
+    return orig_obs
 end
 
-function scale_action(env::ScalingWrapperEnv{E,Box,Box}, action) where E
-    #scale action from original space to [-1, 1]
-    orig_space = action_space(env.env)
-    return scale(action, orig_space)
+
+function scale_action!(action, env::ScalingWrapperEnv{E,Box,Box}) where E
+    scale!(action, env.act_scale_factor, env.act_offset)
+    return nothing
 end
 
-function unscale_action(env::ScalingWrapperEnv{E,Box,Box}, action) where E
-    #unscale action from [-1, 1] to original space
-    orig_space = action_space(env.env)
-    return unscale(action, orig_space)
+function unscale_action!(action, env::ScalingWrapperEnv{E,Box,Box}) where E
+    unscale!(action, env.act_scale_factor, env.act_offset)
+    return nothing
 end
 
 function act!(env::ScalingWrapperEnv{E,Box,Box}, action) where E
-    orig_action = unscale_action(env, action)
-    return act!(env.env, orig_action)
+    unscale_action!(action, env)
+    return act!(env.env, action)
 end
 
 function terminated(env::ScalingWrapperEnv)
@@ -212,12 +407,25 @@ function Random.seed!(env::AbstractEnv, seed::Integer)
 end
 
 """
-    Random.seed!(env::AbstractParallellEnv, seed::Integer)
+    Random.seed!(env::AbstractParallelEnv, seed::Integer)
 
 Seed all sub-environments in a parallel environment with incremented seeds.
 Each sub-environment gets seeded with `seed + i - 1` where `i` is the environment index.
 """
-function Random.seed!(env::AbstractParallellEnv, seed::Integer)
+function Random.seed!(env::AbstractParallelEnv, seed::Integer)
+    for (i, sub_env) in enumerate(env.envs)
+        Random.seed!(sub_env, seed + i - 1)
+    end
+    return env
+end
+
+"""
+    Random.seed!(env::BroadcastedParallelEnv, seed::Integer)
+
+Seed all sub-environments in a broadcasted parallel environment with incremented seeds.
+Each sub-environment gets seeded with `seed + i - 1` where `i` is the environment index.
+"""
+function Random.seed!(env::BroadcastedParallelEnv, seed::Integer)
     for (i, sub_env) in enumerate(env.envs)
         Random.seed!(sub_env, seed + i - 1)
     end
@@ -283,7 +491,7 @@ function update_from_moments!(rms::RunningMeanStd{T}, batch_mean::AbstractArray{
     end
 end
 
-struct NormalizeWrapperEnv{E<:AbstractParallellEnv,T<:AbstractFloat} <: AbstractParallellEnvWrapper{E}
+struct NormalizeWrapperEnv{E<:AbstractParallelEnv,T<:AbstractFloat} <: AbstractParallelEnvWrapper{E}
     env::E
     obs_rms::RunningMeanStd{T}
     ret_rms::RunningMeanStd{T}
@@ -311,7 +519,7 @@ function NormalizeWrapperEnv{E,T}(
     clip_reward::T=T(10.0),
     gamma::T=T(0.99),
     epsilon::T=T(1e-8)
-) where {E<:AbstractParallellEnv,T<:AbstractFloat}
+) where {E<:AbstractParallelEnv,T<:AbstractFloat}
 
     obs_space = observation_space(env)
     n_envs = number_of_envs(env)
@@ -331,7 +539,7 @@ end
 DRiL.unwrap(env::NormalizeWrapperEnv) = env.env
 
 # Convenience constructor
-function NormalizeWrapperEnv(env::E; kwargs...) where {E<:AbstractParallellEnv}
+function NormalizeWrapperEnv(env::E; kwargs...) where {E<:AbstractParallelEnv}
     return NormalizeWrapperEnv{E,Float32}(env; kwargs...)
 end
 
@@ -343,104 +551,124 @@ number_of_envs(env::NormalizeWrapperEnv) = number_of_envs(env.env)
 function reset!(env::NormalizeWrapperEnv{E,T}) where {E,T}
     reset!(env.env)
     obs = observe(env.env)
-    env.old_obs .= obs
-    env.returns .= zero(T)
 
-    # Update observation statistics if in training mode
-    if env.training && env.norm_obs
-        update!(env.obs_rms, obs)
-    end
+    # Store original observations BEFORE normalization
+    #should we also store rewards or something?
+    env.old_obs .= batch(obs, observation_space(env))
+    env.returns .= zero(T)
 
     return nothing
 end
 
 function observe(env::NormalizeWrapperEnv{E,T}) where {E,T}
     obs = observe(env.env)
-    env.old_obs .= obs
-    return normalize_obs(env, obs)
-end
 
-function step!(env::NormalizeWrapperEnv{E,T}, action) where {E,T}
-    rewards, terminateds, truncateds, infos = step!(env.env, action)
-    obs = observe(env.env)
-
-    env.old_obs .= obs
-    env.old_rewards .= rewards
+    # Store original observations and rewards for access
+    env.old_obs .= batch(obs, observation_space(env))
 
     # Update observation statistics if in training mode
     if env.training && env.norm_obs
-        update!(env.obs_rms, obs)
+        obs_batch = batch(obs, observation_space(env))
+        update!(env.obs_rms, obs_batch)
     end
+    normalize_obs!.(obs, Ref(env))
+    return obs
+end
+
+function act!(env::NormalizeWrapperEnv{E,T}, actions::AbstractVector) where {E,T}
+    rewards, terminateds, truncateds, infos = act!(env.env, actions)
+    env.old_rewards .= rewards
 
     # Update reward statistics and normalize
     if env.training && env.norm_reward
         update_reward_stats!(env, rewards)
     end
+    normalize_rewards!(rewards, env)
 
-    normalized_obs = normalize_obs(env, obs)
-    normalized_rewards = normalize_reward(env, rewards)
+    # Reset returns for terminated environments
+    dones = terminateds .| truncateds
+    for i in findall(dones)
+        env.returns[i] = zero(T)
+    end
 
-    # Handle terminal observations in info
-    for (i, (term, trunc)) in enumerate(zip(terminateds, truncateds))
-        if term || trunc
-            if haskey(infos[i], "terminal_observation")
-                infos[i]["terminal_observation"] = normalize_obs(env, infos[i]["terminal_observation"])
-            end
-            env.returns[i] = zero(T)
+    # Normalize terminal observations in infos
+    for i in findall(truncateds)
+        if haskey(infos[i], "terminal_observation")
+            term_obs = infos[i]["terminal_observation"]
+            normalize_obs!(term_obs, env)
+            infos[i]["terminal_observation"] = term_obs
         end
     end
 
-    return normalized_rewards, terminateds, truncateds, infos
+    return rewards, terminateds, truncateds, infos
 end
 
-function update_reward_stats!(env::NormalizeWrapperEnv{E,T}, rewards::Vector{T}) where {E,T}
+function update_reward_stats!(env::NormalizeWrapperEnv, rewards::Vector{T}) where T<:AbstractFloat
     env.returns .= env.returns .* env.gamma .+ rewards
     # Update return statistics (single value, so we reshape for consistency)
     update!(env.ret_rms, reshape(env.returns, 1, length(env.returns)))
 end
 
-function normalize_obs(env::NormalizeWrapperEnv{E,T}, obs::AbstractArray{T}) where {E,T}
+function normalize_obs!(obs, env::NormalizeWrapperEnv)
     if !env.norm_obs
         return obs
     end
 
     # Normalize using running statistics
-    normalized = (obs .- env.obs_rms.mean) ./ sqrt.(env.obs_rms.var .+ env.epsilon)
-    return clamp.(normalized, -env.clip_obs, env.clip_obs)
+    @. obs = (obs .- env.obs_rms.mean) ./ sqrt.(env.obs_rms.var .+ env.epsilon)
+    clamp!(obs, -env.clip_obs, env.clip_obs)
+    return nothing
 end
 
-function normalize_reward(env::NormalizeWrapperEnv{E,T}, rewards::Vector{T}) where {E,T}
+function normalize_rewards!(rewards, env::NormalizeWrapperEnv)
     if !env.norm_reward
         return rewards
     end
 
     # Normalize rewards using return statistics
-    normalized = rewards ./ sqrt(env.ret_rms.var[1] + env.epsilon)
-    return clamp.(normalized, -env.clip_reward, env.clip_reward)
+    @. rewards = rewards ./ sqrt(env.ret_rms.var[1] + env.epsilon)
+    clamp!(rewards, -env.clip_reward, env.clip_reward)
+    return nothing
 end
 
-function unnormalize_obs(env::NormalizeWrapperEnv{E,T}, obs::AbstractArray{T}) where {E,T}
+function unnormalize_obs!(obs, env::NormalizeWrapperEnv)
     if !env.norm_obs
         return obs
     end
-    return obs .* sqrt.(env.obs_rms.var .+ env.epsilon) .+ env.obs_rms.mean
+    @. obs = obs .* sqrt.(env.obs_rms.var .+ env.epsilon) .+ env.obs_rms.mean
+    return nothing
 end
 
-function unnormalize_reward(env::NormalizeWrapperEnv{E,T}, rewards::Vector{T}) where {E,T}
+function unnormalize_rewards!(rewards, env::NormalizeWrapperEnv)
     if !env.norm_reward
         return rewards
     end
-    return rewards .* sqrt(env.ret_rms.var[1] + env.epsilon)
+    @. rewards = rewards .* sqrt(env.ret_rms.var[1] + env.epsilon)
+    return nothing
 end
 
 # Get original (unnormalized) observations and rewards
-get_original_obs(env::NormalizeWrapperEnv{E,T}) where {E,T} = copy(env.old_obs)
-get_original_rewards(env::NormalizeWrapperEnv{E,T}) where {E,T} = copy(env.old_rewards)
+get_original_obs(env::NormalizeWrapperEnv) = eachslice(env.old_obs, dims=ndims(env.old_obs))
+get_original_rewards(env::NormalizeWrapperEnv) = env.old_rewards
 
 # Forward other methods
-terminated(env::NormalizeWrapperEnv{E,T}) where {E,T} = terminated(env.env)
-truncated(env::NormalizeWrapperEnv{E,T}) where {E,T} = truncated(env.env)
-get_info(env::NormalizeWrapperEnv{E,T}) where {E,T} = get_info(env.env)
+terminated(env::NormalizeWrapperEnv) = terminated(env.env)
+truncated(env::NormalizeWrapperEnv) = truncated(env.env)
+function get_info(env::NormalizeWrapperEnv)
+    infos = get_info(env.env)
+    terminateds = terminated(env.env)
+    truncateds = truncated(env.env)
+    dones = terminateds .| truncateds
+
+    for i in findall(dones)
+        if haskey(infos[i], "terminal_observation")
+            term_obs = infos[i]["terminal_observation"]
+            normalize_obs!(term_obs, env)
+            infos[i]["terminal_observation"] = term_obs
+        end
+    end
+    return infos
+end
 
 function Random.seed!(env::NormalizeWrapperEnv, seed::Integer)
     Random.seed!(env.env, seed)
@@ -460,7 +688,7 @@ is_training(env::NormalizeWrapperEnv{E,T}) where {E,T} = env.training
 
 Save the normalization statistics (running mean/std) to a file using JLD2.
 """
-function save_normalization_stats(env::NormalizeWrapperEnv{E,T}, filepath::String) where {E,T}
+function save_normalization_stats(env::NormalizeWrapperEnv, filepath::String)
     save(filepath, Dict(
         "obs_mean" => env.obs_rms.mean,
         "obs_var" => env.obs_rms.var,
@@ -480,7 +708,7 @@ end
 
 Load normalization statistics from a file into the environment using JLD2.
 """
-function load_normalization_stats!(env::NormalizeWrapperEnv{E,T}, filepath::String) where {E,T}
+function load_normalization_stats!(env::NormalizeWrapperEnv{E,T}, filepath::String) where {E,T<:AbstractFloat}
     stats = load(filepath)
 
     # Load observation statistics
@@ -497,7 +725,7 @@ function load_normalization_stats!(env::NormalizeWrapperEnv{E,T}, filepath::Stri
 end
 
 #syncs the eval env stats to be same as training env
-function sync_normalization_stats!(eval_env::NormalizeWrapperEnv{E,T}, train_env::NormalizeWrapperEnv{E,T}) where {E,T}
+function sync_normalization_stats!(eval_env::NormalizeWrapperEnv, train_env::NormalizeWrapperEnv)
     eval_env.obs_rms.mean .= train_env.obs_rms.mean
     eval_env.obs_rms.var .= train_env.obs_rms.var
     eval_env.obs_rms.count = train_env.obs_rms.count
@@ -516,14 +744,14 @@ function EpisodeStats{T}(stats_window::Int) where T
     return EpisodeStats{T}(CircularBuffer{T}(stats_window), CircularBuffer{Int}(stats_window))
 end
 
-struct MonitorWrapperEnv{E<:AbstractParallellEnv,T} <: AbstractParallellEnvWrapper{E} where T<:AbstractFloat
+struct MonitorWrapperEnv{E<:AbstractParallelEnv,T} <: AbstractParallelEnvWrapper{E} where T<:AbstractFloat
     env::E
     current_episode_lengths::Vector{Int}
     current_episode_returns::Vector{T}
     episode_stats::EpisodeStats{T}
 end
 
-function MonitorWrapperEnv(env::E, stats_window::Int=100) where E<:AbstractParallellEnv
+function MonitorWrapperEnv(env::E, stats_window::Int=100) where E<:AbstractParallelEnv
     T = eltype(observation_space(env))
     return MonitorWrapperEnv{E,T}(
         env,
@@ -550,20 +778,21 @@ function reset!(monitor_env::MonitorWrapperEnv{E,T}) where {E,T}
     nothing
 end
 
-function step!(monitor_env::MonitorWrapperEnv{E,T}, action) where {E,T}
-    rewards, terminateds, truncateds, infos = step!(monitor_env.env, action)
+function act!(monitor_env::MonitorWrapperEnv{E,T}, actions::AbstractVector) where {E,T}
+    rewards, terminateds, truncateds, infos = act!(monitor_env.env, actions)
+
     monitor_env.current_episode_returns .+= rewards
     monitor_env.current_episode_lengths .+= 1
     dones = terminateds .| truncateds
-    for (i, done) in enumerate(dones)
-        if done
-            push!(monitor_env.episode_stats.episode_returns, monitor_env.current_episode_returns[i])
-            push!(monitor_env.episode_stats.episode_lengths, monitor_env.current_episode_lengths[i])
-            infos[i]["episode"] = Dict("r" => monitor_env.current_episode_returns[i], "l" => monitor_env.current_episode_lengths[i])
-            monitor_env.current_episode_returns[i] = 0
-            monitor_env.current_episode_lengths[i] = 0
-        end
+
+    for i in findall(dones)
+        push!(monitor_env.episode_stats.episode_returns, monitor_env.current_episode_returns[i])
+        push!(monitor_env.episode_stats.episode_lengths, monitor_env.current_episode_lengths[i])
+        infos[i]["episode"] = Dict("r" => monitor_env.current_episode_returns[i], "l" => monitor_env.current_episode_lengths[i])
+        monitor_env.current_episode_returns[i] = 0
+        monitor_env.current_episode_lengths[i] = 0
     end
+
     return rewards, terminateds, truncateds, infos
 end
 
@@ -576,9 +805,11 @@ function log_stats(env::MonitorWrapperEnv{E,T}, logger::TensorBoardLogger.TBLogg
     end
     nothing
 end
-function log_stats(env::AbstractParallellEnvWrapper, logger::AbstractLogger)
+
+function log_stats(env::AbstractParallelEnvWrapper, logger::AbstractLogger)
     log_stats(unwrap(env), logger)
 end
+
 
 # ==============================================================================
 # Show methods for nice environment display
@@ -598,6 +829,46 @@ function Base.show(io::IO, ::MIME"text/plain", env::MultiThreadedParallelEnv{E})
     println(io, "  - Action space: ", act_space)
     print(io, "  environments: ")
     show(io, env.envs[1])
+end
+
+# BroadcastedParallelEnv show methods
+function Base.show(io::IO, env::BroadcastedParallelEnv{E}) where E
+    print(io, "BroadcastedParallelEnv{", E, "}(", length(env.envs), " envs)")
+end
+
+function Base.show(io::IO, ::MIME"text/plain", env::BroadcastedParallelEnv{E}) where E
+    println(io, "BroadcastedParallelEnv{", E, "}")
+    println(io, "  - Number of environments: ", length(env.envs))
+    obs_space = observation_space(env)
+    act_space = action_space(env)
+    println(io, "  - Observation space: ", obs_space)
+    println(io, "  - Action space: ", act_space)
+    print(io, "  environments: ")
+    show(io, env.envs[1])
+end
+
+# MultiAgentParallelEnv show methods
+function Base.show(io::IO, env::MultiAgentParallelEnv{E}) where E
+    print(io, "MultiAgentParallelEnv{", E, "}(", length(env.envs), " parallel envs, ", env.total_envs, " total envs)")
+end
+
+function Base.show(io::IO, ::MIME"text/plain", env::MultiAgentParallelEnv{E}) where E
+    println(io, "MultiAgentParallelEnv{", E, "}")
+    println(io, "  - Number of parallel environments: ", length(env.envs))
+    println(io, "  - Total environments: ", env.total_envs)
+    println(io, "  - Environment counts per parallel env: ", env.env_counts)
+    obs_space = observation_space(env)
+    act_space = action_space(env)
+    println(io, "  - Observation space: ", obs_space)
+    println(io, "  - Action space: ", act_space)
+
+    for (i, sub_env) in enumerate(env.envs)
+        println(io, "  - Parallel env ", i, " (", env.env_counts[i], " envs): ")
+        show(io, sub_env)
+        if i < length(env.envs)
+            println(io)
+        end
+    end
 end
 
 # ScalingWrapperEnv show methods  
@@ -684,3 +955,4 @@ function Base.show(io::IO, ::MIME"text/plain", env::MonitorWrapperEnv{E,T}) wher
     print(io, "  wrapped environment: ")
     show(io, env.env)
 end
+

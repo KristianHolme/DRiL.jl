@@ -172,25 +172,23 @@ end
 
     # Reset and collect observations 
     reset!(norm_env)
-    all_obs = []
-    original_obs = []
 
     # Collect data for normalization
     for i in 1:6  # Multiple steps to build statistics
-        push!(original_obs, get_original_obs(norm_env))
-        push!(all_obs, observe(norm_env))
-        rewards, terms, truncs, infos = DRiL.step!(norm_env, rand(action_space(norm_env), 2))
+        actions = [rand(action_space(norm_env)) for _ in 1:2]
+        rewards = act!(norm_env, actions)
     end
 
     # Check that observations are being normalized
-    final_obs = observe(norm_env)
-    final_original = get_original_obs(norm_env)
+    final_obs = observe(norm_env)[1]
+    final_original = get_original_obs(norm_env)[1]
 
     # The normalized observations should be different from original
     @test final_obs != final_original
 
     # Test unnormalization 
-    unnorm_obs = unnormalize_obs(norm_env, final_obs)
+    unnorm_obs = copy(final_obs)
+    unnormalize_obs!(unnorm_obs, norm_env)
     @test all(abs.(unnorm_obs .- final_original) .< 1e-5)
 end
 
@@ -226,7 +224,8 @@ end
 
     # Collect rewards
     for i in 1:8
-        rewards, terms, truncs, infos = DRiL.step!(norm_env, rand(Float32, 1, 2))
+        actions = [rand(Float32) for _ in 1:2]
+        rewards, _ = act!(norm_env, actions)
         push!(all_rewards, rewards...)
         push!(original_rewards, get_original_rewards(norm_env)...)
     end
@@ -238,9 +237,11 @@ end
     @test norm_reward_std < orig_reward_std
 
     # Test unnormalization
-    last_rewards, _, _, _ = DRiL.step!(norm_env, rand(Float32, 1, 2))
+    actions = [rand(Float32) for _ in 1:2]
+    last_rewards, _ = act!(norm_env, actions)
     last_original = get_original_rewards(norm_env)
-    unnorm_rewards = unnormalize_reward(norm_env, last_rewards)
+    unnorm_rewards = copy(last_rewards)
+    unnormalize_rewards!(unnorm_rewards, norm_env)
 
     @test all(abs.(unnorm_rewards .- last_original) .< 1e-4)
 end
@@ -265,10 +266,11 @@ end
     reset!(norm_env)
     # Build some statistics first
     for i in 1:5
-        DRiL.step!(norm_env, rand(Float32, 1, 1))
+        actions = [rand(Float32)]
+        act!(norm_env, actions)
     end
 
-    obs = observe(norm_env)
+    obs = observe(norm_env)[1]
 
     # All normalized observations should be within clipping bounds
     @test all(abs.(obs) .<= norm_env.clip_obs + 1e-6)
@@ -302,13 +304,17 @@ end
 
     # In training mode, statistics should update
     initial_count = norm_env.obs_rms.count
-    DRiL.step!(norm_env, rand(Float32, 1, 2))
+    actions = [rand(Float32) for _ in 1:2]
+    act!(norm_env, actions)
+    obs = observe(norm_env) # update stats
     training_count = norm_env.obs_rms.count
     @test training_count > initial_count
 
     # Switch to evaluation mode
     norm_env = set_training(norm_env, false)
-    DRiL.step!(norm_env, rand(Float32, 1, 2))
+    actions = [rand(Float32) for _ in 1:2]
+    act!(norm_env, actions)
+    obs = observe(norm_env) # should now not update stats
     eval_count = norm_env.obs_rms.count
 
     # Statistics should not update in evaluation mode
@@ -332,76 +338,28 @@ end
         env.steps += 1
         return Float32(env.steps)
     end
-    function DRiL.get_info(env::TerminalEnv)
-        if terminated(env)
-            return Dict("terminal_observation" => Float32[env.steps+10.0])  # Distinct terminal obs
-        else
-            return Dict()
-        end
-    end
+    DRiL.get_info(::TerminalEnv) = Dict{String,Any}()
     function DRiL.reset!(env::TerminalEnv)
         env.steps = 0
         nothing
     end
 
-    # We need to implement step! for single environments since our wrapper expects parallel envs
-    # Let's create a simple parallel version
-    mutable struct TerminalParallelEnv <: DRiL.AbstractParallellEnv
-        envs::Vector{TerminalEnv}
-    end
 
-    DRiL.observation_space(env::TerminalParallelEnv) = observation_space(env.envs[1])
-    DRiL.action_space(env::TerminalParallelEnv) = action_space(env.envs[1])
-    DRiL.number_of_envs(env::TerminalParallelEnv) = length(env.envs)
 
-    function DRiL.observe(env::TerminalParallelEnv)
-        obs = [observe(e) for e in env.envs]
-        return hcat(obs...)
-    end
-
-    function DRiL.reset!(env::TerminalParallelEnv)
-        for e in env.envs
-            reset!(e)
-        end
-        return observe(env)
-    end
-
-    function DRiL.step!(env::TerminalParallelEnv, actions)
-        rewards = Float32[]
-        terminateds = Bool[]
-        truncateds = Bool[]
-        infos = Dict[]
-
-        for (i, (e, action)) in enumerate(zip(env.envs, eachcol(actions)))
-            reward = act!(e, action)
-            term = terminated(e)
-            trunc = truncated(e)
-            info = get_info(e)
-
-            push!(rewards, reward)
-            push!(terminateds, term)
-            push!(truncateds, trunc)
-            push!(infos, info)
-
-            # Auto-reset if terminated or truncated
-            if term || trunc
-                reset!(e)
-            end
-        end
-
-        return rewards, terminateds, truncateds, infos
-    end
-
-    base_env = TerminalParallelEnv([TerminalEnv(2) for _ in 1:2])
+    base_env = BroadcastedParallelEnv([TerminalEnv(2) for _ in 1:2])
     norm_env = NormalizeWrapperEnv(base_env; training=true)
 
     reset!(norm_env)
 
     # Step until termination
-    rewards, terms, truncs, infos = DRiL.step!(norm_env, rand(Float32, 1, 2))
+    actions = [[rand(Float32)] for _ in 1:2]
+    rewards, terms, truncs, infos = act!(norm_env, actions)
+    obs = observe(norm_env)
     @test !any(terms)
 
-    rewards, terms, truncs, infos = DRiL.step!(norm_env, rand(Float32, 1, 2))
+    actions = [[rand(Float32)] for _ in 1:2]
+    rewards, terms, truncs, infos = act!(norm_env, actions)
+    obs = observe(norm_env)
     @test all(terms)
 
     # Check that terminal observations are normalized in info
@@ -411,8 +369,8 @@ end
             @test terminal_obs isa Vector{Float32}
             @test length(terminal_obs) == 1
             # Terminal observation should be normalized (different from raw value)
-            # The raw terminal observation would be [12.0] or [13.0], normalized should be different
-            @test abs(terminal_obs[1]) ≤ 10.0f0  # Should be normalized
+            # The raw terminal observation would be [2f0], normalized should be different
+            @test abs(terminal_obs[1]) ≤ 2.0f0  # Should be normalized
         end
     end
 end
@@ -421,17 +379,19 @@ end
     using Random
 
     # Simple test environment
-    struct SimpleTestEnv <: AbstractEnv end
+    struct SimpleTestEnv <: AbstractEnv
+        rng::Random.AbstractRNG
+    end
     DRiL.observation_space(::SimpleTestEnv) = Box(Float32[0.0, 0.0], Float32[1.0, 1.0])
     DRiL.action_space(::SimpleTestEnv) = Box(Float32[-1.0], Float32[1.0])
-    DRiL.observe(::SimpleTestEnv) = rand(Float32, 2)
+    DRiL.observe(env::SimpleTestEnv) = rand(env.rng, Float32, 2)
     DRiL.terminated(::SimpleTestEnv) = false
     DRiL.truncated(::SimpleTestEnv) = false
-    DRiL.act!(::SimpleTestEnv, action) = rand(Float32)
+    DRiL.act!(env::SimpleTestEnv, action) = rand(env.rng, Float32)
     DRiL.get_info(::SimpleTestEnv) = Dict()
     DRiL.reset!(::SimpleTestEnv) = nothing
 
-    base_env = MultiThreadedParallelEnv([SimpleTestEnv() for _ in 1:3])
+    base_env = MultiThreadedParallelEnv([SimpleTestEnv(Random.MersenneTwister(i)) for i in 1:3])
     norm_env = NormalizeWrapperEnv(base_env)
 
     # Test that all required interface methods exist and work
@@ -440,7 +400,7 @@ end
     @test hasmethod(number_of_envs, (typeof(norm_env),))
     @test hasmethod(reset!, (typeof(norm_env),))
     @test hasmethod(observe, (typeof(norm_env),))
-    @test hasmethod(step!, (typeof(norm_env), AbstractArray))
+    @test hasmethod(act!, (typeof(norm_env), Vector))
     @test hasmethod(terminated, (typeof(norm_env),))
     @test hasmethod(truncated, (typeof(norm_env),))
     @test hasmethod(get_info, (typeof(norm_env),))
@@ -457,31 +417,37 @@ end
     # Test reset and observe
     reset!(norm_env)
     initial_obs = observe(norm_env)
-    @test size(initial_obs) == (2, 3)
+    @test length(initial_obs) == 3
+    @test all(obs -> length(obs) == 2, initial_obs)
 
     current_obs = observe(norm_env)
-    @test size(current_obs) == (2, 3)
+    @test length(current_obs) == 3
+    @test all(obs -> length(obs) == 2, current_obs)
 
-    # Test step
-    actions = rand(Float32, 1, 3)
-    rewards, terms, truncs, infos = DRiL.step!(norm_env, actions)
+    # Test act!
+    actions = rand(action_space(norm_env), 3)
+    rewards, terms, truncs, infos = act!(norm_env, actions)
 
     @test length(rewards) == 3
+    @test all(r -> r isa Float32, rewards)
+
+    # Test other methods
     @test length(terms) == 3
     @test length(truncs) == 3
     @test length(infos) == 3
-    @test all(r -> r isa Float32, rewards)
     @test all(t -> t isa Bool, terms)
     @test all(t -> t isa Bool, truncs)
     @test all(i -> i isa Dict, infos)
 
     # Test seeding
+    norm_env = set_training(norm_env, false)
     Random.seed!(norm_env, 42)
     reset!(norm_env)
     obs1 = observe(norm_env)
     Random.seed!(norm_env, 42)
     reset!(norm_env)
     obs2 = observe(norm_env)
+    @test all([isapprox(o1, o2) for (o1, o2) in zip(obs1, obs2)])
     # Note: Due to running statistics, perfect reproducibility is not expected
     # but the underlying environment should be seeded
 end

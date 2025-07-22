@@ -64,6 +64,7 @@ function _check_required_methods(env::AbstractEnv; verbose::Bool=true)
         (truncated, "truncated(env)"),
         (action_space, "action_space(env)"),
         (observation_space, "observation_space(env)"),
+        (act!, "act!(env, action)"),
         (get_info, "get_info(env)")
     ]
 
@@ -73,21 +74,6 @@ function _check_required_methods(env::AbstractEnv; verbose::Bool=true)
             throw(AssertionError("Environment must implement method: $method_name"))
         end
         verbose && @info "  ✓ $method_name implemented"
-    end
-
-    # Check environment-type specific methods
-    if env isa AbstractParallellEnv
-        # Parallel environments need step! but not act!
-        if !hasmethod(step!, (typeof(env), Any)) && !hasmethod(step!, (typeof(env), Vector))
-            throw(AssertionError("Parallel environment must implement method: step!(env, actions)"))
-        end
-        verbose && @info "  ✓ step!(env, actions) implemented (parallel environment)"
-    else
-        # Single environments need act! but not step!
-        if !hasmethod(act!, (typeof(env), Any))
-            throw(AssertionError("Single environment must implement method: act!(env, action)"))
-        end
-        verbose && @info "  ✓ act!(env, action) implemented (single environment)"
     end
 end
 
@@ -103,7 +89,7 @@ function _check_spaces(obs_space::AbstractSpace, act_space::AbstractSpace; verbo
 end
 
 # Multiple dispatch methods for different space types
-function _check_space_properties(space::UniformBox, space_name::String; verbose::Bool=true)
+function _check_space_properties(space::Box, space_name::String; verbose::Bool=true)
     @assert all(space.low .<= space.high) "$space_name: low bounds must be <= high bounds"
     @assert length(space.shape) > 0 "$space_name: shape must be non-empty"
     verbose && @info "  ✓ $(space_name): $(space.shape) $(eltype(space)) [$(space.low), $(space.high)]"
@@ -183,25 +169,29 @@ function _check_step_functionality(env::AbstractEnv, obs_space, act_space; warn:
     # Generate a valid action
     action = rand(act_space)
 
-    if env isa AbstractParallellEnv
-        # Test parallel environment step!
+    if env isa AbstractParallelEnv
+        # Test parallel environment act!
         try
-            next_obs, rewards, terminateds, truncateds, infos = step!(env, [action])
+            rewards = act!(env, action)
+            terminateds = terminated(env)
+            truncateds = truncated(env)
+            infos = get_info(env)
+            next_obs = observe(env)
 
             @assert length(rewards) == number_of_envs(env) "rewards length must match n_envs"
             @assert length(terminateds) == number_of_envs(env) "terminateds length must match n_envs"
             @assert length(truncateds) == number_of_envs(env) "truncateds length must match n_envs"
             @assert length(infos) == number_of_envs(env) "infos length must match n_envs"
 
-            _check_observation_shape(next_obs, obs_space, "step!(parallel_env)")
+            _check_observation_shape(next_obs, obs_space, "act!(parallel_env)")
 
-            verbose && @info "  ✓ Parallel environment step! works correctly"
+            verbose && @info "  ✓ Parallel environment act! works correctly"
         catch e
-            @error "Parallel environment step! failed: $e"
+            @error "Parallel environment act! failed: $e"
             rethrow(e)
         end
     else
-        # Test single environment act! only (not step!)
+        # Test single environment act!
         try
             # Test act!
             obs_before = observe(env)
@@ -241,9 +231,11 @@ function _check_space_constraints(env::AbstractEnv, obs_space, act_space; warn::
             # Take action and check if episode continues
             action = rand(act_space)
 
-            if env isa AbstractParallellEnv
+            if env isa AbstractParallelEnv
                 # For parallel envs, auto-reset happens
-                next_obs, rewards, terminateds, truncateds, infos = step!(env, [action])
+                rewards = act!(env, [action])
+                terminateds = terminated(env)
+                truncateds = truncated(env)
                 if terminateds[1] || truncateds[1]
                     break  # Episode ended
                 end
@@ -264,15 +256,8 @@ function _check_space_constraints(env::AbstractEnv, obs_space, act_space; warn::
     end
 end
 
-"""
-Helper function to check observation shape and type using multiple dispatch.
-"""
-function _check_observation_shape(obs, obs_space, context::String)
-    _check_observation_shape_dispatch(obs, obs_space, context)
-end
-
-# Multiple dispatch method for UniformBox
-function _check_observation_shape_dispatch(obs, obs_space::UniformBox, context::String)
+# Multiple dispatch method for Box
+function _check_observation_shape(obs, obs_space::Box, context::String)
     expected_shape = obs_space.shape
     expected_type = eltype(obs_space)
 
@@ -287,14 +272,17 @@ function _check_observation_shape_dispatch(obs, obs_space::UniformBox, context::
         elseif length(obs_shape) == length(expected_shape) + 1
             # Batched observations
             @assert obs_shape[1:end-1] == expected_shape "$context: observation batch shape mismatch"
+        elseif obs isa Vector && length(obs) > 0 && size(obs[1]) == expected_shape
+            # vector of observations
+            @assert all(size(o) == expected_shape for o in obs) "$context: observation batch shape mismatch"
         else
-            throw(AssertionError("$context: observation has unexpected number of dimensions"))
+            throw(AssertionError("$context: observation has unexpected size/dimensions"))
         end
 
         # Check type
         @assert obs_type == expected_type "$context: observation type $obs_type != expected $expected_type"
     else
-        throw(AssertionError("$context: observation must be AbstractArray for UniformBox space"))
+        throw(AssertionError("$context: observation must be AbstractArray for Box space"))
     end
 end
 
