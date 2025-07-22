@@ -89,7 +89,7 @@ function _check_spaces(obs_space::AbstractSpace, act_space::AbstractSpace; verbo
 end
 
 # Multiple dispatch methods for different space types
-function _check_space_properties(space::UniformBox, space_name::String; verbose::Bool=true)
+function _check_space_properties(space::Box, space_name::String; verbose::Bool=true)
     @assert all(space.low .<= space.high) "$space_name: low bounds must be <= high bounds"
     @assert length(space.shape) > 0 "$space_name: shape must be non-empty"
     verbose && @info "  ✓ $(space_name): $(space.shape) $(eltype(space)) [$(space.low), $(space.high)]"
@@ -256,15 +256,8 @@ function _check_space_constraints(env::AbstractEnv, obs_space, act_space; warn::
     end
 end
 
-"""
-Helper function to check observation shape and type using multiple dispatch.
-"""
-function _check_observation_shape(obs, obs_space, context::String)
-    _check_observation_shape_dispatch(obs, obs_space, context)
-end
-
-# Multiple dispatch method for UniformBox
-function _check_observation_shape_dispatch(obs, obs_space::UniformBox, context::String)
+# Multiple dispatch method for Box
+function _check_observation_shape(obs, obs_space::Box, context::String)
     expected_shape = obs_space.shape
     expected_type = eltype(obs_space)
 
@@ -279,14 +272,17 @@ function _check_observation_shape_dispatch(obs, obs_space::UniformBox, context::
         elseif length(obs_shape) == length(expected_shape) + 1
             # Batched observations
             @assert obs_shape[1:end-1] == expected_shape "$context: observation batch shape mismatch"
+        elseif obs isa Vector && length(obs) > 0 && size(obs[1]) == expected_shape
+            # vector of observations
+            @assert all(size(o) == expected_shape for o in obs) "$context: observation batch shape mismatch"
         else
-            throw(AssertionError("$context: observation has unexpected number of dimensions"))
+            throw(AssertionError("$context: observation has unexpected size/dimensions"))
         end
 
         # Check type
         @assert obs_type == expected_type "$context: observation type $obs_type != expected $expected_type"
     else
-        throw(AssertionError("$context: observation must be AbstractArray for UniformBox space"))
+        throw(AssertionError("$context: observation must be AbstractArray for Box space"))
     end
 end
 

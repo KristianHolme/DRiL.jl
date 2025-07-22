@@ -27,7 +27,7 @@ export reset!, act!, observe, terminated, truncated, action_space, observation_s
 
 
 include("spaces.jl")
-export AbstractSpace, AbstractBox, UniformBox, Box, Discrete
+export AbstractSpace, Box, Discrete
 
 include("policies.jl")
 export AbstractActorCriticPolicy, ActorCriticPolicy, ContinuousActorCriticPolicy, DiscreteActorCriticPolicy, AbstractPolicy, AbstractWeightInitializer, OrthogonalInitializer
