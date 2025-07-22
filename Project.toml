@@ -1,7 +1,7 @@
 name = "DRiL"
 uuid = "49b37b9d-a8e6-4364-9144-4677bcb8a7f0"
 authors = ["Kristian Holme <holme.kristian@gmail.com>"]
-version = "0.0.1-DEV"
+version = "0.0.1"
 
 [deps]
 Accessors = "7d9f7c33-5ae7-4f3b-8dc6-eff91059b697"
