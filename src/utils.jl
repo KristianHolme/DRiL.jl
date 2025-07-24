@@ -1,8 +1,8 @@
 function collect_trajectory(agent::ActorCriticAgent,
-        env::AbstractEnv;
-        max_steps::Union{Int,Nothing}=nothing,
-        norm_env::Union{NormalizeWrapperEnv,Nothing}=nothing,
-        deterministic::Bool=true)
+    env::AbstractEnv;
+    max_steps::Union{Int,Nothing}=nothing,
+    norm_env::Union{NormalizeWrapperEnv,Nothing}=nothing,
+    deterministic::Bool=true)
     reset!(env)
     original_training = is_training(env)
     env = set_training(env, false)
@@ -47,4 +47,20 @@ end
 function polyak_update!(target::AbstractArray{T}, source::AbstractArray{T}, tau::T) where T<:AbstractFloat
     target .= tau .* target .+ (1 - tau) .* source
     nothing
+end
+
+function polyak_update!(target::ComponentArray, source::ComponentArray, tau::AbstractFloat)
+    for key in keys(target)
+        target[key] .= tau .* target[key] .+ (1 - tau) .* source[key]
+    end
+    nothing
+end
+
+
+function Base.merge(a1::ComponentArray, a2::ComponentArray)
+    a3 = copy(a1)
+    for key in keys(a2)
+        a3[key] = a2[key]
+    end
+    return a3
 end

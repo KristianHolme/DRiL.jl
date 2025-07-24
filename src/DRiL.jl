@@ -32,9 +32,9 @@ include("spaces.jl")
 export AbstractSpace, Box, Discrete
 
 include("policies.jl")
-export AbstractActorCriticPolicy, ActorCriticPolicy, ContinuousActorCriticPolicy, 
-DiscreteActorCriticPolicy, AbstractPolicy, AbstractWeightInitializer, 
-OrthogonalInitializer, QCritic, VCritic
+export AbstractActorCriticPolicy, ActorCriticPolicy, ContinuousActorCriticPolicy,
+    DiscreteActorCriticPolicy, AbstractPolicy, AbstractWeightInitializer,
+    OrthogonalInitializer, QCritic, VCritic, action_log_prob
 
 include("agents.jl")
 export ActorCriticAgent, predict_actions, predict_values, steps_taken
