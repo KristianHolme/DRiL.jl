@@ -195,3 +195,64 @@ function load_policy_params_and_state(agent::ActorCriticAgent, path::AbstractStr
     @reset agent.train_state = new_train_state
     return agent
 end
+
+
+struct SACAgent <: AbstractAgent
+    policy::ContinuousActorCriticPolicy
+    train_state::Lux.Training.TrainState
+    Q_target_parameters::ComponentArray
+    Q_target_states::NamedTuple
+    entropy_coefficient::ComponentArray
+    optimizer_type::Type{<:Optimisers.AbstractRule}
+    stats_window::Int
+    logger::Union{Nothing,TensorBoardLogger.TBLogger}
+    verbose::Int
+    rng::AbstractRNG
+    stats::AgentStats
+end
+
+function SACAgent(policy::ContinuousActorCriticPolicy, entropy_coefficient::AbstractEntropyCoefficient;
+    optimizer_type::Type{<:Optimisers.AbstractRule}=Optimisers.Adam,
+    log_dir::Union{Nothing,String}=nothing,
+    stats_window::Int=100,
+    rng::AbstractRNG = Random.default_rng()
+    )
+    ps, st = Lux.setup(rng, policy)
+    if !isnothing(log_dir)
+        logger = TBLogger(log_dir, tb_increment)
+    else
+        logger = nothing
+    end
+    optimizer = make_optimizer(optimizer_type, learning_rate)
+    train_state = Lux.Training.TrainState(policy, ps, st, optimizer)
+    Q_target_parameters = copy_critic_parameters(policy, ps)
+    Q_target_states = copy_critic_states(policy, st)
+    entropy_coefficient = init_entropy_coefficient(entropy_coefficient, rng)
+    return SACAgent(policy, train_state, Q_target_parameters, Q_target_states, 
+        entropy_coefficient, optimizer_type, stats_window, logger, verbose, rng, 
+        AgentStats(0, 0)
+    )
+end
+
+function copy_critic_parameters(policy::ContinuousActorCriticPolicy{<:Any,<:Any,N,QCritic}, ps::ComponentArray) where N<:AbstractNoise
+    if policy.shared_features
+        ComponentArray((feature_extractor=copy(ps.feature_extractor), critic_head=copy(ps.critic_head)))
+    else
+        ComponentArray((critic_feature_extractor=copy(ps.critic_feature_extractor), critic_head=copy(ps.critic_head)))
+    end
+end
+
+function copy_critic_states(policy::ContinuousActorCriticPolicy{<:Any,<:Any,N,QCritic}, st::NamedTuple) where N<:AbstractNoise
+    if policy.shared_features
+        (feature_extractor=copy(st.feature_extractor), critic_head=copy(st.critic_head))
+    else
+        (critic_feature_extractor=copy(st.critic_feature_extractor), critic_head=copy(st.critic_head))
+    end
+end
+
+function init_entropy_coefficient(entropy_coefficient::FixedEntropyCoefficient)
+    ComponentArray(entropy_coefficient=entropy_coefficient.coef)
+end
+function init_entropy_coefficient(entropy_coefficient::AutoEntropyCoefficient)
+    ComponentArray(entropy_coefficient=entropy_coefficient.initial_value)
+end
