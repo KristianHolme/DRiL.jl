@@ -202,7 +202,7 @@ struct SACAgent <: AbstractAgent
     train_state::Lux.Training.TrainState
     Q_target_parameters::ComponentArray
     Q_target_states::NamedTuple
-    entropy_coefficient::ComponentArray
+    log_ent_coef::ComponentArray
     optimizer_type::Type{<:Optimisers.AbstractRule}
     stats_window::Int
     logger::Union{Nothing,TensorBoardLogger.TBLogger}
@@ -215,8 +215,8 @@ function SACAgent(policy::ContinuousActorCriticPolicy, entropy_coefficient::Abst
     optimizer_type::Type{<:Optimisers.AbstractRule}=Optimisers.Adam,
     log_dir::Union{Nothing,String}=nothing,
     stats_window::Int=100,
-    rng::AbstractRNG = Random.default_rng()
-    )
+    rng::AbstractRNG=Random.default_rng()
+)
     ps, st = Lux.setup(rng, policy)
     if !isnothing(log_dir)
         logger = TBLogger(log_dir, tb_increment)
@@ -227,9 +227,9 @@ function SACAgent(policy::ContinuousActorCriticPolicy, entropy_coefficient::Abst
     train_state = Lux.Training.TrainState(policy, ps, st, optimizer)
     Q_target_parameters = copy_critic_parameters(policy, ps)
     Q_target_states = copy_critic_states(policy, st)
-    entropy_coefficient = init_entropy_coefficient(entropy_coefficient, rng)
-    return SACAgent(policy, train_state, Q_target_parameters, Q_target_states, 
-        entropy_coefficient, optimizer_type, stats_window, logger, verbose, rng, 
+    log_ent_coef = init_entropy_coefficient(entropy_coefficient)
+    return SACAgent(policy, train_state, Q_target_parameters, Q_target_states,
+        log_ent_coef, optimizer_type, stats_window, logger, verbose, rng,
         AgentStats(0, 0)
     )
 end
@@ -251,8 +251,8 @@ function copy_critic_states(policy::ContinuousActorCriticPolicy{<:Any,<:Any,N,QC
 end
 
 function init_entropy_coefficient(entropy_coefficient::FixedEntropyCoefficient)
-    ComponentArray(entropy_coefficient=entropy_coefficient.coef)
+    ComponentArray(entropy_coefficient=[entropy_coefficient.coef |> log])
 end
 function init_entropy_coefficient(entropy_coefficient::AutoEntropyCoefficient)
-    ComponentArray(entropy_coefficient=entropy_coefficient.initial_value)
+    ComponentArray(entropy_coefficient=[entropy_coefficient.initial_value |> log])
 end
