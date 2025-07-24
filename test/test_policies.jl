@@ -283,7 +283,7 @@ end
     @test neg_processed[1] ∈ neg_action_space
 end
 
-@testitem "Q-value actor critic policy" tags = [:policies, :qvalue, :actor_critic] setup = [SharedTestSetup] begin
+@testitem "Basic Q-value actor critic policy" tags = [:policies, :qvalue, :actor_critic] setup = [SharedTestSetup] begin
     #test that the different q networks are different and produce different values
     using Random
     using Lux
@@ -299,5 +299,9 @@ end
     mock_actions = rand(1, 10)
     mock_values, st = predict_values(policy, mock_obs, mock_actions, ps, st)
     @test size(mock_values) == (2, 10)
-    @test all(mock_values[1,:] .≈ mock_values[2, :]) #test that the two networks are different
+    @test all(mock_values[1,:] .!= mock_values[2, :]) #test that the two networks are different
+
+    actions, log_probs, st = action_log_prob(policy, mock_obs, ps, st)
+    @test size(actions) == (1, 10)
+    
 end
