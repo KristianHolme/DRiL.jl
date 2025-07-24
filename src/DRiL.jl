@@ -23,6 +23,8 @@ include("DRiLDistributions/DRiLDistributions.jl")
 
 include("types_and_interfaces.jl")
 export AbstractEnv, AbstractParallelEnv, AbstractAgent, AbstractBuffer, AbstractAlgorithm
+export AbstractEntropyTarget, FixedEntropyTarget, AutoEntropyTarget
+export AbstractEntropyCoefficient, FixedEntropyCoefficient, AutoEntropyCoefficient
 export reset!, act!, observe, terminated, truncated, action_space, observation_space, get_info, number_of_envs
 
 
@@ -30,7 +32,9 @@ include("spaces.jl")
 export AbstractSpace, Box, Discrete
 
 include("policies.jl")
-export AbstractActorCriticPolicy, ActorCriticPolicy, ContinuousActorCriticPolicy, DiscreteActorCriticPolicy, AbstractPolicy, AbstractWeightInitializer, OrthogonalInitializer
+export AbstractActorCriticPolicy, ActorCriticPolicy, ContinuousActorCriticPolicy, 
+DiscreteActorCriticPolicy, AbstractPolicy, AbstractWeightInitializer, 
+OrthogonalInitializer, QCritic, VCritic
 
 include("agents.jl")
 export ActorCriticAgent, predict_actions, predict_values, steps_taken
@@ -48,8 +52,12 @@ export get_original_obs, get_original_rewards, normalize_obs!, normalize_rewards
 export MonitorWrapperEnv, EpisodeStats, is_wrapper, unwrap, unwrap_all
 export MultiAgentParallelEnv
 
-include("algorithms.jl")
+include("algorithms/ppo.jl")
 export learn!, PPO
+
+include("algorithms/sac.jl")
+export SAC
+
 
 include("utils.jl")
 export collect_trajectory
