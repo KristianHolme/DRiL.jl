@@ -161,6 +161,7 @@ function load_policy_params_and_state(agent::AbstractAgent, path::AbstractString
 end
 
 # Add a helper function for optimizer crtion
+#TODO: change second argument to be an algorithm, make single method for PPO that changes adam epsilon, else do optimizer(learning_Rate)
 function make_optimizer(optimizer_type::Type{<:Optimisers.AbstractRule}, learning_rate::Float32)
     if optimizer_type == Optimisers.Adam
         return optimizer_type(eta=learning_rate, epsilon=1f-5)
@@ -211,11 +212,12 @@ struct SACAgent <: AbstractAgent
     stats::AgentStats
 end
 
-function SACAgent(policy::ContinuousActorCriticPolicy, entropy_coefficient::AbstractEntropyCoefficient;
+function SACAgent(policy::ContinuousActorCriticPolicy, alg::SAC;
     optimizer_type::Type{<:Optimisers.AbstractRule}=Optimisers.Adam,
     log_dir::Union{Nothing,String}=nothing,
     stats_window::Int=100,
-    rng::AbstractRNG=Random.default_rng()
+    rng::AbstractRNG=Random.default_rng(),
+    verbose::Int=1
 )
     ps, st = Lux.setup(rng, policy)
     if !isnothing(log_dir)
@@ -223,11 +225,11 @@ function SACAgent(policy::ContinuousActorCriticPolicy, entropy_coefficient::Abst
     else
         logger = nothing
     end
-    optimizer = make_optimizer(optimizer_type, learning_rate)
+    optimizer = make_optimizer(optimizer_type, alg.learning_rate)
     train_state = Lux.Training.TrainState(policy, ps, st, optimizer)
     Q_target_parameters = copy_critic_parameters(policy, ps)
     Q_target_states = copy_critic_states(policy, st)
-    log_ent_coef = init_entropy_coefficient(entropy_coefficient)
+    log_ent_coef = init_entropy_coefficient(alg.ent_coef)
     return SACAgent(policy, train_state, Q_target_parameters, Q_target_states,
         log_ent_coef, optimizer_type, stats_window, logger, verbose, rng,
         AgentStats(0, 0)
@@ -244,9 +246,9 @@ end
 
 function copy_critic_states(policy::ContinuousActorCriticPolicy{<:Any,<:Any,N,QCritic}, st::NamedTuple) where N<:AbstractNoise
     if policy.shared_features
-        (feature_extractor=copy(st.feature_extractor), critic_head=copy(st.critic_head))
+        (feature_extractor=deepcopy(st.feature_extractor), critic_head=deepcopy(st.critic_head))
     else
-        (critic_feature_extractor=copy(st.critic_feature_extractor), critic_head=copy(st.critic_head))
+        (critic_feature_extractor=deepcopy(st.critic_feature_extractor), critic_head=deepcopy(st.critic_head))
     end
 end
 
