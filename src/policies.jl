@@ -351,8 +351,8 @@ function Lux.parameterlength(policy::ContinuousActorCriticPolicy)
     if policy.shared_features
         feats_len = Lux.parameterlength(policy.feature_extractor)
     else
-        feats_len = Lux.parameterlength(policy.actor_feature_extractor) +
-                    Lux.parameterlength(policy.critic_feature_extractor)
+        feats_len = Lux.parameterlength(policy.feature_extractor) +
+                    Lux.parameterlength(policy.feature_extractor)
     end
     head_len = Lux.parameterlength(policy.actor_head) +
                Lux.parameterlength(policy.critic_head)
@@ -364,8 +364,8 @@ function Lux.parameterlength(policy::DiscreteActorCriticPolicy)
     if policy.shared_features
         feats_len = Lux.parameterlength(policy.feature_extractor)
     else
-        feats_len = Lux.parameterlength(policy.actor_feature_extractor) +
-                    Lux.parameterlength(policy.critic_feature_extractor)
+        feats_len = Lux.parameterlength(policy.feature_extractor) +
+                    Lux.parameterlength(policy.feature_extractor)
     end
     head_len = Lux.parameterlength(policy.actor_head) +
                Lux.parameterlength(policy.critic_head)
@@ -376,8 +376,8 @@ function Lux.statelength(policy::AbstractActorCriticPolicy)
     if policy.shared_features
         feats_len = Lux.statelength(policy.feature_extractor)
     else
-        feats_len = Lux.statelength(policy.actor_feature_extractor) +
-                    Lux.statelength(policy.critic_feature_extractor)
+        feats_len = Lux.statelength(policy.feature_extractor) +
+                    Lux.statelength(policy.feature_extractor)
     end
     head_len = Lux.statelength(policy.actor_head) +
                Lux.statelength(policy.critic_head)

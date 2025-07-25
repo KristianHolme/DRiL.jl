@@ -1,19 +1,19 @@
 @kwdef struct SAC{T<:AbstractFloat,E<:AbstractEntropyCoefficient} <: AbstractAlgorithm
-    learning_rate::T = 3f-4
+    learning_rate::T = 3f-4 #learning rate
     buffer_size::Int = 1_000_000
     start_steps::Int = 100 # how many steps to collect before first gradient update
     batch_size::Int = 256
-    tau::T = 0.005 #soft update rate
-    gamma::T = 0.99 #discount
+    tau::T = 0.005f0 #soft update rate
+    gamma::T = 0.99f0 #discount
     train_freq::Int = 1
-    gradient_steps::Int = 1 # -1 to do as many updates as steps (train_freq)
+    gradient_steps::Int = 1 # number of gradient updates per train_freq steps, -1 to do as many updates as steps (train_freq)
     ent_coef::E = AutoEntropyCoefficient()
     target_update_interval::Int = 1 # how often to update the target networks
 end
 
-function sac_ent_coef_loss(alg::SAC{T,AutoEntropyCoefficient{T,FixedEntropyTarget{T}}},
+function sac_ent_coef_loss(alg::SAC,
     policy::ContinuousActorCriticPolicy{<:Any,<:Any,<:Any,QCritic}, ps, st, data
-) where {T}
+)
     log_ent_coef = ps.log_ent_coef[1]
     policy_ps = data.policy_ps
     policy_st = data.policy_st
@@ -23,7 +23,7 @@ function sac_ent_coef_loss(alg::SAC{T,AutoEntropyCoefficient{T,FixedEntropyTarge
     return loss, st, Dict("policy_st" => policy_st)
 end
 
-function sac_actor_loss(alg::SAC, policy::ContinuousActorCriticPolicy{<:Any,<:Any,<:Any,QCritic}, actor_ps, actor_st, data)
+function sac_actor_loss(::SAC, policy::ContinuousActorCriticPolicy{<:Any,<:Any,<:Any,QCritic}, actor_ps, actor_st, data)
     obs = data.obs
     ent_coef = data.log_ent_coef[1] |> exp
     critic_ps = data.critic_ps
