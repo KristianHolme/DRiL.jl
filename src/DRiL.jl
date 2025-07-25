@@ -37,10 +37,10 @@ export AbstractActorCriticPolicy, ActorCriticPolicy, ContinuousActorCriticPolicy
     OrthogonalInitializer, QCritic, VCritic, action_log_prob
 
 include("agents.jl")
-export ActorCriticAgent, predict_actions, predict_values, steps_taken
+export ActorCriticAgent, predict_actions, predict_values, steps_taken, SACAgent
 
 include("buffers.jl")
-export Trajectory, RolloutBuffer
+export Trajectory, RolloutBuffer, OffPolicyTrajectory, ReplayBuffer
 
 include("callbacks.jl")
 export AbstractCallback, on_training_start, on_training_end, on_rollout_start, on_rollout_end, on_step
