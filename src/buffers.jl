@@ -320,7 +320,10 @@ function get_data_loader(buffer::ReplayBuffer, samples::Int, shuffle::Bool, para
     terminated_sample = buffer.terminated[sample_inds]
     truncated_sample = buffer.truncated[sample_inds]
     truncated_obs_sample = buffer.truncated_observations[sample_inds]
-    #only have observations for non-terminated samples so this will often be shorter than the other arrays
+    #TODO: only have observations for non-terminated samples so this will often be shorter than the other arrays
     next_obs_sample = nothing
-    return DataLoader((obs_sample, action_sample, reward_sample, terminated_sample, truncated_sample, next_obs_sample), batchsize=batch_size, shuffle=shuffle, parallel=parallel, rng=rng)
+    return DataLoader((observations=obs_sample, actions=action_sample,
+            rewards=reward_sample, terminated=terminated_sample,
+            truncated=truncated_sample, next_obs=next_obs_sample);
+        batchsize=batch_size, shuffle, parallel, rng)
 end
