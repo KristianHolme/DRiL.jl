@@ -189,3 +189,138 @@ function compute_advantages!(advantages::AbstractArray, traj::Trajectory, gamma:
 
     nothing
 end
+
+
+"""
+    OffPolicyTrajectory{T,O,A}
+
+A mutable container for storing a single trajectory of off-policy experience data including observations, actions, rewards, and termination information.
+"""
+mutable struct OffPolicyTrajectory{T<:AbstractFloat,O,A}
+    observations::Vector{O}
+    actions::Vector{A}
+    rewards::Vector{T}
+    terminated::Bool
+    truncated::Bool
+    truncated_observation::Union{Nothing,O}
+end
+
+function OffPolicyTrajectory(observation_space::AbstractSpace, action_space::AbstractSpace)
+    obs_type = typeof(rand(observation_space))
+    action_type = typeof(rand(action_space))
+    return OffPolicyTrajectory{Float32,obs_type,action_type}(obs_type[], action_type[], T[], false, false, nothing)
+end
+
+Base.length(traj::OffPolicyTrajectory) = length(traj.rewards)
+
+function collect_trajectories(agent::SACAgent, env::AbstractParallelEnv, n_steps::Int,
+    progress_meter::Union{Progress,Nothing}=nothing; callbacks::Union{Vector{<:AbstractCallback},Nothing}=nothing)
+    # reset!(env)
+    trajectories = OffPolicyTrajectory[]
+    obs_space = observation_space(env)
+    act_space = action_space(env)
+    n_envs = number_of_envs(env)
+    current_trajectories = [OffPolicyTrajectory(obs_space, act_space) for _ in 1:n_envs]
+    new_obs = observe(env)
+    for i in 1:n_steps
+        all_good = true
+        if !isnothing(callbacks)
+            for callback in callbacks
+                callback_good = on_step(callback, agent, env, current_trajectories, new_obs)
+                all_good = all_good && callback_good
+            end
+            if !all_good
+                @warn "Collecting trajectories stopped due to callback failure"
+                return trajectories
+            end
+        end
+        observations = new_obs
+        actions = predict_actions(agent, observations)
+        processed_actions = process_action.(actions, Ref(act_space))
+        rewards, terminateds, truncateds, infos = act!(env, processed_actions)
+        new_obs = observe(env)
+        for j in 1:n_envs
+            push!(current_trajectories[j].observations, observations[j])
+            push!(current_trajectories[j].actions, actions[j])
+            push!(current_trajectories[j].rewards, rewards[j])
+            if terminateds[j] || truncateds[j] || i == n_steps
+                current_trajectories[j].terminated = terminateds[j]
+                current_trajectories[j].truncated = truncateds[j]
+
+                # Handle bootstrapping for truncated episodes
+                if truncateds[j] && haskey(infos[j], "terminal_observation")
+                    last_observation = infos[j]["terminal_observation"]
+                    current_trajectories[j].truncated_observation = last_observation
+                end
+
+                # Handle bootstrapping for rollout-limited trajectories (neither terminated nor truncated)
+                # We need to bootstrap with the value of the current observation
+                if !terminateds[j] && !truncateds[j] && i == n_steps
+                    # Get the next observation after last step (which is the current state)
+                    next_obs = new_obs[j]
+                    current_trajectories[j].truncated_observation = next_obs
+                end
+
+                push!(trajectories, current_trajectories[j])
+                current_trajectories[j] = OffPolicyTrajectory(obs_space, act_space)
+            end
+        end
+        !isnothing(progress_meter) && next!(progress_meter, step=number_of_envs(env))
+    end
+    return trajectories
+end
+
+
+"""
+    ReplayBuffer{T,O,A}
+
+A circular buffer for storing multiple trajectories of off-policy experience data, used for replay-based learning algorithms.
+
+# Truncation Logic
+- If `terminated = true`, then there should be no `truncated_observation`
+- If `truncated = true`, then there should be a `truncated_observation`  
+- If `terminated = false` and `truncated = false`, then we stopped in the middle of an episode, so there should be a `truncated_observation`
+"""
+struct ReplayBuffer{T<:AbstractFloat,O,A}
+    observations::CircularBuffer{Vector{O}}
+    actions::CircularBuffer{Vector{A}}
+    rewards::CircularBuffer{Vector{T}}
+    terminated::CircularBuffer{Vector{Bool}}
+    truncated::CircularBuffer{Vector{Bool}}
+    truncated_observations::CircularBuffer{Union{Nothing,Vector{O}}}
+end
+function Base.length(buffer::ReplayBuffer)
+    obs_len = length(buffer.observations)
+    action_len = length(buffer.actions)
+    reward_len = length(buffer.rewards)
+    terminated_len = length(buffer.terminated)
+    truncated_len = length(buffer.truncated)
+    truncated_obs_len = length(buffer.truncated_observations)
+    @assert obs_len == action_len == reward_len == terminated_len == truncated_len == truncated_obs_len "All buffers must have the same length"
+    return obs_len
+end
+
+function Base.push!(buffer::ReplayBuffer, traj::OffPolicyTrajectory)
+    push!(buffer.observations, traj.observations)
+    push!(buffer.actions, traj.actions)
+    push!(buffer.rewards, traj.rewards)
+    push!(buffer.terminated, traj.terminated)
+    push!(buffer.truncated, traj.truncated)
+    push!(buffer.truncated_observations, traj.truncated_observation)
+    nothing
+end
+
+function get_data_loader(buffer::ReplayBuffer, samples::Int, shuffle::Bool, parallel::Bool, rng::AbstractRNG)
+    buffer_size = length(buffer)
+    sample_inds = sample(rng, 1:buffer_size, samples, replace=false)
+
+    obs_sample = buffer.observations[sample_inds]
+    action_sample = buffer.actions[sample_inds]
+    reward_sample = buffer.rewards[sample_inds]
+    terminated_sample = buffer.terminated[sample_inds]
+    truncated_sample = buffer.truncated[sample_inds]
+    truncated_obs_sample = buffer.truncated_observations[sample_inds]
+    #only have observations for non-terminated samples so this will often be shorter than the other arrays
+    next_obs_sample = nothing
+    return DataLoader((obs_sample, action_sample, reward_sample, terminated_sample, truncated_sample, next_obs_sample), batchsize=batch_size, shuffle=shuffle, parallel=parallel, rng=rng)
+end
