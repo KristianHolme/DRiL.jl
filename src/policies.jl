@@ -124,6 +124,7 @@ function (policy::AbstractPolicy) end
 abstract type AbstractNoise end
 
 struct StateIndependantNoise <: AbstractNoise end
+struct StateDependentNoise <: AbstractNoise end
 struct NoNoise <: AbstractNoise end
 
 abstract type AbstractActorCriticPolicy <: AbstractPolicy end
@@ -455,17 +456,28 @@ function get_values_from_features(policy::ContinuousActorCriticPolicy{<:Any,<:An
 end
 
 # For continuous action spaces
-#TODO: dispatch in noise type?
-function get_distributions(policy::ContinuousActorCriticPolicy, action_means::AbstractArray, log_std::AbstractArray)
-    # static_std = !(size(std) == size(action_means))
+# Dispatch on noise type for VCritic policies
+function get_distributions(policy::ContinuousActorCriticPolicy{<:Any,<:Any,StateIndependantNoise,VCritic}, action_means::AbstractArray, log_std::AbstractArray)
     batch_dim = ndims(action_means)
-    noise_type = noise(policy)
-    if noise_type == StateIndependantNoise()
-        return DiagGaussian.(eachslice(action_means, dims=batch_dim), Ref(log_std))
-    else
-        @assert size(log_std) == size(action_means) "log_std and action_means have different shapes"
-        return DiagGaussian.(eachslice(action_means, dims=batch_dim), eachslice(log_std, dims=batch_dim))
-    end
+    return DiagGaussian.(eachslice(action_means, dims=batch_dim), Ref(log_std))
+end
+
+function get_distributions(policy::ContinuousActorCriticPolicy{<:Any,<:Any,StateDependentNoise,VCritic}, action_means::AbstractArray, log_std::AbstractArray)
+    batch_dim = ndims(action_means)
+    @assert size(log_std) == size(action_means) "log_std and action_means have different shapes"
+    return DiagGaussian.(eachslice(action_means, dims=batch_dim), eachslice(log_std, dims=batch_dim))
+end
+
+# Dispatch on noise type for QCritic policies
+function get_distributions(policy::ContinuousActorCriticPolicy{<:Any,<:Any,StateIndependantNoise,QCritic}, action_means::AbstractArray, log_std::AbstractArray)
+    batch_dim = ndims(action_means)
+    return SquashedDiagGaussian.(eachslice(action_means, dims=batch_dim), Ref(log_std))
+end
+
+function get_distributions(policy::ContinuousActorCriticPolicy{<:Any,<:Any,StateDependentNoise,QCritic}, action_means::AbstractArray, log_std::AbstractArray)
+    batch_dim = ndims(action_means)
+    @assert size(log_std) == size(action_means) "log_std and action_means have different shapes"
+    return SquashedDiagGaussian.(eachslice(action_means, dims=batch_dim), eachslice(log_std, dims=batch_dim))
 end
 
 # For discrete action spaces
@@ -547,8 +559,8 @@ function action_log_prob(policy::ContinuousActorCriticPolicy, obs::AbstractArray
     action_means, st = get_actions_from_features(policy, actor_feats, ps, st)
     log_std = ps.log_std
     ds = get_distributions(policy, action_means, log_std)
-    # Sample actions
-    actions = rand.(ds)
+    actions = mode.(ds)
     log_probs = logpdf.(ds, actions)
-    return actions, log_probs, st
+    scaled_actions = scale_to_space(actions, policy.action_space)
+    return scaled_actions, log_probs, st
 end

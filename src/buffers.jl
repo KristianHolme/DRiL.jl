@@ -132,7 +132,7 @@ function collect_trajectories(agent::ActorCriticAgent, env::AbstractParallelEnv,
     return trajectories
 end
 
-function collect_rollouts!(rollout_buffer::RolloutBuffer, agent::ActorCriticAgent, env::AbstractEnv, progress_meter::Union{Progress,Nothing}=nothing; callbacks::Union{Vector{<:AbstractCallback},Nothing}=nothing)
+function collect_rollout!(rollout_buffer::RolloutBuffer, agent::ActorCriticAgent, env::AbstractEnv, progress_meter::Union{Progress,Nothing}=nothing; callbacks::Union{Vector{<:AbstractCallback},Nothing}=nothing)
     # reset!(env) #we dont reset the, we continue from where we left off
 
     obs_space = observation_space(env)
@@ -208,67 +208,16 @@ end
 function OffPolicyTrajectory(observation_space::AbstractSpace, action_space::AbstractSpace)
     obs_type = typeof(rand(observation_space))
     action_type = typeof(rand(action_space))
-    return OffPolicyTrajectory{Float32,obs_type,action_type}(obs_type[], action_type[], T[], false, false, nothing)
+    obs_scalar_type = eltype(observation_space)
+    action_scalar_type = eltype(action_space)
+    @assert obs_scalar_type == action_scalar_type "Observation and action types must be the same"
+    T = obs_scalar_type
+    return OffPolicyTrajectory{T,obs_type,action_type}(obs_type[], action_type[], T[], false, false, nothing)
 end
 
 Base.length(traj::OffPolicyTrajectory) = length(traj.rewards)
 
-function collect_trajectories(agent::SACAgent, env::AbstractParallelEnv, n_steps::Int,
-    progress_meter::Union{Progress,Nothing}=nothing; callbacks::Union{Vector{<:AbstractCallback},Nothing}=nothing)
-    # reset!(env)
-    trajectories = OffPolicyTrajectory[]
-    obs_space = observation_space(env)
-    act_space = action_space(env)
-    n_envs = number_of_envs(env)
-    current_trajectories = [OffPolicyTrajectory(obs_space, act_space) for _ in 1:n_envs]
-    new_obs = observe(env)
-    for i in 1:n_steps
-        all_good = true
-        if !isnothing(callbacks)
-            for callback in callbacks
-                callback_good = on_step(callback, agent, env, current_trajectories, new_obs)
-                all_good = all_good && callback_good
-            end
-            if !all_good
-                @warn "Collecting trajectories stopped due to callback failure"
-                return trajectories
-            end
-        end
-        observations = new_obs
-        actions = predict_actions(agent, observations)
-        processed_actions = process_action.(actions, Ref(act_space))
-        rewards, terminateds, truncateds, infos = act!(env, processed_actions)
-        new_obs = observe(env)
-        for j in 1:n_envs
-            push!(current_trajectories[j].observations, observations[j])
-            push!(current_trajectories[j].actions, actions[j])
-            push!(current_trajectories[j].rewards, rewards[j])
-            if terminateds[j] || truncateds[j] || i == n_steps
-                current_trajectories[j].terminated = terminateds[j]
-                current_trajectories[j].truncated = truncateds[j]
 
-                # Handle bootstrapping for truncated episodes
-                if truncateds[j] && haskey(infos[j], "terminal_observation")
-                    last_observation = infos[j]["terminal_observation"]
-                    current_trajectories[j].truncated_observation = last_observation
-                end
-
-                # Handle bootstrapping for rollout-limited trajectories (neither terminated nor truncated)
-                # We need to bootstrap with the value of the current observation
-                if !terminateds[j] && !truncateds[j] && i == n_steps
-                    # Get the next observation after last step (which is the current state)
-                    next_obs = new_obs[j]
-                    current_trajectories[j].truncated_observation = next_obs
-                end
-
-                push!(trajectories, current_trajectories[j])
-                current_trajectories[j] = OffPolicyTrajectory(obs_space, act_space)
-            end
-        end
-        !isnothing(progress_meter) && next!(progress_meter, step=number_of_envs(env))
-    end
-    return trajectories
-end
 
 
 """
@@ -281,14 +230,31 @@ A circular buffer for storing multiple trajectories of off-policy experience dat
 - If `truncated = true`, then there should be a `truncated_observation`  
 - If `terminated = false` and `truncated = false`, then we stopped in the middle of an episode, so there should be a `truncated_observation`
 """
-struct ReplayBuffer{T<:AbstractFloat,O,A}
-    observations::CircularBuffer{Vector{O}}
-    actions::CircularBuffer{Vector{A}}
-    rewards::CircularBuffer{Vector{T}}
-    terminated::CircularBuffer{Vector{Bool}}
-    truncated::CircularBuffer{Vector{Bool}}
-    truncated_observations::CircularBuffer{Union{Nothing,Vector{O}}}
+struct ReplayBuffer{T,O,A}
+    observations::CircularBuffer{O}
+    actions::CircularBuffer{A}
+    rewards::CircularBuffer{T}
+    terminated::CircularBuffer{Bool}
+    truncated::CircularBuffer{Bool}
+    truncated_observations::CircularBuffer{Union{Nothing,O}}
 end
+function ReplayBuffer(observation_space::AbstractSpace, action_space::AbstractSpace, capacity::Int)
+    O = typeof(rand(observation_space))
+    A = typeof(rand(action_space))
+    obs_scalar_type = eltype(observation_space)
+    action_scalar_type = eltype(action_space)
+    @assert obs_scalar_type == action_scalar_type "Observation and action types must be the same"
+    T = obs_scalar_type
+    return ReplayBuffer{T,O,A}(
+        CircularBuffer{O}(capacity),
+        CircularBuffer{A}(capacity),
+        CircularBuffer{T}(capacity),
+        CircularBuffer{Bool}(capacity),
+        CircularBuffer{Bool}(capacity),
+        CircularBuffer{Union{Nothing,O}}(capacity)
+    )
+end
+
 function Base.length(buffer::ReplayBuffer)
     obs_len = length(buffer.observations)
     action_len = length(buffer.actions)
@@ -296,34 +262,93 @@ function Base.length(buffer::ReplayBuffer)
     terminated_len = length(buffer.terminated)
     truncated_len = length(buffer.truncated)
     truncated_obs_len = length(buffer.truncated_observations)
-    @assert obs_len == action_len == reward_len == terminated_len == truncated_len == truncated_obs_len "All buffers must have the same length"
+    @assert allequal([obs_len, action_len, reward_len, terminated_len, truncated_len, truncated_obs_len]) "All buffers must have the same length"
     return obs_len
 end
+Base.size(buffer::ReplayBuffer) = length(buffer)
 
+function DataStructures.isfull(buffer::ReplayBuffer)
+    obs_full = isfull(buffer.observations)
+    action_full = isfull(buffer.actions)
+    reward_full = isfull(buffer.rewards)
+    terminated_full = isfull(buffer.terminated)
+    truncated_full = isfull(buffer.truncated)
+    truncated_obs_full = isfull(buffer.truncated_observations)
+    @assert allequal([obs_full, action_full, reward_full, terminated_full, truncated_full, truncated_obs_full]) "All buffers must have the same length"
+    return obs_full
+end
+
+function Base.empty!(buffer::ReplayBuffer)
+    empty!(buffer.observations)
+    empty!(buffer.actions)
+    empty!(buffer.rewards)
+    empty!(buffer.terminated)
+    empty!(buffer.truncated)
+    empty!(buffer.truncated_observations)
+    nothing
+end
+
+function DataStructures.capacity(buffer::ReplayBuffer)
+    obs_cap = capacity(buffer.observations)
+    action_cap = capacity(buffer.actions)
+    reward_cap = capacity(buffer.rewards)
+    terminated_cap = capacity(buffer.terminated)
+    truncated_cap = capacity(buffer.truncated)
+    truncated_obs_cap = capacity(buffer.truncated_observations)
+    @assert allequal([obs_cap, action_cap, reward_cap, terminated_cap, truncated_cap, truncated_obs_cap]) "All buffers must have the same capacity"
+    return obs_cap
+end
+
+#TODO: make tests
 function Base.push!(buffer::ReplayBuffer, traj::OffPolicyTrajectory)
     push!(buffer.observations, traj.observations)
     push!(buffer.actions, traj.actions)
     push!(buffer.rewards, traj.rewards)
-    push!(buffer.terminated, traj.terminated)
-    push!(buffer.truncated, traj.truncated)
-    push!(buffer.truncated_observations, traj.truncated_observation)
+    vec_terminated = fill(false, length(traj.observations))
+    vec_terminated[end] = traj.terminated
+    push!(buffer.terminated, vec_terminated...)
+    vec_truncated = fill(false, length(traj.observations))
+    vec_truncated[end] = traj.truncated
+    push!(buffer.truncated, vec_truncated...)
+    O = typeof(traj.observations[1])
+    vec_truncated_obs = Vector{Union{Nothing,O}}(nothing, length(traj.observations))
+    vec_truncated_obs[end] = traj.truncated_observation
+    push!(buffer.truncated_observations, vec_truncated_obs...)
     nothing
 end
 
-function get_data_loader(buffer::ReplayBuffer, samples::Int, shuffle::Bool, parallel::Bool, rng::AbstractRNG)
+function get_data_loader(buffer::ReplayBuffer, batchsize::Int, batches::Int, shuffle::Bool, parallel::Bool, rng::AbstractRNG)
     buffer_size = length(buffer)
+    samples = batchsize * batches
     sample_inds = sample(rng, 1:buffer_size, samples, replace=false)
 
-    obs_sample = buffer.observations[sample_inds]
-    action_sample = buffer.actions[sample_inds]
+    obs_sample = batch(buffer.observations[sample_inds], observation_space(env))
+    action_sample = batch(buffer.actions[sample_inds], action_space(env))
     reward_sample = buffer.rewards[sample_inds]
     terminated_sample = buffer.terminated[sample_inds]
     truncated_sample = buffer.truncated[sample_inds]
     truncated_obs_sample = buffer.truncated_observations[sample_inds]
-    #TODO: only have observations for non-terminated samples so this will often be shorter than the other arrays
-    next_obs_sample = nothing
+
+    next_obs_sample = Vector{O}(undef, count(!, terminated_sample))
+    next_obs_ind = 1
+    for i in 1:samples
+        if !terminated_sample[i] && truncated_sample[i]
+            next_obs_sample[next_obs_ind] = truncated_obs_sample[i]
+            next_obs_ind += 1
+        else
+            !terminated_sample[i] && !truncated_sample[i]
+            sample_ind = sample_inds[i]
+            next_obs_sample[next_obs_ind] = buffer.observations[sample_ind+1]
+            next_obs_ind += 1
+        end
+    end
+    next_obs_sample = batch(next_obs_sample, observation_space(env))
+    #check that all elements are assigned
+    @assert all(x -> isassigned(next_obs_sample, x), eachindex(next_obs_sample))
+
     return DataLoader((observations=obs_sample, actions=action_sample,
             rewards=reward_sample, terminated=terminated_sample,
             truncated=truncated_sample, next_obs=next_obs_sample);
-        batchsize=batch_size, shuffle, parallel, rng)
+        batchsize, shuffle, parallel, rng)
 end
+
