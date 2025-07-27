@@ -32,15 +32,23 @@ include("spaces.jl")
 export AbstractSpace, Box, Discrete
 
 include("policies.jl")
-export AbstractActorCriticPolicy, ActorCriticPolicy, ContinuousActorCriticPolicy,
-    DiscreteActorCriticPolicy, AbstractPolicy, AbstractWeightInitializer,
-    OrthogonalInitializer, QCritic, VCritic, action_log_prob
+export AbstractActorCriticPolicy, ActorCriticPolicy, ContinuousActorCriticPolicy
+export DiscreteActorCriticPolicy, AbstractPolicy, AbstractWeightInitializer
+export OrthogonalInitializer, QCritic, VCritic, action_log_prob
+
+
 
 include("agents.jl")
-export ActorCriticAgent, predict_actions, predict_values, steps_taken, SACAgent
+export ActorCriticAgent, predict_actions, predict_values, steps_taken
 
 include("buffers.jl")
 export Trajectory, RolloutBuffer, OffPolicyTrajectory, ReplayBuffer
+
+include("algorithms/sac.jl")
+export SAC, SACAgent
+
+include("algorithms/ppo.jl")
+export learn!, PPO, load_policy_params_and_state
 
 include("callbacks.jl")
 export AbstractCallback, on_training_start, on_training_end, on_rollout_start, on_rollout_end, on_step
@@ -52,11 +60,7 @@ export get_original_obs, get_original_rewards, normalize_obs!, normalize_rewards
 export MonitorWrapperEnv, EpisodeStats, is_wrapper, unwrap, unwrap_all
 export MultiAgentParallelEnv
 
-include("algorithms/ppo.jl")
-export learn!, PPO
 
-include("algorithms/sac.jl")
-export SAC
 
 
 include("utils.jl")

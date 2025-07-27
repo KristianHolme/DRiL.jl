@@ -1,22 +1,3 @@
-function TensorBoardLogger.write_hparams!(logger::TBLogger, alg::AbstractAlgorithm, metrics::AbstractArray{String})
-    hparams = get_hparams(alg)
-    TensorBoardLogger.write_hparams!(logger, hparams, metrics)
-    nothing
-end
-
-function TensorBoardLogger.write_hparams!(logger::TBLogger, agent::AbstractAgent, metrics::AbstractArray{String})
-    hparams = get_hparams(agent)
-    TensorBoardLogger.write_hparams!(logger, hparams, metrics)
-    nothing
-end
-
-#FIXME: is this piracy?
-function TensorBoardLogger.write_hparams!(logger::TBLogger, alg::AbstractAlgorithm, agent::AbstractAgent, metrics::AbstractArray{String})
-    hparams = merge(get_hparams(alg), get_hparams(agent))
-    TensorBoardLogger.write_hparams!(logger, hparams, metrics)
-    nothing
-end
-
 function get_hparams(alg::AbstractAlgorithm)
     @warn "get_hparams is not implemented for $(typeof(alg)). No hyperparameters will be logged."
     return Dict{String,Any}()
@@ -35,7 +16,11 @@ function get_hparams(alg::PPO)
         "ent_coef" => alg.ent_coef,
         "vf_coef" => alg.vf_coef,
         "max_grad_norm" => alg.max_grad_norm,
-        "normalize_advantage" => alg.normalize_advantage
+        "normalize_advantage" => alg.normalize_advantage,
+        "learning_rate" => alg.learning_rate,
+        "batch_size" => alg.batch_size,
+        "n_steps" => alg.n_steps,
+        "epochs" => alg.epochs
     )
 
     if !isnothing(alg.clip_range_vf)
@@ -49,11 +34,18 @@ function get_hparams(alg::PPO)
     return hparams
 end
 
-function get_hparams(agent::ActorCriticAgent)
+function get_hparams(alg::SAC)
     hparams = Dict{String,Any}(
-        "learning_rate" => agent.learning_rate,
-        "batch_size" => agent.batch_size,
-        "n_steps" => agent.n_steps,
-        "epochs" => agent.epochs)
+        "learning_rate" => alg.learning_rate,
+        "buffer_size" => alg.buffer_size,
+        "start_steps" => alg.start_steps,
+        "batch_size" => alg.batch_size,
+        "tau" => alg.tau,
+        "gamma" => alg.gamma,
+        "train_freq" => alg.train_freq,
+        "gradient_steps" => alg.gradient_steps,
+        "ent_coef" => string(alg.ent_coef),
+        "target_update_interval" => alg.target_update_interval
+    )
     return hparams
 end

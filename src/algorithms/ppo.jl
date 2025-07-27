@@ -1,5 +1,5 @@
 #TODO make learning_rate part of algorithm?
-@kwdef struct PPO{T<:AbstractFloat} <: AbstractAlgorithm
+@kwdef struct PPO{T<:AbstractFloat} <: OnPolicyAlgorithm
     gamma::T = 0.99f0
     gae_lambda::T = 0.95f0
     clip_range::T = 0.2f0
@@ -9,12 +9,56 @@
     max_grad_norm::T = 0.5f0
     target_kl::Union{T,Nothing} = nothing
     normalize_advantage::Bool = true
+    # Agent parameters moved from ActorCriticAgent
+    n_steps::Int = 2048
+    batch_size::Int = 64
+    epochs::Int = 10
+    learning_rate::T = 3f-4
+end
+
+function ActorCriticAgent(policy::AbstractActorCriticPolicy, alg::PPO;
+    optimizer_type::Type{<:Optimisers.AbstractRule}=Optimisers.Adam,
+    stats_window::Int=100,#TODO not used
+    verbose::Int=1,
+    log_dir::Union{Nothing,String}=nothing,
+    rng::AbstractRNG=Random.default_rng())
+
+    optimizer = make_optimizer(optimizer_type, alg)
+    ps, st = Lux.setup(rng, policy)
+    # @show ps.log_std
+    if !isnothing(log_dir)
+        logger = TBLogger(log_dir, tb_increment)
+    else
+        logger = nothing
+    end
+    train_state = Lux.Training.TrainState(policy, ps, st, optimizer)
+    return ActorCriticAgent(policy, train_state, optimizer_type, stats_window,
+        logger, verbose, rng, AgentStats(0, 0))
+end
+
+function make_optimizer(optimizer_type::Type{<:Optimisers.Adam}, alg::PPO)
+    return optimizer_type(eta=alg.learning_rate, epsilon=1f-5)
+end
+
+function load_policy_params_and_state(agent::ActorCriticAgent, alg::PPO, path::AbstractString; suffix::String=".jld2")
+    file_path = endswith(path, suffix) ? path : path * suffix
+    @info "Loading policy, parameters, and state from $file_path"
+    data = load(file_path)
+    new_policy = data["policy"]
+    new_parameters = data["parameters"]
+    new_states = data["states"]
+    new_optimizer = make_optimizer(agent.optimizer_type, alg.learning_rate)
+    new_train_state = Lux.Training.TrainState(new_policy, new_parameters, new_states, new_optimizer)
+    #TODO: check if this is correct, probably it is not
+    @reset agent.policy = new_policy
+    @reset agent.train_state = new_train_state
+    return agent
 end
 
 #TODO make parameters n_steps, batch_size, epochs, max_steps kwargs, default to values from agent
 #TODO refactor, separate out learnig loop and logging
 function learn!(agent::ActorCriticAgent, env::AbstractParallelEnv, alg::PPO{T}, max_steps::Int; ad_type::Lux.Training.AbstractADType=AutoZygote(), callbacks::Union{Vector{<:AbstractCallback},Nothing}=nothing) where T
-    n_steps = agent.n_steps
+    n_steps = alg.n_steps
     n_envs = number_of_envs(env)
     roll_buffer = RolloutBuffer(observation_space(env), action_space(env),
         alg.gae_lambda, alg.gamma, n_steps, n_envs
@@ -56,7 +100,7 @@ function learn!(agent::ActorCriticAgent, env::AbstractParallelEnv, alg::PPO{T}, 
     end
 
     for i in 1:iterations
-        learning_rate = agent.learning_rate
+        learning_rate = alg.learning_rate
         Optimisers.adjust!(agent.train_state, learning_rate)
         push!(learning_rates, learning_rate)
 
@@ -70,7 +114,7 @@ function learn!(agent::ActorCriticAgent, env::AbstractParallelEnv, alg::PPO{T}, 
                 return nothing
             end
         end
-        fps = collect_rollouts!(roll_buffer, agent, env, progress_meter; callbacks=callbacks)
+        fps = collect_rollout!(roll_buffer, agent, env, progress_meter; callbacks=callbacks)
         push!(total_fps, fps)
         add_step!(agent, n_steps * n_envs)
         if !isnothing(agent.logger)
@@ -93,7 +137,7 @@ function learn!(agent::ActorCriticAgent, env::AbstractParallelEnv, alg::PPO{T}, 
         data_loader = DataLoader((roll_buffer.observations, roll_buffer.actions,
                 roll_buffer.advantages, roll_buffer.returns,
                 roll_buffer.logprobs, roll_buffer.values),
-            batchsize=agent.batch_size, shuffle=true, parallel=true, rng=agent.rng)
+            batchsize=alg.batch_size, shuffle=true, parallel=true, rng=agent.rng)
         continue_training = true
         entropy_losses = Float32[]
         entropy = Float32[]
@@ -103,7 +147,7 @@ function learn!(agent::ActorCriticAgent, env::AbstractParallelEnv, alg::PPO{T}, 
         approx_kl_divs = Float32[]
         clip_fractions = Float32[]
         grad_norms = Float32[]
-        for epoch in 1:agent.epochs
+        for epoch in 1:alg.epochs
             for (i_batch, batch_data) in enumerate(data_loader)
                 grads, loss_val, stats, train_state = Lux.Training.compute_gradients(ad_type, alg, batch_data, train_state)
 

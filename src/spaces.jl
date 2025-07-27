@@ -124,6 +124,10 @@ function process_action(action, action_space::Box{T}) where T
     return action
 end
 
+function scale_to_space(action, action_space::Box{T}) where T
+    return action .* (action_space.high .- action_space.low) .+ action_space.low
+end
+
 
 struct Discrete{T<:Integer} <: AbstractSpace
     n::T

@@ -8,14 +8,14 @@ using TestItems
     pend_env() = PendulumEnv()
     env = MultiThreadedParallelEnv([pend_env() for _ in 1:4])
     policy = ActorCriticPolicy(DRiL.observation_space(env), DRiL.action_space(env))
-    agent = ActorCriticAgent(policy; n_steps=8, batch_size=8, epochs=1, verbose=0)
-    alg = PPO()
-    n_steps = agent.n_steps
+    alg = PPO(; n_steps=8, batch_size=8, epochs=1)
+    agent = ActorCriticAgent(policy, alg; verbose=0)
+    n_steps = alg.n_steps
     n_envs = DRiL.number_of_envs(env)
     roll_buffer = RolloutBuffer(DRiL.observation_space(env), DRiL.action_space(env), alg.gae_lambda, alg.gamma, n_steps, n_envs)
 
     for i in 1:10
-        DRiL.collect_rollouts!(roll_buffer, agent, env)
+        DRiL.collect_rollout!(roll_buffer, agent, env)
         obs = roll_buffer.observations
         act = roll_buffer.actions
         logprobs = roll_buffer.logprobs
@@ -140,7 +140,7 @@ end
     agent = ActorCriticAgent(policy; n_steps=n_steps, batch_size=16, epochs=1, verbose=0)
 
     # Collect rollouts
-    DRiL.collect_rollouts!(roll_buffer, agent, env)
+    DRiL.collect_rollout!(roll_buffer, agent, env)
 
     # Verify buffer dimensions
     @test size(roll_buffer.observations) == (obs_space.shape..., n_steps * n_envs)
@@ -170,15 +170,15 @@ end
     cartpole_env() = CartPoleEnv()
     env = MultiThreadedParallelEnv([cartpole_env() for _ in 1:4])
     policy = DiscreteActorCriticPolicy(DRiL.observation_space(env), DRiL.action_space(env))
-    agent = ActorCriticAgent(policy; n_steps=8, batch_size=8, epochs=1, verbose=0)
-    alg = PPO()
+    alg = PPO(; n_steps=8, batch_size=8, epochs=1)
+    agent = ActorCriticAgent(policy, alg; verbose=0)
 
-    n_steps = agent.n_steps
+    n_steps = alg.n_steps
     n_envs = DRiL.number_of_envs(env)
     roll_buffer = RolloutBuffer(DRiL.observation_space(env), DRiL.action_space(env), alg.gae_lambda, alg.gamma, n_steps, n_envs)
 
     # Test rollout collection
-    DRiL.collect_rollouts!(roll_buffer, agent, env)
+    DRiL.collect_rollout!(roll_buffer, agent, env)
 
     # Check that actions are stored as 1-based indices (raw policy output)
     actions = roll_buffer.actions
@@ -235,8 +235,8 @@ end
     continuous_buffer = RolloutBuffer(DRiL.observation_space(continuous_env), DRiL.action_space(continuous_env), alg.gae_lambda, alg.gamma, 4, 2)
 
     # Collect rollouts
-    DRiL.collect_rollouts!(discrete_buffer, discrete_agent, discrete_env)
-    DRiL.collect_rollouts!(continuous_buffer, continuous_agent, continuous_env)
+    DRiL.collect_rollout!(discrete_buffer, discrete_agent, discrete_env)
+    DRiL.collect_rollout!(continuous_buffer, continuous_agent, continuous_env)
 
     # Test discrete actions are integers
     discrete_actions = discrete_buffer.actions
@@ -286,7 +286,7 @@ end
         agent = ActorCriticAgent(policy; verbose=0)
         alg = PPO()
         roll_buffer = RolloutBuffer(obs_space, act_space, alg.gae_lambda, alg.gamma, n_steps, DRiL.number_of_envs(env))
-        DRiL.collect_rollouts!(roll_buffer, agent, env)
+        DRiL.collect_rollout!(roll_buffer, agent, env)
         return roll_buffer
     end
     function test_rollout(roll_buffer::RolloutBuffer, env::AbstractEnv)
@@ -302,7 +302,7 @@ end
         @test length(roll_buffer.returns) == n_steps * n_envs
         @test length(roll_buffer.logprobs) == n_steps * n_envs
     end
-    shapes = [(1,), (1,1), (2,), (2,3), (2,3,1), (2,3,4)]
+    shapes = [(1,), (1, 1), (2,), (2, 3), (2, 3, 1), (2, 3, 4)]
     for shape in shapes
         env = BroadcastedParallelEnv([SharedTestSetup.CustomShapedBoxEnv(shape) for _ in 1:2])
         roll_buffer = get_rollout(env)
@@ -320,12 +320,12 @@ end
     cartpole_env() = CartPoleEnv()
     env = MultiThreadedParallelEnv([cartpole_env() for _ in 1:n_envs])
     policy = DiscreteActorCriticPolicy(DRiL.observation_space(env), DRiL.action_space(env))
-    agent = ActorCriticAgent(policy; n_steps=n_steps, batch_size=n_steps, epochs=1, verbose=0)
-    alg = PPO()
+    alg = PPO(; n_steps=n_steps, batch_size=n_steps, epochs=1)
+    agent = ActorCriticAgent(policy, alg; verbose=0)
     roll_buffer = RolloutBuffer(DRiL.observation_space(env), DRiL.action_space(env), alg.gae_lambda, alg.gamma, n_steps, n_envs)
 
     # Test rollout collection
-    DRiL.collect_rollouts!(roll_buffer, agent, env)
+    DRiL.collect_rollout!(roll_buffer, agent, env)
 
     @test roll_buffer.observations |> size == (4, n_steps * n_envs)
     @test roll_buffer.actions |> size == (1, n_steps * n_envs)
@@ -334,5 +334,34 @@ end
     @test roll_buffer.returns |> size == (n_steps * n_envs,)
     @test roll_buffer.logprobs |> size == (n_steps * n_envs,)
     @test roll_buffer.values |> size == (n_steps * n_envs,)
-    
+
+end
+
+@testitem "Basic ReplayBuffer workings" tags = [:buffers, :rollouts] setup = [SharedTestSetup] begin
+    using Random
+    using DRiL.DataStructures
+
+    n_envs = 4
+    train_freq = 8
+    buffer_capacity = 16
+    rng = Random.Xoshiro(42)
+
+    alg = SAC()
+    env = BroadcastedParallelEnv([SharedTestSetup.SimpleRewardEnv(8) for _ in 1:n_envs])
+    policy = ContinuousActorCriticPolicy(DRiL.observation_space(env), DRiL.action_space(env), critic_type=QCritic())
+    agent = SACAgent(policy, alg)
+    buffer = ReplayBuffer(DRiL.observation_space(env), DRiL.action_space(env), buffer_capacity)
+    @test capacity(buffer) == buffer_capacity
+    @test !isfull(buffer)
+
+    DRiL.collect_rollout!(buffer, agent, env, train_freq)
+    @test size(buffer) == train_freq
+
+    DRiL.collect_rollout!(buffer, agent, env, train_freq)
+    @test size(buffer) == buffer_capacity
+    @test isfull(buffer)
+
+    empty!(buffer)
+    @test size(buffer) == 0
+    @test isempty(buffer)
 end
