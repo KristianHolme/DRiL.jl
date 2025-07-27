@@ -290,18 +290,18 @@ end
     obs_space = Box(Float32[-1.0, -1.0], Float32[1.0, 1.0])
     action_space = Box(Float32[-1.0], Float32[1.0])
     policy = ContinuousActorCriticPolicy(obs_space, action_space, activation=relu,
-    critic_type=QCritic(), shared_features=false)
+        critic_type=QCritic(), shared_features=false)
 
     rng = Random.MersenneTwister(42)
     ps, st = Lux.setup(rng, policy)
 
-    mock_obs = rand(2, 10)
-    mock_actions = rand(1, 10)
+    mock_obs = rand(Float32, 2, 10)
+    mock_actions = rand(Float32, 1, 10)
     mock_values, st = predict_values(policy, mock_obs, mock_actions, ps, st)
     @test size(mock_values) == (2, 10)
-    @test all(mock_values[1,:] .!= mock_values[2, :]) #test that the two networks are different
+    @test all(mock_values[1, :] .!= mock_values[2, :]) #test that the two networks are different
 
     actions, log_probs, st = action_log_prob(policy, mock_obs, ps, st)
     @test size(actions) == (1, 10)
-    
+
 end
