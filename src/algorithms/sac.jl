@@ -36,13 +36,11 @@ get_target_entropy(ent_coef::FixedEntropyCoefficient, action_space) = nothing
 function sac_ent_coef_loss(alg::SAC,
     policy::ContinuousActorCriticPolicy{<:Any,<:Any,<:Any,QCritic}, ps, st, data
 )
-    @ignore_derivatives @info keys(ps)
     log_ent_coef = ps.log_ent_coef[1]
     policy_ps = data.policy_ps
     policy_st = data.policy_st
     _, log_probs_pi, policy_st = action_log_prob(policy, data.observations, policy_ps, policy_st)
     target_entropy = data.target_entropy
-    @ignore_derivatives @info typeof(target_entropy) typeof(log_probs_pi)
     loss = -(log_ent_coef * @ignore_derivatives(log_probs_pi .+ target_entropy |> mean))
     return loss, st, Dict()
 end
@@ -80,7 +78,7 @@ function sac_critic_loss(alg::SAC, policy::ContinuousActorCriticPolicy{<:Any,<:A
         next_q_vals_with_entropy = min_next_q .- ent_coef .* next_log_probs
         target_q_vals = rewards
         # Bellman target
-        target_q_vals[!terminated] .+= gamma .* next_q_vals_with_entropy
+        target_q_vals[.!terminated] .+= gamma .* next_q_vals_with_entropy
         target_q_vals
     end
 
@@ -336,7 +334,6 @@ function learn!(
 
     n_steps = div(alg.start_steps, number_of_envs(env))
 
-    agent.verbose > 0 && @info "Starting SAC training with buffer size: $(length(replay_buffer))"
 
     # Main training loop
     training_iteration = 0
@@ -349,8 +346,11 @@ function learn!(
         showspeed=true, enabled=agent.verbose > 0
     )
 
+    agent.verbose > 0 && @info "Starting SAC training with buffer size: $(length(replay_buffer)),
+    start_steps: $alg.start_steps, train_freq: $alg.train_freq, number_of_envs: $n_envs,
+    adjusted_train_freq: $adjusted_train_freq, iterations: $iterations, total_steps: $total_steps"
     for training_iteration in 1:iterations  # Adjust this termination condition as needed
-
+        @info "Training iteration $training_iteration, collecting rollout"
         # Collect experience
         fps = collect_rollout!(replay_buffer, agent, env, n_steps, progress_meter; callbacks)
         #set steps to train_freq after first (potentially larger) rollout
@@ -363,6 +363,7 @@ function learn!(
         data_loader = get_data_loader(replay_buffer, alg.batch_size, n_updates, true, true, agent.rng)
 
         for batch_data in data_loader
+            @info "Training iteration $training_iteration, batch $batch_data"
             # Update entropy coefficient if using automatic entropy tuning
             if update_entropy_coef
                 ent_train_state = agent.ent_train_state
@@ -430,7 +431,7 @@ function learn!(
 
             # Update target networks
             if gradient_updates_performed % alg.target_update_interval == 0
-                agent.Q_target_states = copy_critic_states(policy, train_state.states)
+                @set agent.Q_target_states = copy_critic_states(policy, train_state.states)
                 polyak_update!(agent.Q_target_parameters, train_state.parameters, alg.tau)
 
             end
@@ -450,13 +451,8 @@ function learn!(
 
         # Log training statistics
         log_sac_training(agent, training_stats, steps_taken(agent))
-
-        # Print progress occasionally
-        if agent.verbose > 1 && training_iteration % 10 == 0
-            @info "SAC Training Iteration $training_iteration" actor_loss = training_stats.actor_losses[end] critic_loss = training_stats.critic_losses[end] entropy_coef = training_stats.entropy_coefficients[end]
-        end
     end
 
     # Return training statistics
-    return replay_buffer, training_stats
+    return agent, replay_buffer, training_stats
 end
