@@ -342,6 +342,7 @@ function learn!(
 
     total_steps = n_steps + adjusted_train_freq * (iterations - 1)
 
+    #TODO: progress bar is not matching actual progress, its too quick to 99%
     progress_meter = Progress(total_steps, desc="Training...",
         showspeed=true, enabled=agent.verbose > 0
     )
