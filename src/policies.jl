@@ -426,14 +426,15 @@ end
 function extract_features(policy::AbstractActorCriticPolicy, obs::AbstractArray, ps, st)
     if policy.shared_features
         feats, feats_st = policy.feature_extractor(obs, ps.feature_extractor, st.feature_extractor)
+        actor_feats = feats
+        critic_feats = feats
         st = merge(st, (; feature_extractor=feats_st))
-        return feats, feats, st
     else
         actor_feats, actor_feats_st = policy.feature_extractor(obs, ps.actor_feature_extractor, st.actor_feature_extractor)
         critic_feats, critic_feats_st = policy.feature_extractor(obs, ps.critic_feature_extractor, st.critic_feature_extractor)
         st = merge(st, (; actor_feature_extractor=actor_feats_st, critic_feature_extractor=critic_feats_st))
-        return actor_feats, critic_feats, st
     end
+    return actor_feats, critic_feats, st
 end
 
 function get_actions_from_features(policy::AbstractActorCriticPolicy, feats::AbstractArray, ps, st)
@@ -449,6 +450,9 @@ function get_values_from_features(policy::AbstractActorCriticPolicy, feats::Abst
 end
 
 function get_values_from_features(policy::ContinuousActorCriticPolicy{<:Any,<:Any,N,QCritic}, feats::AbstractArray, actions::AbstractArray, ps, st) where N<:AbstractNoise
+    if ndims(actions) == 1
+        actions = batch(actions, action_space(policy))
+    end
     inputs = vcat(feats, actions)
     values, critic_st = policy.critic_head(inputs, ps.critic_head, st.critic_head)
     st = merge(st, (; critic_head=critic_st))
@@ -554,6 +558,7 @@ function predict_values(policy::ContinuousActorCriticPolicy{<:Any,<:Any,N,QCriti
     return values, st #dont return vec(values) as this is a matrix
 end
 
+#returns vector of actions
 function action_log_prob(policy::ContinuousActorCriticPolicy, obs::AbstractArray, ps, st)
     actor_feats, critic_feats, st = extract_features(policy, obs, ps, st)
     action_means, st = get_actions_from_features(policy, actor_feats, ps, st)
