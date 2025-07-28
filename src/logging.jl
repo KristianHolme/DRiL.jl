@@ -37,7 +37,7 @@ end
 function get_hparams(alg::SAC)
     hparams = Dict{String,Any}(
         "learning_rate" => alg.learning_rate,
-        "buffer_size" => alg.buffer_size,
+        "buffer_capacity" => alg.buffer_capacity,
         "start_steps" => alg.start_steps,
         "batch_size" => alg.batch_size,
         "tau" => alg.tau,

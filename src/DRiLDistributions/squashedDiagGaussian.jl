@@ -19,8 +19,10 @@ function logpdf(d::SquashedDiagGaussian, x::AbstractArray)
     gaussian_logpdf = logpdf(d.DiagGaussian, x)
     # More numerically stable formula: 2*(log(2) - x - softplus(-2*x)) instead of log(1 - tanh(x)^2)
     # https://github.com/openai/spinningup/blob/master/spinup/algos/pytorch/sac/core.py
+    #TODO: type stability, getting Float64
+    #TODO: make test for this
     correction = 2 * (log(2) .- x .- Lux.softplus.(-2 .* x))
-    squashed_logpdf = gaussian_logpdf .- sum(correction, dims=ndims(x))
+    squashed_logpdf = gaussian_logpdf .- sum(correction)
     return squashed_logpdf
 end
 
