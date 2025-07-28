@@ -1,6 +1,6 @@
-@kwdef struct SAC{T<:AbstractFloat,E<:AbstractEntropyCoefficient} <: AbstractAlgorithm
+@kwdef struct SAC{T<:AbstractFloat,E<:AbstractEntropyCoefficient} <: OffPolicyAlgorithm
     learning_rate::T = 3f-4 #learning rate
-    buffer_size::Int = 1_000_000
+    buffer_capacity::Int = 1_000_000
     start_steps::Int = 100 # how many steps to collect before first gradient update
     batch_size::Int = 256
     tau::T = 0.005f0 #soft update rate
@@ -15,7 +15,7 @@ end
 function get_target_entropy(ent_coef::AutoEntropyCoefficient{T}, action_space) where T
     if ent_coef.target isa AutoEntropyTarget
         # For continuous action spaces, target entropy is typically -dim(action_space)
-        return -T(length(action_space))
+        return -T(prod(size(action_space)))
     elseif ent_coef.target isa FixedEntropyTarget
         return ent_coef.target.target
     else
@@ -36,17 +36,19 @@ get_target_entropy(ent_coef::FixedEntropyCoefficient, action_space) = nothing
 function sac_ent_coef_loss(alg::SAC,
     policy::ContinuousActorCriticPolicy{<:Any,<:Any,<:Any,QCritic}, ps, st, data
 )
+    @ignore_derivatives @info keys(ps)
     log_ent_coef = ps.log_ent_coef[1]
     policy_ps = data.policy_ps
     policy_st = data.policy_st
-    _, log_probs_pi, policy_st = action_log_prob(policy, data.obs, policy_ps, policy_st)
+    _, log_probs_pi, policy_st = action_log_prob(policy, data.observations, policy_ps, policy_st)
     target_entropy = data.target_entropy
+    @ignore_derivatives @info typeof(target_entropy) typeof(log_probs_pi)
     loss = -(log_ent_coef * @ignore_derivatives(log_probs_pi .+ target_entropy |> mean))
-    return loss, st, Dict("policy_st" => policy_st)
+    return loss, st, Dict()
 end
 
 function sac_actor_loss(::SAC, policy::ContinuousActorCriticPolicy{<:Any,<:Any,<:Any,QCritic}, ps, st, data)
-    obs = data.obs
+    obs = data.observations
     ent_coef = data.log_ent_coef[1] |> exp
     actions_pi, log_probs_pi, st = action_log_prob(policy, obs, ps, st)
     q_values, st = @ignore_derivatives predict_values(policy, obs, actions_pi, ps, st)
@@ -123,15 +125,15 @@ function SACAgent(policy::ContinuousActorCriticPolicy, alg::SAC;
     else
         logger = nothing
     end
-    optimizer = make_optimizer(optimizer_type, alg.learning_rate)
+    optimizer = make_optimizer(optimizer_type, alg)
     train_state = Lux.Training.TrainState(policy, ps, st, optimizer)
     Q_target_parameters = copy_critic_parameters(policy, ps)
     Q_target_states = copy_critic_states(policy, st)
 
     # Always initialize entropy coefficient train state
-    log_ent_coef = init_entropy_coefficient(alg.ent_coef)
-    ent_optimizer = make_optimizer(optimizer_type, alg.learning_rate)
-    ent_train_state = Lux.Training.TrainState(nothing, log_ent_coef, NamedTuple(), ent_optimizer)
+    ent_coef_params = init_entropy_coefficient(alg.ent_coef)
+    ent_optimizer = make_optimizer(optimizer_type, alg)
+    ent_train_state = Lux.Training.TrainState(policy, ent_coef_params, NamedTuple(), ent_optimizer)
 
     return SACAgent(policy, train_state, Q_target_parameters, Q_target_states,
         ent_train_state, optimizer_type, stats_window, logger, verbose, rng,
@@ -161,10 +163,10 @@ function copy_critic_states(policy::ContinuousActorCriticPolicy{<:Any,<:Any,N,QC
 end
 
 function init_entropy_coefficient(entropy_coefficient::FixedEntropyCoefficient)
-    ComponentArray(entropy_coefficient=[entropy_coefficient.coef |> log])
+    ComponentArray(log_ent_coef=[entropy_coefficient.coef |> log])
 end
 function init_entropy_coefficient(entropy_coefficient::AutoEntropyCoefficient)
-    ComponentArray(entropy_coefficient=[entropy_coefficient.initial_value |> log])
+    ComponentArray(log_ent_coef=[entropy_coefficient.initial_value |> log])
 end
 
 function predict_actions(agent::SACAgent, observations::AbstractVector; deterministic::Bool=false, rng::AbstractRNG=agent.rng)
@@ -173,7 +175,7 @@ function predict_actions(agent::SACAgent, observations::AbstractVector; determin
     st = agent.train_state.states
     batched_obs = batch(observations, observation_space(policy))
     actions, st = predict_actions(policy, batched_obs, ps, st; deterministic, rng)
-    agent.train_state.states = st
+    #TODO: handle update of st? make agent mutable and set new train_state with @set?
     actions = process_action.(actions, Ref(action_space(policy)))
     return actions
 end
@@ -262,7 +264,7 @@ struct SACTrainingStats{T<:AbstractFloat}
 end
 
 function SACTrainingStats{T}() where T<:AbstractFloat
-    return SACTrainingStats{T}(T[], T[], T[], T[], T[], T[], T[], T[])
+    return SACTrainingStats{T}(T[], T[], T[], T[], T[], T[], T[], T[], T[])
 end
 
 function log_sac_training(agent::SACAgent, stats::SACTrainingStats, step::Int)
@@ -298,10 +300,20 @@ end
 
 function learn!(
     agent::SACAgent,
+    env::AbstractParallelEnv,
+    alg::OffPolicyAlgorithm,
+    max_steps::Int; kwargs...
+)
+    replay_buffer = ReplayBuffer(observation_space(env), action_space(env), alg.buffer_capacity)
+    learn!(agent, replay_buffer, env, alg, max_steps; kwargs...)
+end
+
+function learn!(
+    agent::SACAgent,
     replay_buffer::ReplayBuffer,
     env::AbstractParallelEnv,
     alg::OffPolicyAlgorithm,
-    max_steps::Int,
+    max_steps::Int;
     #TODO: make callbacks an agent property?
     callbacks::Union{Vector{<:AbstractCallback},Nothing}=nothing,
     ad_type::Lux.Training.AbstractADType=AutoZygote()
@@ -328,7 +340,7 @@ function learn!(
 
     # Main training loop
     training_iteration = 0
-    adjusted_train_freq = div(alg.train_freq, number_of_envs(env)) * number_of_envs(env)
+    adjusted_train_freq = max(1, div(alg.train_freq, number_of_envs(env))) * number_of_envs(env)
     iterations = div(max_steps - n_steps, adjusted_train_freq) + 1
 
     total_steps = n_steps + adjusted_train_freq * (iterations - 1)
@@ -355,14 +367,14 @@ function learn!(
             if update_entropy_coef
                 ent_train_state = agent.ent_train_state
                 ent_data = (
-                    obs=batch_data.observations,
+                    observations=batch_data.observations,
                     policy_ps=train_state.parameters,
                     policy_st=train_state.states,
                     target_entropy=target_entropy,
                     target_ps=agent.Q_target_parameters,
                     target_st=agent.Q_target_states
                 )
-                ent_grad, ent_loss, _, ent_train_state, = Lux.Training.compute_gradients(ad_type,
+                ent_grad, ent_loss, _, ent_train_state = Lux.Training.compute_gradients(ad_type,
                     (model, ps, st, data) -> sac_ent_coef_loss(alg, policy, ps, st, data),
                     ent_data,
                     ent_train_state
@@ -370,19 +382,19 @@ function learn!(
 
                 Lux.Training.apply_gradients!(ent_train_state, ent_grad)
                 push!(training_stats.entropy_losses, ent_loss)
-                agent.ent_train_state = ent_train_state
+                @reset agent.ent_train_state = ent_train_state
             end
 
 
             train_state = agent.train_state
             # Update critic networks
             critic_data = (
-                obs=batch_data.observations,
+                observations=batch_data.observations,
                 actions=batch_data.actions,
                 rewards=batch_data.rewards,
                 terminated=batch_data.terminated,
                 truncated=batch_data.truncated,
-                next_obs=batch_data.next_obs,
+                next_observations=batch_data.next_observations,
                 log_ent_coef=agent.ent_train_state.parameters,
                 target_ps=agent.Q_target_parameters,
                 target_st=agent.Q_target_states
@@ -398,12 +410,12 @@ function learn!(
 
             # Update actor network  
             actor_data = (
-                obs=batch_data.observations,
+                observations=batch_data.observations,
                 actions=batch_data.actions,
                 rewards=batch_data.rewards,
                 terminated=batch_data.terminated,
                 truncated=batch_data.truncated,
-                next_obs=batch_data.next_obs,
+                next_observations=batch_data.next_observations,
                 log_ent_coef=agent.ent_train_state.parameters
             )
 
@@ -446,14 +458,5 @@ function learn!(
     end
 
     # Return training statistics
-    return Dict(
-        "actor_losses" => training_stats.actor_losses,
-        "critic_losses" => training_stats.critic_losses,
-        "entropy_losses" => training_stats.entropy_losses,
-        "entropy_coefficients" => training_stats.entropy_coefficients,
-        "q_values" => training_stats.q_values,
-        "learning_rates" => training_stats.learning_rates,
-        "grad_norms" => training_stats.grad_norms,
-        "fps" => training_stats.fps
-    )
+    return replay_buffer, training_stats
 end

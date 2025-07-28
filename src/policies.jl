@@ -561,6 +561,6 @@ function action_log_prob(policy::ContinuousActorCriticPolicy, obs::AbstractArray
     ds = get_distributions(policy, action_means, log_std)
     actions = mode.(ds)
     log_probs = logpdf.(ds, actions)
-    scaled_actions = scale_to_space(actions, policy.action_space)
+    scaled_actions = scale_to_space.(actions, Ref(policy.action_space))
     return scaled_actions, log_probs, st
 end

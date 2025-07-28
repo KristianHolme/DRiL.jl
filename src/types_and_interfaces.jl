@@ -196,7 +196,8 @@ end
 
 @kwdef struct AutoEntropyCoefficient{T<:AbstractFloat,E<:AbstractEntropyTarget} <: AbstractEntropyCoefficient
     target::E = AutoEntropyTarget()
-    initial_value::T = 1.0
+    initial_value::T = 1.0f0
 end
+
 Base.string(e::AutoEntropyCoefficient) = "AutoEntropyCoefficient(target=$(e.target), initial_value=$(e.initial_value))"
 Base.string(e::FixedEntropyCoefficient) = "FixedEntropyCoefficient(coef=$(e.coef))"
