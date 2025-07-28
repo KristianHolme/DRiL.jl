@@ -14,6 +14,7 @@ using ProgressMeter
 using Reexport
 using Random
 using Statistics
+using StatsBase: sample
 using TensorBoardLogger
 using FileIO
 using JLD2

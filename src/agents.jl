@@ -117,7 +117,8 @@ function predict_actions(agent::ActorCriticAgent, observations::AbstractVector; 
     # Convert observations vector to batched matrix for policy
     batched_obs = batch(observations, observation_space(policy))
     actions, st = predict_actions(policy, batched_obs, ps, st; deterministic=deterministic, rng=rng)
-    agent.train_state.states = st
+    #TODO: handle update of st?
+
     # Process actions for environment use (e.g., convert 1-based to 0-based for Discrete)
     actions = process_action.(actions, Ref(action_space(policy)))
     return actions

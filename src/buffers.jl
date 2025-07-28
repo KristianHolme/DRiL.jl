@@ -231,6 +231,8 @@ A circular buffer for storing multiple trajectories of off-policy experience dat
 - If `terminated = false` and `truncated = false`, then we stopped in the middle of an episode, so there should be a `truncated_observation`
 """
 struct ReplayBuffer{T,O,A}
+    observation_space::AbstractSpace
+    action_space::Box
     observations::CircularBuffer{O}
     actions::CircularBuffer{A}
     rewards::CircularBuffer{T}
@@ -238,7 +240,7 @@ struct ReplayBuffer{T,O,A}
     truncated::CircularBuffer{Bool}
     truncated_observations::CircularBuffer{Union{Nothing,O}}
 end
-function ReplayBuffer(observation_space::AbstractSpace, action_space::AbstractSpace, capacity::Int)
+function ReplayBuffer(observation_space::AbstractSpace, action_space::Box, capacity::Int)
     O = typeof(rand(observation_space))
     A = typeof(rand(action_space))
     obs_scalar_type = eltype(observation_space)
@@ -246,6 +248,8 @@ function ReplayBuffer(observation_space::AbstractSpace, action_space::AbstractSp
     @assert obs_scalar_type == action_scalar_type "Observation and action types must be the same"
     T = obs_scalar_type
     return ReplayBuffer{T,O,A}(
+        observation_space,
+        action_space,
         CircularBuffer{O}(capacity),
         CircularBuffer{A}(capacity),
         CircularBuffer{T}(capacity),
@@ -254,6 +258,9 @@ function ReplayBuffer(observation_space::AbstractSpace, action_space::AbstractSp
         CircularBuffer{Union{Nothing,O}}(capacity)
     )
 end
+
+observation_space(buffer::ReplayBuffer) = buffer.observation_space
+action_space(buffer::ReplayBuffer) = buffer.action_space
 
 function Base.length(buffer::ReplayBuffer)
     obs_len = length(buffer.observations)
@@ -301,9 +308,9 @@ end
 
 #TODO: make tests
 function Base.push!(buffer::ReplayBuffer, traj::OffPolicyTrajectory)
-    push!(buffer.observations, traj.observations)
-    push!(buffer.actions, traj.actions)
-    push!(buffer.rewards, traj.rewards)
+    push!(buffer.observations, traj.observations...)
+    push!(buffer.actions, traj.actions...)
+    push!(buffer.rewards, traj.rewards...)
     vec_terminated = fill(false, length(traj.observations))
     vec_terminated[end] = traj.terminated
     push!(buffer.terminated, vec_terminated...)
@@ -317,13 +324,14 @@ function Base.push!(buffer::ReplayBuffer, traj::OffPolicyTrajectory)
     nothing
 end
 
-function get_data_loader(buffer::ReplayBuffer, batchsize::Int, batches::Int, shuffle::Bool, parallel::Bool, rng::AbstractRNG)
+function get_data_loader(buffer::ReplayBuffer{T,O,A}, batch_size::Int, batches::Int, shuffle::Bool, parallel::Bool, rng::AbstractRNG) where {T,O,A}
     buffer_size = length(buffer)
-    samples = batchsize * batches
-    sample_inds = sample(rng, 1:buffer_size, samples, replace=false)
+    samples = batch_size * batches
+    #TODO: should this be with replacement? how to handle learning_starts < batch_size*gradient_steps?
+    sample_inds = sample(rng, 1:buffer_size, samples, replace=true)
 
-    obs_sample = batch(buffer.observations[sample_inds], observation_space(env))
-    action_sample = batch(buffer.actions[sample_inds], action_space(env))
+    obs_sample = batch(buffer.observations[sample_inds], observation_space(buffer))
+    action_sample = batch(buffer.actions[sample_inds], action_space(buffer))
     reward_sample = buffer.rewards[sample_inds]
     terminated_sample = buffer.terminated[sample_inds]
     truncated_sample = buffer.truncated[sample_inds]
@@ -331,24 +339,28 @@ function get_data_loader(buffer::ReplayBuffer, batchsize::Int, batches::Int, shu
 
     next_obs_sample = Vector{O}(undef, count(!, terminated_sample))
     next_obs_ind = 1
+    #TODO: fix logic, not correct for steps thats not terminated or truncated, need to distinghuis 
     for i in 1:samples
         if !terminated_sample[i] && truncated_sample[i]
             next_obs_sample[next_obs_ind] = truncated_obs_sample[i]
             next_obs_ind += 1
-        else
-            !terminated_sample[i] && !truncated_sample[i]
-            sample_ind = sample_inds[i]
-            next_obs_sample[next_obs_ind] = buffer.observations[sample_ind+1]
+        elseif !terminated_sample[i] && !truncated_sample[i]
+            if isnothing(truncated_obs_sample[i])
+                sample_ind = sample_inds[i]
+                next_obs_sample[next_obs_ind] = buffer.observations[sample_ind+1]
+            else
+                next_obs_sample[next_obs_ind] = truncated_obs_sample[i]
+            end
             next_obs_ind += 1
         end
     end
-    next_obs_sample = batch(next_obs_sample, observation_space(env))
+    next_obs_sample = batch(next_obs_sample, observation_space(buffer))
     #check that all elements are assigned
     @assert all(x -> isassigned(next_obs_sample, x), eachindex(next_obs_sample))
 
     return DataLoader((observations=obs_sample, actions=action_sample,
             rewards=reward_sample, terminated=terminated_sample,
-            truncated=truncated_sample, next_obs=next_obs_sample);
-        batchsize, shuffle, parallel, rng)
+            truncated=truncated_sample, next_observations=next_obs_sample);
+        batchsize=batch_size, shuffle, parallel, rng)
 end
 
