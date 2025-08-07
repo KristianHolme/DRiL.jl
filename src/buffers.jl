@@ -327,7 +327,6 @@ end
 function get_data_loader(buffer::ReplayBuffer{T,O,A}, batch_size::Int, batches::Int, shuffle::Bool, parallel::Bool, rng::AbstractRNG) where {T,O,A}
     buffer_size = length(buffer)
     samples = batch_size * batches
-    #TODO: should this be with replacement? how to handle learning_starts < batch_size*gradient_steps?
     sample_inds = sample(rng, 1:buffer_size, samples, replace=true)
 
     obs_sample = batch(buffer.observations[sample_inds], observation_space(buffer))
@@ -339,18 +338,16 @@ function get_data_loader(buffer::ReplayBuffer{T,O,A}, batch_size::Int, batches::
 
     next_obs_sample = Vector{O}(undef, count(!, terminated_sample))
     next_obs_ind = 1
-    #TODO: fix logic, not correct for steps thats not terminated or truncated, need to distinghuis 
     for i in 1:samples
-        if !terminated_sample[i] && truncated_sample[i]
-            next_obs_sample[next_obs_ind] = truncated_obs_sample[i]
-            next_obs_ind += 1
-        elseif !terminated_sample[i] && !truncated_sample[i]
-            if isnothing(truncated_obs_sample[i])
-                sample_ind = sample_inds[i]
-                next_obs_sample[next_obs_ind] = buffer.observations[sample_ind+1]
+        if !terminated_sample[i]
+            next_obs = if isnothing(truncated_obs_sample[i])
+                #step is in the middle of a rollout, so we just take the next observation
+                buffer.observations[sample_inds[i]+1]
             else
-                next_obs_sample[next_obs_ind] = truncated_obs_sample[i]
+                #step is at end of rollout, or truncated by episode time limit
+                truncated_obs_sample[i]
             end
+            next_obs_sample[next_obs_ind] = next_obs
             next_obs_ind += 1
         end
     end
