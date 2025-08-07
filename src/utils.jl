@@ -45,13 +45,13 @@ function collect_trajectory(agent::ActorCriticAgent,
 end
 
 function polyak_update!(target::AbstractArray{T}, source::AbstractArray{T}, tau::T) where T<:AbstractFloat
-    target .= tau .* target .+ (1 - tau) .* source
+    target .= tau .* source .+ (1 - tau) .* target
     nothing
 end
 
 function polyak_update!(target::ComponentArray, source::ComponentArray, tau::AbstractFloat)
     for key in keys(target)
-        target[key] .= tau .* target[key] .+ (1 - tau) .* source[key]
+        target[key] .= tau .* source[key] .+ (1 - tau) .* target[key]
     end
     nothing
 end
