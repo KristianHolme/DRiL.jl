@@ -332,39 +332,40 @@ function learn!(
 
     gradient_updates_performed = 0
 
-    n_steps = div(alg.start_steps, number_of_envs(env))
+    start_steps = alg.start_steps > 0 ? alg.start_steps : alg.train_freq
+    n_steps = div(start_steps, number_of_envs(env))
 
 
     # Main training loop
     training_iteration = 0
     adjusted_train_freq = max(1, div(alg.train_freq, number_of_envs(env))) * number_of_envs(env)
-    iterations = div(max_steps - n_steps, adjusted_train_freq) + 1
+    iterations = div(max_steps - n_steps * n_envs, adjusted_train_freq) + 1
 
-    total_steps = n_steps + adjusted_train_freq * (iterations - 1)
+    total_steps = n_steps * n_envs + adjusted_train_freq * (iterations - 1)
 
-    #TODO: progress bar is not matching actual progress, its too quick to 99%
+    #XXX: progress bar is not matching actual progress, its too quick to 99%
     progress_meter = Progress(total_steps, desc="Training...",
         showspeed=true, enabled=agent.verbose > 0
     )
 
     agent.verbose > 0 && @info "Starting SAC training with buffer size: $(length(replay_buffer)),
-    start_steps: $alg.start_steps, train_freq: $alg.train_freq, number_of_envs: $n_envs,
-    adjusted_train_freq: $adjusted_train_freq, iterations: $iterations, total_steps: $total_steps"
+    start_steps: $(alg.start_steps), train_freq: $(alg.train_freq), number_of_envs: $(n_envs),
+    adjusted_train_freq: $(adjusted_train_freq), iterations: $(iterations), total_steps: $(total_steps)"
     for training_iteration in 1:iterations  # Adjust this termination condition as needed
-        @info "Training iteration $training_iteration, collecting rollout"
+        # @info "Training iteration $training_iteration, collecting rollout ($n_steps steps)"
         # Collect experience
         fps = collect_rollout!(replay_buffer, agent, env, n_steps, progress_meter; callbacks)
         #set steps to train_freq after first (potentially larger) rollout
         push!(training_stats.fps, fps)
         add_step!(agent, n_steps * n_envs)
-        n_steps = adjusted_train_freq
+        n_steps = div(adjusted_train_freq, n_envs)
 
         # Perform gradient updates
         n_updates = get_gradient_steps(alg, adjusted_train_freq)
         data_loader = get_data_loader(replay_buffer, alg.batch_size, n_updates, true, true, agent.rng)
 
-        for batch_data in data_loader
-            @info "Training iteration $training_iteration, batch $batch_data"
+        for (i, batch_data) in enumerate(data_loader)
+            # @info "Training iteration $training_iteration, batch $i, batch_size: $(size(batch_data.observations))"
             # Update entropy coefficient if using automatic entropy tuning
             if update_entropy_coef
                 ent_train_state = agent.ent_train_state
