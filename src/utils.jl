@@ -1,4 +1,4 @@
-function collect_trajectory(agent::ActorCriticAgent,
+function collect_trajectory(agent::AbstractAgent,
     env::AbstractEnv;
     max_steps::Union{Int,Nothing}=nothing,
     norm_env::Union{NormalizeWrapperEnv,Nothing}=nothing,
@@ -43,6 +43,7 @@ function collect_trajectory(agent::ActorCriticAgent,
     env = set_training(env, original_training)
     return observations, actions, rewards
 end
+
 
 function polyak_update!(target::AbstractArray{T}, source::AbstractArray{T}, tau::T) where T<:AbstractFloat
     target .= tau .* source .+ (1 - tau) .* target
