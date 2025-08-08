@@ -343,6 +343,7 @@ end
 
     n_envs = 4
     train_freq = 8
+    n_steps = floor(Int, train_freq / n_envs)
     buffer_capacity = 16
     rng = Random.Xoshiro(42)
 
@@ -354,8 +355,8 @@ end
     @test capacity(buffer) == buffer_capacity
     @test !isfull(buffer)
 
-    DRiL.collect_rollout!(buffer, agent, env, train_freq)
-    @test size(buffer) == train_freq
+    DRiL.collect_rollout!(buffer, agent, env, n_steps)
+    @test size(buffer) == n_steps * n_envs
 
     DRiL.collect_rollout!(buffer, agent, env, train_freq)
     @test size(buffer) == buffer_capacity
