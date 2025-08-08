@@ -4,13 +4,13 @@
     using LinearAlgebra
     using DRiL.DRiLDistributions
 
-    
-    shapes = [(1,), (1,1), (2,), (2,3), (2,3,1), (2,3,4)]
+
+    shapes = [(1,), (1, 1), (2,), (2, 3), (2, 3, 1), (2, 3, 4)]
     for shape in shapes
         low = rand(Float32, shape...) .- 1f0
         high = rand(Float32, shape...) .+ 1f0
         action_space = Box(low, high, shape)
-        
+
         same_outputs = Bool[]
         for i in 1:100
             mean = rand(action_space)
@@ -38,13 +38,66 @@
 
 end
 
+@testitem "SquashedDiagGaussian epsilon keyword types" begin
+    using Random
+    using DRiL.DRiLDistributions
+
+    make_triplet(::Type{T}) where {T<:AbstractFloat} = (rand(T, 2, 3), rand(T, 2, 3), rand(T, 2, 3))
+
+    function check_ok_with_eps(::Type{T}) where {T<:AbstractFloat}
+        mean, log_std, x = make_triplet(T)
+        d = SquashedDiagGaussian(mean, log_std; eps=T(1e-6))
+        y = DRiLDistributions.logpdf(d, x)
+        @test y isa T
+        @test d.epsilon isa T
+        true
+    end
+
+    # matching types should succeed and preserve type
+    @test check_ok_with_eps(Float32)
+    @test check_ok_with_eps(Float64)
+
+    # mismatched epsilon type should fail
+    mean32, logstd32, _ = make_triplet(Float32)
+    mean64, logstd64, _ = make_triplet(Float64)
+    @test_throws TypeError SquashedDiagGaussian(mean32, logstd32; eps=Float64(1e-6))
+    @test_throws TypeError SquashedDiagGaussian(mean64, logstd64; eps=Float32(1e-6))
+    @test_throws TypeError SquashedDiagGaussian(mean64, logstd64; eps=Float16(1e-6))
+end
+
+
+@testitem "SquashedDiagGaussian constructor and logpdf types" begin
+    using Random
+    using DRiL.DRiLDistributions
+
+    make_triplet(::Type{T}) where {T<:AbstractFloat} = (rand(T, 2, 3), rand(T, 2, 3), rand(T, 2, 3))
+
+    function check_ok_and_type(::Type{T}) where {T<:AbstractFloat}
+        mean, log_std, x = make_triplet(T)
+        d = SquashedDiagGaussian(mean, log_std)
+        y = DRiLDistributions.logpdf(d, x)
+        @test y isa T
+        true
+    end
+
+    # same-type constructions should work and logpdf should return matching type
+    @test check_ok_and_type(Float32)
+    @test check_ok_and_type(Float64)
+
+    # mixed-type constructions should fail
+    mean32, logstd32, _ = make_triplet(Float32)
+    mean64, logstd64, _ = make_triplet(Float64)
+    @test_throws MethodError SquashedDiagGaussian(mean32, logstd64)
+    @test_throws MethodError SquashedDiagGaussian(mean64, logstd32)
+end
+
 @testitem "Categorical vs Distributions.Categorical" begin
     using Random
     using Distributions
 
     same_outputs = Bool[]
 
-    for N in [3,8], i in 1:100
+    for N in [3, 8], i in 1:100
         p = rand(Float32, N)
         p = p ./ sum(p)
 
