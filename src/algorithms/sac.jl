@@ -1,7 +1,7 @@
 @kwdef struct SAC{T<:AbstractFloat,E<:AbstractEntropyCoefficient} <: OffPolicyAlgorithm
     learning_rate::T = 3f-4 #learning rate
     buffer_capacity::Int = 1_000_000
-    start_steps::Int = 100 # how many steps to collect before first gradient update
+    start_steps::Int = 100 # how many steps to collect with random actions before first gradient update
     batch_size::Int = 256
     tau::T = 0.005f0 #soft update rate
     gamma::T = 0.99f0 #discount
@@ -189,7 +189,9 @@ function predict_actions(agent::SACAgent, observations::AbstractVector; determin
 end
 
 function collect_trajectories(agent::SACAgent, env::AbstractParallelEnv, n_steps::Int,
-    progress_meter::Union{Progress,Nothing}=nothing; callbacks::Union{Vector{<:AbstractCallback},Nothing}=nothing)
+    progress_meter::Union{Progress,Nothing}=nothing;
+    callbacks::Union{Vector{<:AbstractCallback},Nothing}=nothing,
+    use_random_actions::Bool=false)
 
     trajectories = OffPolicyTrajectory[]
     obs_space = observation_space(env)
@@ -210,7 +212,11 @@ function collect_trajectories(agent::SACAgent, env::AbstractParallelEnv, n_steps
             end
         end
         observations = new_obs
+        if use_random_actions
+            actions = rand(act_space, size(observations))
+        else
         actions = predict_actions(agent, observations)
+        end
         processed_actions = process_action.(actions, Ref(act_space))
         rewards, terminateds, truncateds, infos = act!(env, processed_actions)
         new_obs = observe(env)
@@ -245,9 +251,11 @@ function collect_trajectories(agent::SACAgent, env::AbstractParallelEnv, n_steps
     return trajectories
 end
 
-function collect_rollout!(buffer::ReplayBuffer, agent::SACAgent, env::AbstractParallelEnv, n_steps::Int, progress_meter::Union{Progress,Nothing}=nothing; callbacks::Union{Vector{<:AbstractCallback},Nothing}=nothing)
+function collect_rollout!(buffer::ReplayBuffer, agent::SACAgent, env::AbstractParallelEnv,
+    n_steps::Int, progress_meter::Union{Progress,Nothing}=nothing; kwargs...
+)
     t_start = time()
-    trajectories = collect_trajectories(agent, env, n_steps, progress_meter; callbacks=callbacks)
+    trajectories = collect_trajectories(agent, env, n_steps, progress_meter; kwargs...)
     t_collect = time() - t_start
     total_steps = sum(length.(trajectories))
     fps = total_steps / t_collect
@@ -367,7 +375,8 @@ function learn!(
     for training_iteration in 1:iterations  # Adjust this termination condition as needed
         # @info "Training iteration $training_iteration, collecting rollout ($n_steps steps)"
         # Collect experience
-        fps = collect_rollout!(replay_buffer, agent, env, n_steps, progress_meter; callbacks)
+        fps = collect_rollout!(replay_buffer, agent, env, n_steps, progress_meter; callbacks,
+            use_random_actions=training_iteration == 1 && alg.start_steps > 0)
         #set steps to train_freq after first (potentially larger) rollout
         push!(training_stats.fps, fps)
         add_step!(agent, n_steps * n_envs)
