@@ -178,7 +178,7 @@ function get_feature_extractor(O::Discrete)
     return Lux.FlattenLayer()
 end
 
-function get_mlp(latent_dim::Int, hidden_dims::Vector{Int}, activation::Function,
+function get_mlp(latent_dim::Int, output_dim::Int, hidden_dims::Vector{Int}, activation::Function,
     bias_init, hidden_init, output_init
 )
     layers = []
@@ -191,7 +191,7 @@ function get_mlp(latent_dim::Int, hidden_dims::Vector{Int}, activation::Function
             push!(layers, Dense(hidden_dims[i-1], hidden_dims[i], activation,
                 init_weight=hidden_init, init_bias=bias_init))
         end
-        push!(layers, Dense(hidden_dims[end], 1, init_weight=output_init,
+        push!(layers, Dense(hidden_dims[end], output_dim, init_weight=output_init,
             init_bias=bias_init))
     end
     return Chain(layers...)
@@ -200,7 +200,7 @@ end
 function get_actor_head(latent_dim::Int, action_dim::Int, hidden_dims::Vector{Int},
     activation::Function, bias_init, hidden_init, output_init
 )
-    return get_mlp(latent_dim, hidden_dims, activation, bias_init, hidden_init,
+    return get_mlp(latent_dim, action_dim, hidden_dims, activation, bias_init, hidden_init,
         output_init)
 end
 
@@ -226,7 +226,7 @@ function get_critic_head(latent_dim::Int, action_space::Box, hidden_dims::Vector
     activation::Function, bias_init, hidden_init, output_init, critic_type::QCritic
 )
     action_dim = size(action_space) |> prod
-    mlp = get_mlp(latent_dim + action_dim, hidden_dims, activation, bias_init, hidden_init,
+    mlp = get_mlp(latent_dim + action_dim, 1, hidden_dims, activation, bias_init, hidden_init,
         output_init)
     net = Lux.Parallel(vcat, [mlp for _ in 1:critic_type.n_critics]...)
     return net
@@ -236,7 +236,7 @@ function get_critic_head(latent_dim::Int, action_space::AbstractSpace,
     hidden_dims::Vector{Int}, activation::Function, bias_init, hidden_init, output_init,
     critic_type::VCritic
 )
-    return get_mlp(latent_dim, hidden_dims, activation, bias_init, hidden_init, output_init)
+    return get_mlp(latent_dim, 1, hidden_dims, activation, bias_init, hidden_init, output_init)
 end
 
 function ContinuousActorCriticPolicy(observation_space::Union{Discrete,Box{T}},
