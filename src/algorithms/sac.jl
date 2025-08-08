@@ -86,7 +86,8 @@ function sac_critic_loss(alg::SAC, policy::ContinuousActorCriticPolicy{<:Any,<:A
     T = eltype(current_q_values)
     critic_loss = T(0.5) * sum(mean((current_q .- target_q_values) .^ 2) for current_q in eachrow(current_q_values))
 
-    return critic_loss, new_st, Dict()
+    stats = Dict("mean_q_values" => mean(current_q_values))
+    return critic_loss, new_st, stats
 end
 
 # Callable functions for SAC algorithm - needed for Lux.Training.compute_gradients
