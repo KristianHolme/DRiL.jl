@@ -295,6 +295,18 @@ function Base.empty!(buffer::ReplayBuffer)
     nothing
 end
 
+function Base.isempty(buffer::ReplayBuffer)
+    obs_empty = isempty(buffer.observations)
+    action_empty = isempty(buffer.actions)
+    reward_empty = isempty(buffer.rewards)
+    terminated_empty = isempty(buffer.terminated)
+    truncated_empty = isempty(buffer.truncated)
+    truncated_obs_empty = isempty(buffer.truncated_observations)
+    @assert allequal([true, obs_empty, action_empty, reward_empty, terminated_empty,
+        truncated_empty, truncated_obs_empty]) "All buffers must have the same length"
+    return obs_empty
+end
+
 function DataStructures.capacity(buffer::ReplayBuffer)
     obs_cap = capacity(buffer.observations)
     action_cap = capacity(buffer.actions)
