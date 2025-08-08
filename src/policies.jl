@@ -569,3 +569,20 @@ function action_log_prob(policy::ContinuousActorCriticPolicy, obs::AbstractArray
     scaled_actions = scale_to_space.(actions, Ref(policy.action_space))
     return scaled_actions, log_probs, st
 end
+
+function zero_critic_grads!(critic_grad::ComponentArray, policy::ContinuousActorCriticPolicy)
+    if policy.shared_features
+        names_to_zero = [:critic_head]
+    else
+        names_to_zero = [:critic_head, :critic_feature_extractor]
+    end
+    zero_fields!(critic_grad, names_to_zero)
+    nothing
+end
+
+function zero_fields!(a::ComponentArray{T}, names::Vector{Symbol}) where T<:Real
+    for name in names
+        a[name] .= zero(T)
+    end
+    nothing
+end
