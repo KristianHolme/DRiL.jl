@@ -302,6 +302,6 @@ end
     @test all(mock_values[1, :] .!= mock_values[2, :]) #test that the two networks are different
 
     actions, log_probs, st = action_log_prob(policy, mock_obs, ps, st)
-    @test size(actions) == (1, 10)
+    @test size(actions) == (10,)
 
 end
