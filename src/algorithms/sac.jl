@@ -83,7 +83,8 @@ function sac_critic_loss(alg::SAC, policy::ContinuousActorCriticPolicy{<:Any,<:A
     end
 
     # Critic loss (sum over all Q-networks)
-    critic_loss = sum(mean((current_q .- target_q_values) .^ 2) for current_q in eachrow(current_q_values))
+    T = eltype(current_q_values)
+    critic_loss = T(0.5) * sum(mean((current_q .- target_q_values) .^ 2) for current_q in eachrow(current_q_values))
 
     return critic_loss, new_st, Dict()
 end
