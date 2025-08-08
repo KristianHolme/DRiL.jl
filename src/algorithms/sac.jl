@@ -66,6 +66,9 @@ function sac_critic_loss(alg::SAC, policy::ContinuousActorCriticPolicy{<:Any,<:A
     current_q_values, new_st = predict_values(policy, obs, actions, ps, st)
 
     # Target Q-values (no gradients)
+    obs_dims = ndims(obs)
+    next_obs = selectdim(next_obs, obs_dims, .!terminated)
+    @assert !any(isnan, next_obs) "Next observations contain NaNs"
     target_q_values = @ignore_derivatives begin
         next_actions, next_log_probs, st = action_log_prob(policy, next_obs, ps, st)
         #replace critic ps and st with target
