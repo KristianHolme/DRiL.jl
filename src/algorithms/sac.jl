@@ -267,7 +267,7 @@ function SACTrainingStats{T}() where T<:AbstractFloat
     return SACTrainingStats{T}(T[], T[], T[], T[], T[], T[], T[], T[], T[])
 end
 
-function log_sac_training(agent::SACAgent, stats::SACTrainingStats, step::Int)
+function log_sac_training(agent::SACAgent, stats::SACTrainingStats, step::Int, env::AbstractParallelEnv)
     if !isnothing(agent.logger)
         set_step!(agent.logger, step)
         if !isempty(stats.actor_losses)
@@ -295,6 +295,9 @@ function log_sac_training(agent::SACAgent, stats::SACTrainingStats, step::Int)
             log_value(agent.logger, "env/fps", stats.fps[end])
         end
         log_value(agent.logger, "train/total_steps", steps_taken(agent))
+
+        # Log episode statistics
+        log_stats(env, agent.logger)
     end
 end
 
@@ -405,13 +408,16 @@ function learn!(
                 target_st=agent.Q_target_states
             )
 
-            critic_grad, critic_loss, _, train_state = Lux.Training.compute_gradients(ad_type,
+            critic_grad, critic_loss, critic_stats, train_state = Lux.Training.compute_gradients(ad_type,
                 (model, ps, st, data) -> sac_critic_loss(alg, policy, ps, st, data),
                 critic_data,
                 train_state
             )
             train_state = Lux.Training.apply_gradients(train_state, critic_grad)
             push!(training_stats.critic_losses, critic_loss)
+
+            # Record Q-value statistics
+            push!(training_stats.q_values, critic_stats["mean_q_values"])
 
             # Update actor network  
             actor_data = (
@@ -445,16 +451,15 @@ function learn!(
             push!(training_stats.entropy_coefficients, current_ent_coef)
             push!(training_stats.learning_rates, alg.learning_rate)
 
-            # TODO: Calculate gradient norm when gradients are properly captured
-            # total_grad_norm = sqrt(sum(norm(g)^2 for g in grads_critic) + sum(norm(g)^2 for g in grads_actor))
-            # push!(training_stats.grad_norms, total_grad_norm)
+            total_grad_norm = sqrt(sum(norm(g)^2 for g in critic_grad) + sum(norm(g)^2 for g in actor_grad))
+            push!(training_stats.grad_norms, total_grad_norm)
 
             gradient_updates_performed += 1
             add_gradient_update!(agent)
         end
 
         # Log training statistics
-        log_sac_training(agent, training_stats, steps_taken(agent))
+        log_sac_training(agent, training_stats, steps_taken(agent), env)
     end
 
     # Return training statistics
