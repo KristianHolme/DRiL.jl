@@ -215,7 +215,7 @@ function collect_trajectories(agent::SACAgent, env::AbstractParallelEnv, n_steps
         if use_random_actions
             actions = rand(act_space, size(observations))
         else
-        actions = predict_actions(agent, observations)
+            actions = predict_actions(agent, observations)
         end
         processed_actions = process_action.(actions, Ref(act_space))
         rewards, terminateds, truncateds, infos = act!(env, processed_actions)
