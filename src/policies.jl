@@ -559,12 +559,12 @@ function predict_values(policy::ContinuousActorCriticPolicy{<:Any,<:Any,N,QCriti
 end
 
 #returns vector of actions
-function action_log_prob(policy::ContinuousActorCriticPolicy, obs::AbstractArray, ps, st)
-    actor_feats, critic_feats, st = extract_features(policy, obs, ps, st)
+function action_log_prob(policy::ContinuousActorCriticPolicy, obs::AbstractArray, ps, st; rng::AbstractRNG=Random.default_rng())
+    actor_feats, _, st = extract_features(policy, obs, ps, st)
     action_means, st = get_actions_from_features(policy, actor_feats, ps, st)
     log_std = ps.log_std
     ds = get_distributions(policy, action_means, log_std)
-    actions = mode.(ds)
+    actions = rand.(rng, ds)
     log_probs = logpdf.(ds, actions)
     scaled_actions = scale_to_space.(actions, Ref(policy.action_space))
     return scaled_actions, log_probs, st
