@@ -293,7 +293,7 @@
 
 
     struct CustomShapedBoxEnv <: AbstractEnv
-        shape::Tuple{Int, Vararg{Int}}
+        shape::Tuple{Int,Vararg{Int}}
     end
     DRiL.reset!(env::CustomShapedBoxEnv) = nothing
     DRiL.act!(env::CustomShapedBoxEnv, action::AbstractArray) = rand(Float32)
@@ -303,7 +303,6 @@
     DRiL.terminated(env::CustomShapedBoxEnv) = false
     DRiL.truncated(env::CustomShapedBoxEnv) = false
     DRiL.get_info(env::CustomShapedBoxEnv) = Dict{String,Any}()
-
 
     struct RandomDiscreteEnv <: AbstractEnv
         obs_space::Box
