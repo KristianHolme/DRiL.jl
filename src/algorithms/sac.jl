@@ -452,7 +452,9 @@ function learn!(
                 actor_data,
                 train_state
             )
-            train_state = Lux.Training.apply_gradients(train_state, actor_grad)
+            zero_critic_grads!(actor_loss_grad, policy)
+            @assert norm(actor_loss_grad.critic_head) < 1e-10 "Critic head gradient is not zero"
+            train_state = Lux.Training.apply_gradients(train_state, actor_loss_grad)
             push!(training_stats.actor_losses, actor_loss)
 
 
@@ -468,7 +470,7 @@ function learn!(
             push!(training_stats.entropy_coefficients, current_ent_coef)
             push!(training_stats.learning_rates, alg.learning_rate)
 
-            total_grad_norm = sqrt(sum(norm(g)^2 for g in critic_grad) + sum(norm(g)^2 for g in actor_grad))
+            total_grad_norm = sqrt(sum(norm(g)^2 for g in critic_grad) + sum(norm(g)^2 for g in actor_loss_grad))
             push!(training_stats.grad_norms, total_grad_norm)
 
             gradient_updates_performed += 1
