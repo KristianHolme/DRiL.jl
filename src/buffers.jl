@@ -348,8 +348,7 @@ function get_data_loader(buffer::ReplayBuffer{T,O,A}, batch_size::Int, batches::
     truncated_sample = buffer.truncated[sample_inds]
     truncated_obs_sample = buffer.truncated_observations[sample_inds]
 
-    next_obs_sample = Vector{O}(undef, count(!, terminated_sample))
-    next_obs_ind = 1
+    next_obs_sample = Vector{O}(undef, samples)
     for i in 1:samples
         if !terminated_sample[i]
             next_obs = if isnothing(truncated_obs_sample[i])
@@ -359,8 +358,12 @@ function get_data_loader(buffer::ReplayBuffer{T,O,A}, batch_size::Int, batches::
                 #step is at end of rollout, or truncated by episode time limit
                 truncated_obs_sample[i]
             end
-            next_obs_sample[next_obs_ind] = next_obs
-            next_obs_ind += 1
+            next_obs_sample[i] = next_obs
+        else
+            #dummy value to have next_obs be same length as the other arrays
+            #take first value to get shape, and multiply with NaN to get all NaNs
+            #TODO is there a cleaner simpler way to do this?
+            next_obs_sample[i] = buffer.observations[1] * NaN
         end
     end
     next_obs_sample = batch(next_obs_sample, observation_space(buffer))
