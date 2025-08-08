@@ -48,8 +48,8 @@ end
 function sac_actor_loss(::SAC, policy::ContinuousActorCriticPolicy{<:Any,<:Any,<:Any,QCritic}, ps, st, data)
     obs = data.observations
     ent_coef = data.log_ent_coef[1] |> exp
-    actions_pi, log_probs_pi, st = action_log_prob(policy, obs, ps, st)
-    q_values, st = @ignore_derivatives predict_values(policy, obs, actions_pi, ps, st)
+    actions_pi, log_probs_pi, st = action_log_prob(policy, obs, ps, st; rng)
+    q_values, st = predict_values(policy, obs, actions_pi, ps, st)
     min_q_values = minimum(q_values, dims=1) |> vec
     loss = mean(ent_coef .* log_probs_pi - min_q_values)
     return loss, st, Dict()
