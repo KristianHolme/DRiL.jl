@@ -33,19 +33,22 @@ end
 
 get_target_entropy(ent_coef::FixedEntropyCoefficient, action_space) = nothing
 
-function sac_ent_coef_loss(alg::SAC,
-    policy::ContinuousActorCriticPolicy{<:Any,<:Any,<:Any,QCritic}, ps, st, data
+function sac_ent_coef_loss(::SAC,
+    policy::ContinuousActorCriticPolicy{<:Any,<:Any,<:Any,QCritic}, ps, st, data;
+    rng::AbstractRNG=Random.default_rng()
 )
     log_ent_coef = ps.log_ent_coef[1]
     policy_ps = data.policy_ps
     policy_st = data.policy_st
-    _, log_probs_pi, policy_st = action_log_prob(policy, data.observations, policy_ps, policy_st)
+    _, log_probs_pi, policy_st = action_log_prob(policy, data.observations, policy_ps, policy_st; rng)
     target_entropy = data.target_entropy
     loss = -(log_ent_coef * @ignore_derivatives(log_probs_pi .+ target_entropy |> mean))
     return loss, st, Dict()
 end
 
-function sac_actor_loss(::SAC, policy::ContinuousActorCriticPolicy{<:Any,<:Any,<:Any,QCritic}, ps, st, data)
+function sac_actor_loss(::SAC, policy::ContinuousActorCriticPolicy{<:Any,<:Any,<:Any,QCritic}, ps, st, data;
+    rng::AbstractRNG=Random.default_rng()
+)
     obs = data.observations
     ent_coef = data.log_ent_coef[1] |> exp
     actions_pi, log_probs_pi, st = action_log_prob(policy, obs, ps, st; rng)
@@ -55,8 +58,10 @@ function sac_actor_loss(::SAC, policy::ContinuousActorCriticPolicy{<:Any,<:Any,<
     return loss, st, Dict()
 end
 
-function sac_critic_loss(alg::SAC, policy::ContinuousActorCriticPolicy{<:Any,<:Any,<:Any,QCritic}, ps, st, data)
-    obs, actions, rewards, terminated, truncated, next_obs = data.observations, data.actions, data.rewards, data.terminated, data.truncated, data.next_observations
+function sac_critic_loss(alg::SAC, policy::ContinuousActorCriticPolicy{<:Any,<:Any,<:Any,QCritic}, ps, st, data;
+    rng::AbstractRNG=Random.default_rng()
+)
+    obs, actions, rewards, terminated, _, next_obs = data.observations, data.actions, data.rewards, data.terminated, data.truncated, data.next_observations
     gamma = alg.gamma
     ent_coef = data.log_ent_coef[1] |> exp
     target_ps = data.target_ps
@@ -70,7 +75,7 @@ function sac_critic_loss(alg::SAC, policy::ContinuousActorCriticPolicy{<:Any,<:A
     next_obs = selectdim(next_obs, obs_dims, .!terminated)
     @assert !any(isnan, next_obs) "Next observations contain NaNs"
     target_q_values = @ignore_derivatives begin
-        next_actions, next_log_probs, st = action_log_prob(policy, next_obs, ps, st)
+        next_actions, next_log_probs, st = action_log_prob(policy, next_obs, ps, st; rng)
         #replace critic ps and st with target
         ps_with_target = merge(ps, target_ps)
         st_with_target = merge(st, target_st)
@@ -386,7 +391,7 @@ function learn!(
                     target_st=agent.Q_target_states
                 )
                 ent_grad, ent_loss, _, ent_train_state = Lux.Training.compute_gradients(ad_type,
-                    (model, ps, st, data) -> sac_ent_coef_loss(alg, policy, ps, st, data),
+                    (model, ps, st, data) -> sac_ent_coef_loss(alg, policy, ps, st, data; rng=agent.rng),
                     ent_data,
                     ent_train_state
                 )
@@ -412,7 +417,7 @@ function learn!(
             )
 
             critic_grad, critic_loss, critic_stats, train_state = Lux.Training.compute_gradients(ad_type,
-                (model, ps, st, data) -> sac_critic_loss(alg, policy, ps, st, data),
+                (model, ps, st, data) -> sac_critic_loss(alg, policy, ps, st, data; rng=agent.rng),
                 critic_data,
                 train_state
             )
@@ -433,8 +438,8 @@ function learn!(
                 log_ent_coef=agent.ent_train_state.parameters
             )
 
-            actor_grad, actor_loss, _, train_state = Lux.Training.compute_gradients(ad_type,
-                (model, ps, st, data) -> sac_actor_loss(alg, policy, ps, st, data),
+            actor_loss_grad, actor_loss, _, train_state = Lux.Training.compute_gradients(ad_type,
+                (model, ps, st, data) -> sac_actor_loss(alg, policy, ps, st, data; rng=agent.rng),
                 actor_data,
                 train_state
             )
