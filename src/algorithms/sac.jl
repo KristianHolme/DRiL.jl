@@ -312,6 +312,12 @@ function log_sac_training(agent::SACAgent, stats::SACTrainingStats, step::Int, e
         end
         log_value(agent.logger, "train/total_steps", steps_taken(agent))
 
+        # Log mean std (exp of log_std) if present, consistent with PPO logging
+        if haskey(agent.train_state.parameters, :log_std)
+            mean_std = Statistics.mean(exp.(agent.train_state.parameters[:log_std]))
+            log_value(agent.logger, "train/std", mean_std)
+        end
+
         # Log episode statistics
         log_stats(env, agent.logger)
     end
@@ -453,6 +459,7 @@ function learn!(
                 train_state
             )
             zero_critic_grads!(actor_loss_grad, policy)
+            #TODO: check log_std grad, should not be zero?
             @assert norm(actor_loss_grad.critic_head) < 1e-10 "Critic head gradient is not zero"
             train_state = Lux.Training.apply_gradients(train_state, actor_loss_grad)
             push!(training_stats.actor_losses, actor_loss)
