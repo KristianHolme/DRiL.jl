@@ -459,7 +459,6 @@ function learn!(
                 train_state
             )
             zero_critic_grads!(actor_loss_grad, policy)
-            #TODO: check log_std grad, should not be zero?
             @assert norm(actor_loss_grad.critic_head) < 1e-10 "Critic head gradient is not zero"
             train_state = Lux.Training.apply_gradients(train_state, actor_loss_grad)
             push!(training_stats.actor_losses, actor_loss)
@@ -471,6 +470,8 @@ function learn!(
                 polyak_update!(agent.Q_target_parameters, train_state.parameters, alg.tau)
 
             end
+
+            @reset agent.train_state = train_state
 
             # Record statistics
             current_ent_coef = exp(agent.ent_train_state.parameters[1])
