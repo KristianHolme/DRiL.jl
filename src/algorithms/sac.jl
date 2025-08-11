@@ -193,7 +193,7 @@ function predict_actions(agent::SACAgent,
         return actions
     else
         #HACK: incorporate alg into agent?
-        return process_action(actions, action_space(policy), SAC())
+        return process_action.(actions, Ref(action_space(policy)), Ref(alg))
     end
     return actions
 end
@@ -388,7 +388,6 @@ function learn!(
 
     total_steps = n_steps * n_envs + adjusted_train_freq * (iterations - 1)
 
-    #XXX: progress bar is not matching actual progress, its too quick to 99%
     progress_meter = Progress(total_steps, desc="Training...",
         showspeed=true, enabled=agent.verbose > 0
     )
