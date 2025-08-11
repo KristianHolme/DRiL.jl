@@ -20,7 +20,7 @@
 
     # Collect rollouts
     roll_buffer = RolloutBuffer(DRiL.observation_space(env), DRiL.action_space(env), gae_lambda, gamma, max_steps, 1)
-    DRiL.collect_rollout!(roll_buffer, agent, env)
+    DRiL.collect_rollout!(roll_buffer, agent, alg, env)
 
     # Verify reward pattern
     rewards = roll_buffer.rewards
@@ -92,7 +92,7 @@ end
         alg = PPO(; gamma=gamma, gae_lambda=gae_lambda)
 
         roll_buffer = RolloutBuffer(DRiL.observation_space(env), DRiL.action_space(env), gae_lambda, gamma, max_steps, 1)
-        DRiL.collect_rollout!(roll_buffer, agent, env)
+        DRiL.collect_rollout!(roll_buffer, agent, alg, env)
 
         rewards = roll_buffer.rewards
         values = roll_buffer.values
@@ -133,7 +133,7 @@ end
 
     # Collect rollouts
     roll_buffer = RolloutBuffer(DRiL.observation_space(env), DRiL.action_space(env), gae_lambda, gamma, max_steps, 1)
-    DRiL.collect_rollout!(roll_buffer, agent, env)
+    DRiL.collect_rollout!(roll_buffer, agent, alg, env)
 
     # Verify rewards pattern: should be [0, 0, 0, ..., 0, 1] for each episode
     rewards = roll_buffer.rewards
@@ -193,7 +193,7 @@ end
 
     # Collect rollouts
     roll_buffer = RolloutBuffer(DRiL.observation_space(env), DRiL.action_space(env), gae_lambda, gamma, n_total_steps, 1)
-    DRiL.collect_rollout!(roll_buffer, agent, env)
+    DRiL.collect_rollout!(roll_buffer, agent, alg, env)
 
     rewards = roll_buffer.rewards
     advantages = roll_buffer.advantages
@@ -238,7 +238,7 @@ end
 
     # Collect rollouts
     roll_buffer = RolloutBuffer(DRiL.observation_space(env), DRiL.action_space(env), gae_lambda, gamma, max_steps, 1)
-    DRiL.collect_rollout!(roll_buffer, agent, env)
+    DRiL.collect_rollout!(roll_buffer, agent, alg, env)
 
     rewards = roll_buffer.rewards
     values = roll_buffer.values
@@ -286,7 +286,7 @@ end
     alg = PPO(; gamma=gamma, gae_lambda=gae_lambda)
 
     roll_buffer = RolloutBuffer(DRiL.observation_space(env), DRiL.action_space(env), gae_lambda, gamma, max_steps, 1)
-    DRiL.collect_rollout!(roll_buffer, agent, env)
+    DRiL.collect_rollout!(roll_buffer, agent, alg, env)
 
     rewards = roll_buffer.rewards
     values = roll_buffer.values
@@ -304,7 +304,7 @@ end
     # Test zero gamma case
     gamma_zero = 0.0f0
     roll_buffer_zero = RolloutBuffer(DRiL.observation_space(env), DRiL.action_space(env), gae_lambda, gamma_zero, max_steps, 1)
-    DRiL.collect_rollout!(roll_buffer_zero, agent, env)
+    DRiL.collect_rollout!(roll_buffer_zero, agent, alg, env)
 
     # With gamma=0, advantage should just be immediate reward - value
     @test roll_buffer_zero.advantages[1] ≈ (1.0f0 - constant_value) atol = 1e-4
@@ -314,7 +314,7 @@ end
     env_multi = BroadcastedParallelEnv([SharedTestSetup.CustomEnv(3)])  # 3 steps for better testing
     agent_multi = ActorCriticAgent(policy; n_steps=3, batch_size=3, epochs=1, verbose=0)
     roll_buffer_td0 = RolloutBuffer(DRiL.observation_space(env_multi), DRiL.action_space(env_multi), lambda_zero, gamma, 3, 1)
-    DRiL.collect_rollout!(roll_buffer_td0, agent_multi, env_multi)
+    DRiL.collect_rollout!(roll_buffer_td0, agent_multi, alg, env_multi)
 
     # With lambda=0 (TD(0)), GAE reduces to simple TD error
     # Each advantage should be just the immediate TD error without accumulation

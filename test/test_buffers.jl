@@ -15,7 +15,7 @@ using TestItems
     roll_buffer = RolloutBuffer(DRiL.observation_space(env), DRiL.action_space(env), alg.gae_lambda, alg.gamma, n_steps, n_envs)
 
     for i in 1:10
-        DRiL.collect_rollout!(roll_buffer, agent, env)
+        DRiL.collect_rollout!(roll_buffer, agent, alg, env)
         obs = roll_buffer.observations
         act = roll_buffer.actions
         logprobs = roll_buffer.logprobs
@@ -140,7 +140,7 @@ end
     agent = ActorCriticAgent(policy; n_steps=n_steps, batch_size=16, epochs=1, verbose=0)
 
     # Collect rollouts
-    DRiL.collect_rollout!(roll_buffer, agent, env)
+    DRiL.collect_rollout!(roll_buffer, agent, alg, env)
 
     # Verify buffer dimensions
     @test size(roll_buffer.observations) == (obs_space.shape..., n_steps * n_envs)
@@ -178,7 +178,7 @@ end
     roll_buffer = RolloutBuffer(DRiL.observation_space(env), DRiL.action_space(env), alg.gae_lambda, alg.gamma, n_steps, n_envs)
 
     # Test rollout collection
-    DRiL.collect_rollout!(roll_buffer, agent, env)
+    DRiL.collect_rollout!(roll_buffer, agent, alg, env)
 
     # Check that actions are stored as 1-based indices (raw policy output)
     actions = roll_buffer.actions
@@ -235,8 +235,8 @@ end
     continuous_buffer = RolloutBuffer(DRiL.observation_space(continuous_env), DRiL.action_space(continuous_env), alg.gae_lambda, alg.gamma, 4, 2)
 
     # Collect rollouts
-    DRiL.collect_rollout!(discrete_buffer, discrete_agent, discrete_env)
-    DRiL.collect_rollout!(continuous_buffer, continuous_agent, continuous_env)
+    DRiL.collect_rollout!(discrete_buffer, discrete_agent, alg, discrete_env)
+    DRiL.collect_rollout!(continuous_buffer, continuous_agent, alg, continuous_env)
 
     # Test discrete actions are integers
     discrete_actions = discrete_buffer.actions
@@ -286,7 +286,7 @@ end
         agent = ActorCriticAgent(policy; verbose=0)
         alg = PPO()
         roll_buffer = RolloutBuffer(obs_space, act_space, alg.gae_lambda, alg.gamma, n_steps, DRiL.number_of_envs(env))
-        DRiL.collect_rollout!(roll_buffer, agent, env)
+        DRiL.collect_rollout!(roll_buffer, agent, alg, env)
         return roll_buffer
     end
     function test_rollout(roll_buffer::RolloutBuffer, env::AbstractEnv)
@@ -325,7 +325,7 @@ end
     roll_buffer = RolloutBuffer(DRiL.observation_space(env), DRiL.action_space(env), alg.gae_lambda, alg.gamma, n_steps, n_envs)
 
     # Test rollout collection
-    DRiL.collect_rollout!(roll_buffer, agent, env)
+    DRiL.collect_rollout!(roll_buffer, agent, alg, env)
 
     @test roll_buffer.observations |> size == (4, n_steps * n_envs)
     @test roll_buffer.actions |> size == (1, n_steps * n_envs)
@@ -355,10 +355,10 @@ end
     @test capacity(buffer) == buffer_capacity
     @test !isfull(buffer)
 
-    DRiL.collect_rollout!(buffer, agent, env, n_steps)
+    DRiL.collect_rollout!(buffer, agent, alg, env, n_steps)
     @test size(buffer) == n_steps * n_envs
 
-    DRiL.collect_rollout!(buffer, agent, env, train_freq)
+    DRiL.collect_rollout!(buffer, agent, alg, env, train_freq)
     @test size(buffer) == buffer_capacity
     @test isfull(buffer)
 
