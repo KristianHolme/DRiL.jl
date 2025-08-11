@@ -210,7 +210,7 @@ end
 
         # Collect initial rollouts (like in learn!)
         n_steps = 4
-        fps = DRiL.collect_rollout!(replay_buffer, agent, env, n_steps)
+        fps = DRiL.collect_rollout!(replay_buffer, agent, alg, env, n_steps)
 
         @test fps > 0  # Sanity check that collection worked
         @test length(replay_buffer) > 0  # Buffer should have data
