@@ -46,13 +46,13 @@ end
 
 
 function polyak_update!(target::AbstractArray{T}, source::AbstractArray{T}, tau::T) where T<:AbstractFloat
-    target .= tau .* source .+ (1 - tau) .* target
+    target .= tau .* source .+ (one(T) - tau) .* target
     nothing
 end
 
-function polyak_update!(target::ComponentArray, source::ComponentArray, tau::AbstractFloat)
+function polyak_update!(target::ComponentArray{T}, source::ComponentArray{T}, tau::T) where T<:AbstractFloat
     for key in keys(target)
-        target[key] .= tau .* source[key] .+ (1 - tau) .* target[key]
+        target[key] .= tau .* source[key] .+ (one(T) - tau) .* target[key]
     end
     nothing
 end
