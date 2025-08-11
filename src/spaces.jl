@@ -113,7 +113,7 @@ end
 
 # Helper function to process actions: ensure correct type and clipping for Box
 #TODO performance
-function process_action(action, action_space::Box{T}) where T
+function process_action(action, action_space::Box{T}, ::PPO) where T
     # First check if type conversion is needed
     if eltype(action) != T
         @warn "Action type mismatch: $(eltype(action)) != $T"
@@ -124,8 +124,25 @@ function process_action(action, action_space::Box{T}) where T
     return action
 end
 
+function process_action(action::AbstractVector, action_space::Box, alg::SAC)
+    return process_action.(action, Ref(action_space), Ref(alg))
+end
+
+function process_action(action, action_space::Box{T}, ::SAC) where T
+    # First check if type conversion is needed
+    if eltype(action) != T
+        @warn "Action type mismatch: $(eltype(action)) != $T"
+        action = convert.(T, action)
+    end
+    action = scale_to_space(action, action_space)
+    return action
+end
+
 function scale_to_space(action, action_space::Box{T}) where T
-    return action .* (action_space.high .- action_space.low) .+ action_space.low
+    low = action_space.low
+    high = action_space.high
+    x = action
+    return x .* (high - low) ./ T(2) + (low + high) ./ T(2)
 end
 
 
@@ -210,15 +227,15 @@ function Base.in(sample, space::Discrete)
 end
 
 # Helper function to process actions: convert from 1-based indexing to action space range
-function process_action(action::Integer, action_space::Discrete)
-    # Clamp to valid range
+function process_action(action::Integer, action_space::Discrete, ::PPO)
+    # Make sure its in valid range
     @assert action_space.start ≤ action ≤ action_space.start + action_space.n - 1
     return action
 end
 
 # Handle case where action might be in an array (for consistency with Box spaces)
-function process_action(action::AbstractArray{<:Integer}, action_space::Discrete)
-    return process_action.(action, Ref(action_space))
+function process_action(action::AbstractArray{<:Integer}, action_space::Discrete, alg::AbstractAlgorithm)
+    return process_action.(action, Ref(action_space), Ref(alg))
 end
 
 

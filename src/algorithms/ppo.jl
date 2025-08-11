@@ -114,7 +114,7 @@ function learn!(agent::ActorCriticAgent, env::AbstractParallelEnv, alg::PPO{T}, 
                 return nothing
             end
         end
-        fps = collect_rollout!(roll_buffer, agent, env, progress_meter; callbacks=callbacks)
+        fps = collect_rollout!(roll_buffer, agent, alg, env, progress_meter; callbacks=callbacks)
         push!(total_fps, fps)
         add_step!(agent, n_steps * n_envs)
         if !isnothing(agent.logger)

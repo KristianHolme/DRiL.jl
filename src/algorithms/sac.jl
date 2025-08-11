@@ -177,14 +177,24 @@ function init_entropy_coefficient(entropy_coefficient::AutoEntropyCoefficient)
     ComponentArray(log_ent_coef=[entropy_coefficient.initial_value |> log])
 end
 
-function predict_actions(agent::SACAgent, observations::AbstractVector; deterministic::Bool=false, rng::AbstractRNG=agent.rng)
+function predict_actions(agent::SACAgent,
+    observations::AbstractVector;
+    deterministic::Bool=false,
+    rng::AbstractRNG=agent.rng,
+    raw::Bool=false
+)
     policy = agent.policy
     ps = agent.train_state.parameters
     st = agent.train_state.states
     batched_obs = batch(observations, observation_space(policy))
     actions, st = predict_actions(policy, batched_obs, ps, st; deterministic, rng)
     #TODO: handle update of st? make agent mutable and set new train_state with @set?
-    actions = process_action.(actions, Ref(action_space(policy)))
+    if raw
+        return actions
+    else
+        #HACK: incorporate alg into agent?
+        return process_action(actions, action_space(policy), SAC())
+    end
     return actions
 end
 
@@ -214,15 +224,16 @@ function collect_trajectories(agent::SACAgent, env::AbstractParallelEnv, n_steps
         observations = new_obs
         if use_random_actions
             actions = rand(act_space, size(observations))
+            processed_actions = actions  # already in env space
         else
-            actions = predict_actions(agent, observations)
+            actions = predict_actions(agent, observations, SAC(); raw=true)
+            processed_actions = process_action.(actions, Ref(act_space))
         end
-        processed_actions = process_action.(actions, Ref(act_space))
         rewards, terminateds, truncateds, infos = act!(env, processed_actions)
         new_obs = observe(env)
         for j in 1:n_envs
             push!(current_trajectories[j].observations, observations[j])
-            push!(current_trajectories[j].actions, actions[j])
+            push!(current_trajectories[j].actions, actions[j]) #store unprocessed actions
             push!(current_trajectories[j].rewards, rewards[j])
             if terminateds[j] || truncateds[j] || i == n_steps
                 current_trajectories[j].terminated = terminateds[j]
@@ -251,11 +262,11 @@ function collect_trajectories(agent::SACAgent, env::AbstractParallelEnv, n_steps
     return trajectories
 end
 
-function collect_rollout!(buffer::ReplayBuffer, agent::SACAgent, env::AbstractParallelEnv,
+function collect_rollout!(buffer::ReplayBuffer, agent::SACAgent, alg::SAC, env::AbstractParallelEnv,
     n_steps::Int, progress_meter::Union{Progress,Nothing}=nothing; kwargs...
 )
     t_start = time()
-    trajectories = collect_trajectories(agent, env, n_steps, progress_meter; kwargs...)
+    trajectories = collect_trajectories(agent, alg, env, n_steps, progress_meter; kwargs...)
     t_collect = time() - t_start
     total_steps = sum(length.(trajectories))
     fps = total_steps / t_collect
@@ -381,7 +392,7 @@ function learn!(
     for training_iteration in 1:iterations  # Adjust this termination condition as needed
         # @info "Training iteration $training_iteration, collecting rollout ($n_steps steps)"
         # Collect experience
-        fps = collect_rollout!(replay_buffer, agent, env, n_steps, progress_meter; callbacks,
+        fps = collect_rollout!(replay_buffer, agent, alg, env, n_steps, progress_meter; callbacks,
             use_random_actions=training_iteration == 1 && alg.start_steps > 0)
         #set steps to train_freq after first (potentially larger) rollout
         push!(training_stats.fps, fps)

@@ -71,7 +71,7 @@ Base.length(trajectory::Trajectory) = length(trajectory.rewards)
 total_reward(trajectory::Trajectory) = sum(trajectory.rewards)
 
 
-function collect_trajectories(agent::ActorCriticAgent, env::AbstractParallelEnv, n_steps::Int,
+function collect_trajectories(agent::ActorCriticAgent, env::AbstractParallelEnv, alg::AbstractAlgorithm, n_steps::Int,
     progress_meter::Union{Progress,Nothing}=nothing; callbacks::Union{Vector{<:AbstractCallback},Nothing}=nothing)
     # reset!(env)
     trajectories = Trajectory[]
@@ -94,7 +94,7 @@ function collect_trajectories(agent::ActorCriticAgent, env::AbstractParallelEnv,
         end
         observations = new_obs
         actions, values, logprobs = get_action_and_values(agent, observations)
-        processed_actions = process_action.(actions, Ref(act_space))
+        processed_actions = process_action(actions, act_space, alg)
         rewards, terminateds, truncateds, infos = act!(env, processed_actions)
         new_obs = observe(env)
         for j in 1:n_envs
@@ -132,7 +132,13 @@ function collect_trajectories(agent::ActorCriticAgent, env::AbstractParallelEnv,
     return trajectories
 end
 
-function collect_rollout!(rollout_buffer::RolloutBuffer, agent::ActorCriticAgent, env::AbstractEnv, progress_meter::Union{Progress,Nothing}=nothing; callbacks::Union{Vector{<:AbstractCallback},Nothing}=nothing)
+function collect_rollout!(rollout_buffer::RolloutBuffer,
+    agent::ActorCriticAgent,
+    alg::PPO,
+    env::AbstractEnv,
+    progress_meter::Union{Progress,Nothing}=nothing;
+    callbacks::Union{Vector{<:AbstractCallback},Nothing}=nothing
+)
     # reset!(env) #we dont reset the, we continue from where we left off
 
     obs_space = observation_space(env)
@@ -141,7 +147,7 @@ function collect_rollout!(rollout_buffer::RolloutBuffer, agent::ActorCriticAgent
     reset!(rollout_buffer)
 
     t_start = time()
-    trajectories = collect_trajectories(agent, env, rollout_buffer.n_steps, progress_meter; callbacks=callbacks)
+    trajectories = collect_trajectories(agent, env, alg, rollout_buffer.n_steps, progress_meter; callbacks=callbacks)
     t_collect = time() - t_start
     total_steps = sum(length.(trajectories))
     fps = total_steps / t_collect
