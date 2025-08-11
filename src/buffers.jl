@@ -134,7 +134,7 @@ end
 
 function collect_rollout!(rollout_buffer::RolloutBuffer,
     agent::ActorCriticAgent,
-    alg::PPO,
+    alg::OnPolicyAlgorithm,
     env::AbstractEnv,
     progress_meter::Union{Progress,Nothing}=nothing;
     callbacks::Union{Vector{<:AbstractCallback},Nothing}=nothing
