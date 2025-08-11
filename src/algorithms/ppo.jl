@@ -324,3 +324,23 @@ function (alg::PPO{T})(policy::AbstractActorCriticPolicy, ps, st, batch_data) wh
     return loss, st, stats
 end
 
+
+# Helper function to process actions: ensure correct type and clipping for Box
+#TODO performance
+function process_action(action, action_space::Box{T}, ::PPO) where T
+    # First check if type conversion is needed
+    if eltype(action) != T
+        @warn "Action type mismatch: $(eltype(action)) != $T"
+        action = convert.(T, action)
+    end
+    # Then clip to bounds element-wise
+    action = clamp.(action, action_space.low, action_space.high)
+    return action
+end
+
+# Helper function to process actions: convert from 1-based indexing to action space range
+function process_action(action::Integer, action_space::Discrete, ::PPO)
+    # Make sure its in valid range
+    @assert action_space.start ≤ action ≤ action_space.start + action_space.n - 1
+    return action
+end
