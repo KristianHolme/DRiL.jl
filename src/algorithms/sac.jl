@@ -37,7 +37,7 @@ function sac_ent_coef_loss(::SAC,
     policy::ContinuousActorCriticPolicy{<:Any,<:Any,<:Any,QCritic}, ps, st, data;
     rng::AbstractRNG=Random.default_rng()
 )
-    log_ent_coef = ps.log_ent_coef[1]
+    log_ent_coef = ps.log_ent_coef[firstindex(ps.log_ent_coef)]
     policy_ps = data.policy_ps
     policy_st = data.policy_st
     _, log_probs_pi, policy_st = action_log_prob(policy, data.observations, policy_ps, policy_st; rng)
@@ -50,7 +50,7 @@ function sac_actor_loss(::SAC, policy::ContinuousActorCriticPolicy{<:Any,<:Any,<
     rng::AbstractRNG=Random.default_rng()
 )
     obs = data.observations
-    ent_coef = data.log_ent_coef[1] |> exp
+    ent_coef = data.log_ent_coef[firstindex(data.log_ent_coef)] |> exp
     actions_pi, log_probs_pi, st = action_log_prob(policy, obs, ps, st; rng)
     q_values, st = predict_values(policy, obs, actions_pi, ps, st)
     min_q_values = minimum(q_values, dims=1) |> vec
@@ -84,7 +84,7 @@ function sac_critic_loss(alg::SAC, policy::ContinuousActorCriticPolicy{<:Any,<:A
 
         # Add entropy term
         next_q_vals_with_entropy = min_next_q .- ent_coef .* next_log_probs
-        target_q_vals = rewards
+        target_q_vals = copy(rewards)
         # Bellman target
         target_q_vals[.!terminated] .+= gamma .* next_q_vals_with_entropy
         target_q_vals
@@ -198,7 +198,7 @@ function predict_actions(agent::SACAgent,
     return actions
 end
 
-function collect_trajectories(agent::SACAgent, env::AbstractParallelEnv, n_steps::Int,
+function collect_trajectories(agent::SACAgent, alg::SAC, env::AbstractParallelEnv, n_steps::Int,
     progress_meter::Union{Progress,Nothing}=nothing;
     callbacks::Union{Vector{<:AbstractCallback},Nothing}=nothing,
     use_random_actions::Bool=false)
@@ -223,11 +223,12 @@ function collect_trajectories(agent::SACAgent, env::AbstractParallelEnv, n_steps
         end
         observations = new_obs
         if use_random_actions
-            actions = rand(act_space, size(observations))
+            @assert observations isa AbstractVector
+            actions = rand(agent.rng, act_space, length(observations))
             processed_actions = actions  # already in env space
         else
-            actions = predict_actions(agent, observations, SAC(); raw=true)
-            processed_actions = process_action.(actions, Ref(act_space))
+            actions = predict_actions(agent, observations; raw=true)
+            processed_actions = process_action.(actions, Ref(act_space), Ref(alg))
         end
         rewards, terminateds, truncateds, infos = act!(env, processed_actions)
         new_obs = observe(env)
@@ -508,4 +509,14 @@ function learn!(
 
     # Return training statistics
     return agent, replay_buffer, training_stats
+end
+
+function process_action(action, action_space::Box{T}, ::SAC) where T
+    # First check if type conversion is needed
+    if eltype(action) != T
+        @warn "Action type mismatch: $(eltype(action)) != $T"
+        action = convert.(T, action)
+    end
+    action = scale_to_space(action, action_space)
+    return action
 end
