@@ -566,8 +566,8 @@ function action_log_prob(policy::ContinuousActorCriticPolicy, obs::AbstractArray
     ds = get_distributions(policy, action_means, log_std)
     actions = rand.(rng, ds)
     log_probs = logpdf.(ds, actions)
-    scaled_actions = scale_to_space.(actions, Ref(policy.action_space))
-    return scaled_actions, log_probs, st
+    # scaled_actions = scale_to_space.(actions, Ref(policy.action_space))
+    return actions, log_probs, st
 end
 
 function zero_critic_grads!(critic_grad::ComponentArray, policy::ContinuousActorCriticPolicy)
