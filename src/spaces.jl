@@ -58,13 +58,6 @@ Returns a vector of length `n`.
 """
 function Random.rand(rng::AbstractRNG, space::Box{T}, n::Integer) where T
     [rand(rng, space) for _ in 1:n]
-    # # Generate random values with an extra dimension for n samples
-    # unit_random = rand(rng, T, space.shape..., n)
-    # # Scale to [low, high] range element-wise
-    # # Need to add dimensions to low/high to broadcast correctly
-    # low_expanded = reshape(space.low, space.shape..., 1)
-    # high_expanded = reshape(space.high, space.shape..., 1)
-    # return unit_random .* (high_expanded .- low_expanded) .+ low_expanded
 end
 
 Random.rand(space::Box, n::Integer) = rand(Random.default_rng(), space, n)
@@ -111,32 +104,9 @@ function Base.in(sample, space::Box{T}) where T
     return all(space.low .<= sample .<= space.high)
 end
 
-# Helper function to process actions: ensure correct type and clipping for Box
-#TODO performance
-function process_action(action, action_space::Box{T}, ::PPO) where T
-    # First check if type conversion is needed
-    if eltype(action) != T
-        @warn "Action type mismatch: $(eltype(action)) != $T"
-        action = convert.(T, action)
-    end
-    # Then clip to bounds element-wise
-    action = clamp.(action, action_space.low, action_space.high)
-    return action
-end
 
-function process_action(action::AbstractVector, action_space::Box, alg::SAC)
-    return process_action.(action, Ref(action_space), Ref(alg))
-end
 
-function process_action(action, action_space::Box{T}, ::SAC) where T
-    # First check if type conversion is needed
-    if eltype(action) != T
-        @warn "Action type mismatch: $(eltype(action)) != $T"
-        action = convert.(T, action)
-    end
-    action = scale_to_space(action, action_space)
-    return action
-end
+
 
 function scale_to_space(action, action_space::Box{T}) where T
     low = action_space.low
@@ -226,12 +196,7 @@ function Base.in(sample, space::Discrete)
     return space.start <= sample <= space.start + space.n - 1
 end
 
-# Helper function to process actions: convert from 1-based indexing to action space range
-function process_action(action::Integer, action_space::Discrete, ::PPO)
-    # Make sure its in valid range
-    @assert action_space.start ≤ action ≤ action_space.start + action_space.n - 1
-    return action
-end
+
 
 # Handle case where action might be in an array (for consistency with Box spaces)
 function process_action(action::AbstractArray{<:Integer}, action_space::Discrete, alg::AbstractAlgorithm)
