@@ -295,29 +295,30 @@ end
 
     # Test 0-based space (Gymnasium style)
     space_0 = Discrete(5, 0)  # Valid actions: 0, 1, 2, 3, 4
+    alg = PPO()
 
     # Test basic conversion from 1-based to 0-based
-    @test all(process_action(0:4, space_0) .== 0:4)  # Julia 1-based → space 0-based
+    @test all(process_action(0:4, space_0, alg) .== 0:4)  # Julia 1-based → space 0-based
 
     # Test clamping for out-of-bounds actions
-    @test process_action(0, space_0) == 0    # Below valid range, clamp to min
-    @test_throws AssertionError process_action(10, space_0)   # above valid range
-    @test_throws AssertionError process_action(-1, space_0)   # below valid range
-    @test_throws MethodError process_action(1.0, space_0)   # not an integer
-    @test_throws MethodError process_action(1f0, space_0)   # not an integer
+    @test process_action(0, space_0, alg) == 0    # Below valid range, clamp to min
+    @test_throws AssertionError process_action(10, space_0, alg)   # above valid range
+    @test_throws AssertionError process_action(-1, space_0, alg)   # below valid range
+    @test_throws MethodError process_action(1.0, space_0, alg)   # not an integer
+    @test_throws MethodError process_action(1f0, space_0, alg)   # not an integer
 
     space_1 = Discrete(3, 1)  # Valid actions: 1, 2, 3
 
-    @test process_action(1, space_1) == 1  # 1-based → 1-based (no change)
-    @test_throws AssertionError process_action(4, space_1)   # above valid range
-    @test_throws AssertionError process_action(0, space_1)   # below valid range
+    @test process_action(1, space_1, alg) == 1  # 1-based → 1-based (no change)
+    @test_throws AssertionError process_action(4, space_1, alg)   # above valid range
+    @test_throws AssertionError process_action(0, space_1, alg)   # below valid range
 
     # Test custom start space
     space_custom = Discrete(4, -1)  # Valid actions: -1, 0, 1, 2
-    @test_throws AssertionError process_action(5, space_custom)   # above valid range
-    @test_throws AssertionError process_action(-2, space_custom)   # below valid range
-    @test_throws MethodError process_action(1.0, space_custom)   # not an integer
-    @test_throws MethodError process_action(1f0, space_custom)   # not an integer
+    @test_throws AssertionError process_action(5, space_custom, alg)   # above valid range
+    @test_throws AssertionError process_action(-2, space_custom, alg)   # below valid range
+    @test_throws MethodError process_action(1.0, space_custom, alg)   # not an integer
+    @test_throws MethodError process_action(1f0, space_custom, alg)   # not an integer
 end
 
 
@@ -362,6 +363,7 @@ end
 
 @testitem "Discrete space edge cases" tags = [:spaces, :discrete, :edge_cases] begin
     using DRiL: process_action
+    alg = PPO()
 
     # Test single action space
     space_single = Discrete(1, 0)  # Only action: 0
@@ -375,16 +377,16 @@ end
     @test_throws AssertionError Discrete(0)
 
     # Test process_action with single action space
-    @test process_action(0, space_single) == 0  # Only valid action
-    @test_throws AssertionError process_action(1, space_single)  # out of bounds
-    @test_throws AssertionError process_action(-1, space_single)  # out of bounds
+    @test process_action(0, space_single, alg) == 0  # Only valid action
+    @test_throws AssertionError process_action(1, space_single, alg)  # out of bounds
+    @test_throws AssertionError process_action(-1, space_single, alg)  # out of bounds
 
     # Test single action space with different start
     space_single_1 = Discrete(1, 5)  # Only action: 5
     @test 5 ∈ space_single_1
     @test !(4 ∈ space_single_1)
     @test !(6 ∈ space_single_1)
-    @test_throws AssertionError process_action(1, space_single_1) == 5
+    @test_throws AssertionError process_action(1, space_single_1, alg) == 5
 
     # Test large action space
     space_large = Discrete(1000, 0)
@@ -407,8 +409,8 @@ end
     @test !((-5) ∈ space_neg)
 
     # Test process_action with negative start
-    @test_throws AssertionError process_action(1, space_neg)
-    @test_throws AssertionError process_action(5, space_neg)
-    @test_throws AssertionError process_action(0, space_neg)
-    @test_throws AssertionError process_action(6, space_neg)
+    @test_throws AssertionError process_action(1, space_neg, alg)
+    @test_throws AssertionError process_action(5, space_neg, alg)
+    @test_throws AssertionError process_action(0, space_neg, alg)
+    @test_throws AssertionError process_action(6, space_neg, alg)
 end
