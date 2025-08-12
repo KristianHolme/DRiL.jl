@@ -33,6 +33,18 @@ end
 
 get_target_entropy(ent_coef::FixedEntropyCoefficient, action_space) = nothing
 
+function SACPolicy(observation_space::Union{Discrete,Box{T}},
+    action_space::Box{T};
+    log_std_init::T=T(-3),
+    hidden_dims=[512, 512],
+    activation=relu,
+    shared_features::Bool=false,
+    critic_type::CriticType=QCritic()
+) where T
+    return ContinuousActorCriticPolicy(observation_space, action_space;
+        log_std_init, hidden_dims, activation, shared_features, critic_type)
+end
+
 function sac_ent_coef_loss(::SAC,
     policy::ContinuousActorCriticPolicy{<:Any,<:Any,<:Any,QCritic}, ps, st, data;
     rng::AbstractRNG=Random.default_rng()

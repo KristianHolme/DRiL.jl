@@ -46,7 +46,7 @@ include("buffers.jl")
 export Trajectory, RolloutBuffer, OffPolicyTrajectory, ReplayBuffer
 
 include("algorithms/sac.jl")
-export SAC, SACAgent
+export SAC, SACAgent, SACPolicy
 
 include("algorithms/ppo.jl")
 export learn!, PPO, load_policy_params_and_state
