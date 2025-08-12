@@ -193,6 +193,7 @@ function predict_actions(agent::SACAgent,
         return actions
     else
         #HACK: incorporate alg into agent?
+        alg = SAC()
         return process_action.(actions, Ref(action_space(policy)), Ref(alg))
     end
     return actions

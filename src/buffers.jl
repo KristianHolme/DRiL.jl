@@ -94,7 +94,7 @@ function collect_trajectories(agent::ActorCriticAgent, env::AbstractParallelEnv,
         end
         observations = new_obs
         actions, values, logprobs = get_action_and_values(agent, observations)
-        processed_actions = process_action(actions, act_space, alg)
+        processed_actions = process_action.(actions, Ref(act_space), Ref(alg))
         rewards, terminateds, truncateds, infos = act!(env, processed_actions)
         new_obs = observe(env)
         for j in 1:n_envs
