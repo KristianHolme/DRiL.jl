@@ -24,7 +24,7 @@
 
     @kwdef struct OnTrainingStartCheckLocalsCallback <: AbstractCallback
         keys::Vector{Symbol} = [:agent, :env, :alg, :iterations, :total_steps, :max_steps,
-            :n_steps, :n_envs, :roll_buffer, :iterations, :total_fps, :callbacks, :callback]
+            :n_steps, :n_envs, :roll_buffer, :iterations, :total_fps, :callbacks]
     end
     function DRiL.on_training_start(callback::OnTrainingStartCheckLocalsCallback, locals::Dict)
         @info "OnTrainingStartCheckLocalsCallback"
