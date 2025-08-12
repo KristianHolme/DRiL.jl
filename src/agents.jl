@@ -120,7 +120,9 @@ function predict_actions(agent::ActorCriticAgent, observations::AbstractVector; 
     #TODO: handle update of st?
 
     # Process actions for environment use (e.g., convert 1-based to 0-based for Discrete)
-    actions = process_action.(actions, Ref(action_space(policy)))
+    #HACK: incorporate alg into agent?
+    alg = PPO()
+    actions = process_action.(actions, Ref(action_space(policy)), Ref(alg))
     return actions
 end
 
