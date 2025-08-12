@@ -105,7 +105,11 @@ function learn!(agent::ActorCriticAgent, env::AbstractParallelEnv, alg::PPO{T}, 
                 return nothing
             end
         end
-        fps = collect_rollout!(roll_buffer, agent, alg, env, progress_meter; callbacks=callbacks)
+        fps, success = collect_rollout!(roll_buffer, agent, alg, env, progress_meter; callbacks=callbacks)
+        if !success
+            @warn "Training stopped due to callback failure"
+            return nothing
+        end
         push!(total_fps, fps)
         add_step!(agent, n_steps * n_envs)
         if !isnothing(agent.logger)
