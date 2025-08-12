@@ -81,13 +81,8 @@ function collect_trajectories(agent::ActorCriticAgent, env::AbstractParallelEnv,
     current_trajectories = [Trajectory(obs_space, act_space) for _ in 1:n_envs]
     new_obs = observe(env)
     for i in 1:n_steps
-        all_good = true
         if !isnothing(callbacks)
-            for callback in callbacks
-                callback_good = on_step(callback, agent, env, current_trajectories, new_obs)
-                all_good = all_good && callback_good
-            end
-            if !all_good
+            if !all(c -> on_step(c, Base.@locals), callbacks)
                 @warn "Collecting trajectories stopped due to callback failure"
                 return trajectories
             end

@@ -87,13 +87,8 @@ function learn!(agent::ActorCriticAgent, env::AbstractParallelEnv, alg::PPO{T}, 
     total_fps = Float32[]
     total_grad_norms = Float32[]
 
-    all_good = true
     if !isnothing(callbacks)
-        for callback in callbacks
-            callback_good = on_training_start(callback, agent, env, alg, iterations, total_steps)
-            all_good = all_good && callback_good
-        end
-        if !all_good
+        if !all(c -> on_training_start(c, Base.@locals), callbacks)
             @warn "Training stopped due to callback failure"
             return nothing
         end
@@ -105,11 +100,7 @@ function learn!(agent::ActorCriticAgent, env::AbstractParallelEnv, alg::PPO{T}, 
         push!(learning_rates, learning_rate)
 
         if !isnothing(callbacks)
-            for callback in callbacks
-                callback_good = on_rollout_start(callback, agent, env, roll_buffer)
-                all_good = all_good && callback_good
-            end
-            if !all_good
+            if !all(c -> on_rollout_start(c, Base.@locals), callbacks)
                 @warn "Training stopped due to callback failure"
                 return nothing
             end
@@ -124,11 +115,7 @@ function learn!(agent::ActorCriticAgent, env::AbstractParallelEnv, alg::PPO{T}, 
         end
 
         if !isnothing(callbacks)
-            for callback in callbacks
-                callback_good = on_rollout_end(callback, agent, env, roll_buffer)
-                all_good = all_good && callback_good
-            end
-            if !all_good
+            if !all(c -> on_rollout_end(c, Base.@locals), callbacks)
                 @warn "Training stopped due to callback failure"
                 return nothing
             end
@@ -248,11 +235,7 @@ function learn!(agent::ActorCriticAgent, env::AbstractParallelEnv, alg::PPO{T}, 
         "learning_rates" => learning_rates
     )
     if !isnothing(callbacks)
-        for callback in callbacks
-            callback_good = on_training_end(callback, agent, env, alg)
-            all_good = all_good && callback_good
-        end
-        if !all_good
+        if !all(c -> on_training_end(c, Base.@locals), callbacks)
             @warn "Training stopped due to callback failure"
             return nothing
         end

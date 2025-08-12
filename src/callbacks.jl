@@ -1,15 +1,15 @@
-function on_training_start(callback::AbstractCallback, agent::AbstractAgent, env::AbstractParallelEnv, alg::AbstractAlgorithm, iterations::Int, total_steps::Int)
+function on_training_start(callback::AbstractCallback, locals::Dict)
     return true
 end
-function on_rollout_start(callback::AbstractCallback, agent::AbstractAgent, env::AbstractParallelEnv, rollout_buffer::AbstractBuffer)
+function on_rollout_start(callback::AbstractCallback, locals::Dict)
     return true
 end
-function on_step(callback::AbstractCallback, agent::AbstractAgent, env::AbstractParallelEnv, trajectories::Vector{<:Trajectory}, observations::Vector)
+function on_step(callback::AbstractCallback, locals::Dict)
     return true
 end
-function on_rollout_end(callback::AbstractCallback, agent::AbstractAgent, env::AbstractParallelEnv, rollout_buffer::AbstractBuffer)
+function on_rollout_end(callback::AbstractCallback, locals::Dict)
     return true
 end
-function on_training_end(callback::AbstractCallback, agent::AbstractAgent, env::AbstractParallelEnv, alg::AbstractAlgorithm)
+function on_training_end(callback::AbstractCallback, locals::Dict)
     return true
 end
