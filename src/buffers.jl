@@ -84,7 +84,7 @@ function collect_trajectories(agent::ActorCriticAgent, env::AbstractParallelEnv,
         if !isnothing(callbacks)
             if !all(c -> on_step(c, Base.@locals), callbacks)
                 @warn "Collecting trajectories stopped due to callback failure"
-                return trajectories
+                return trajectories, false
             end
         end
         observations = new_obs
@@ -124,7 +124,7 @@ function collect_trajectories(agent::ActorCriticAgent, env::AbstractParallelEnv,
         end
         !isnothing(progress_meter) && next!(progress_meter, step=number_of_envs(env))
     end
-    return trajectories
+    return trajectories, true
 end
 
 function collect_rollout!(rollout_buffer::RolloutBuffer,
@@ -142,10 +142,14 @@ function collect_rollout!(rollout_buffer::RolloutBuffer,
     reset!(rollout_buffer)
 
     t_start = time()
-    trajectories = collect_trajectories(agent, env, alg, rollout_buffer.n_steps, progress_meter; callbacks=callbacks)
+    trajectories, success = collect_trajectories(agent, env, alg, rollout_buffer.n_steps, progress_meter; callbacks=callbacks)
     t_collect = time() - t_start
     total_steps = sum(length.(trajectories))
     fps = total_steps / t_collect
+    if !success
+        @warn "Collecting trajectories stopped due to callback failure"
+        return fps, false
+    end
 
     traj_lengths = length.(trajectories)
     positions = cumsum([1; traj_lengths])
@@ -164,7 +168,7 @@ function collect_rollout!(rollout_buffer::RolloutBuffer,
             traj, rollout_buffer.gamma, rollout_buffer.gae_lambda)
         rollout_buffer.returns[traj_inds] .= rollout_buffer.advantages[traj_inds] .+ rollout_buffer.values[traj_inds]
     end
-    return fps
+    return fps, true
 end
 
 function compute_advantages!(advantages::AbstractArray, traj::Trajectory, gamma::AbstractFloat, gae_lambda::AbstractFloat)
