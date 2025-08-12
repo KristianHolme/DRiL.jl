@@ -211,13 +211,8 @@ function collect_trajectories(agent::SACAgent, alg::SAC, env::AbstractParallelEn
     current_trajectories = [OffPolicyTrajectory(obs_space, act_space) for _ in 1:n_envs]
     new_obs = observe(env)
     for i in 1:n_steps
-        all_good = true
         if !isnothing(callbacks)
-            for callback in callbacks
-                callback_good = on_step(callback, agent, env, current_trajectories, new_obs)
-                all_good = all_good && callback_good
-            end
-            if !all_good
+            if !all(c -> on_step(c, Base.@locals), callbacks)
                 @warn "Collecting trajectories stopped due to callback failure"
                 return trajectories
             end
@@ -396,11 +391,36 @@ function learn!(
     agent.verbose > 0 && @info "Starting SAC training with buffer size: $(length(replay_buffer)),
     start_steps: $(alg.start_steps), train_freq: $(alg.train_freq), number_of_envs: $(n_envs),
     adjusted_train_freq: $(adjusted_train_freq), iterations: $(iterations), total_steps: $(total_steps)"
+
+    # Callbacks: training start
+    if !isnothing(callbacks)
+        if !all(c -> on_training_start(c, Base.@locals), callbacks)
+            @warn "Training stopped due to callback failure"
+            return nothing
+        end
+    end
     for training_iteration in 1:iterations  # Adjust this termination condition as needed
         # @info "Training iteration $training_iteration, collecting rollout ($n_steps steps)"
+
+        # Callbacks: rollout start
+        if !isnothing(callbacks)
+            if !all(c -> on_rollout_start(c, Base.@locals), callbacks)
+                @warn "Training stopped due to callback failure"
+                return nothing
+            end
+        end
+
         # Collect experience
         fps = collect_rollout!(replay_buffer, agent, alg, env, n_steps, progress_meter; callbacks,
             use_random_actions=training_iteration == 1 && alg.start_steps > 0)
+
+        # Callbacks: rollout end
+        if !isnothing(callbacks)
+            if !all(c -> on_rollout_end(c, Base.@locals), callbacks)
+                @warn "Training stopped due to callback failure"
+                return nothing
+            end
+        end
         #set steps to train_freq after first (potentially larger) rollout
         push!(training_stats.fps, fps)
         add_step!(agent, n_steps * n_envs)
@@ -505,6 +525,14 @@ function learn!(
 
         # Log training statistics
         log_sac_training(agent, training_stats, steps_taken(agent), env)
+    end
+
+    # Callbacks: training end
+    if !isnothing(callbacks)
+        if !all(c -> on_training_end(c, Base.@locals), callbacks)
+            @warn "Training stopped due to callback failure"
+            return nothing
+        end
     end
 
     # Return training statistics
