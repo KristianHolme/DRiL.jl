@@ -412,7 +412,7 @@ function learn!(
     if !isnothing(callbacks)
         if !all(c -> on_training_start(c, Base.@locals), callbacks)
             @warn "Training stopped due to callback failure"
-            return nothing
+            return agent, replay_buffer, training_stats
         end
     end
     for training_iteration in 1:iterations  # Adjust this termination condition as needed
@@ -422,7 +422,7 @@ function learn!(
         if !isnothing(callbacks)
             if !all(c -> on_rollout_start(c, Base.@locals), callbacks)
                 @warn "Training stopped due to callback failure"
-                return nothing
+                return agent, replay_buffer, training_stats
             end
         end
 
@@ -551,7 +551,7 @@ function learn!(
     if !isnothing(callbacks)
         if !all(c -> on_training_end(c, Base.@locals), callbacks)
             @warn "Training stopped due to callback failure"
-            return nothing
+            return agent, replay_buffer, training_stats
         end
     end
 
