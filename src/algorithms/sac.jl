@@ -369,7 +369,7 @@ function learn!(
     env::AbstractParallelEnv,
     alg::OffPolicyAlgorithm,
     max_steps::Int;
-    #TODO: make callbacks an agent property?
+    #TODO: remove union?
     callbacks::Union{Vector{<:AbstractCallback},Nothing}=nothing,
     ad_type::Lux.Training.AbstractADType=AutoZygote()
 )
