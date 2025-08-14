@@ -438,6 +438,7 @@ function extract_features(policy::AbstractActorCriticPolicy, obs::AbstractArray,
 end
 
 function get_actions_from_features(policy::AbstractActorCriticPolicy, feats::AbstractArray, ps, st)
+    #TODO: fix runtime dispatch here in actor_head
     actions, actor_st = policy.actor_head(feats, ps.actor_head, st.actor_head)
     st = merge(st, (; actor_head=actor_st))
     return actions, st
@@ -475,6 +476,7 @@ end
 # Dispatch on noise type for QCritic policies
 function get_distributions(policy::ContinuousActorCriticPolicy{<:Any,<:Any,StateIndependantNoise,QCritic}, action_means::AbstractArray, log_std::AbstractArray)
     batch_dim = ndims(action_means)
+    #FIXME: runtime dispatch here in SquashedDiagGaussian
     return SquashedDiagGaussian.(eachslice(action_means, dims=batch_dim), Ref(log_std))
 end
 
@@ -560,6 +562,7 @@ end
 
 #returns vector of actions
 function action_log_prob(policy::ContinuousActorCriticPolicy, obs::AbstractArray, ps, st; rng::AbstractRNG=Random.default_rng())
+    #TODO: fix runtime dispatch here in extract_features
     actor_feats, _, st = extract_features(policy, obs, ps, st)
     action_means, st = get_actions_from_features(policy, actor_feats, ps, st)
     log_std = ps.log_std
