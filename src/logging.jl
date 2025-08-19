@@ -44,8 +44,23 @@ function get_hparams(alg::SAC)
         "gamma" => alg.gamma,
         "train_freq" => alg.train_freq,
         "gradient_steps" => alg.gradient_steps,
-        "ent_coef" => string(alg.ent_coef),
         "target_update_interval" => alg.target_update_interval
     )
+
+    hparams = merge(hparams, get_hparams(alg.ent_coef))
     return hparams
+end
+
+function get_hparams(ent_coef::AutoEntropyCoefficient)
+    return Dict{String,Any}(
+        "ent_coef_mode" => "auto",
+        "ent_coef_value" => ent_coef.initial_value
+    )
+end
+
+function get_hparams(ent_coef::FixedEntropyCoefficient)
+    return Dict{String,Any}(
+        "ent_coef_mode" => "fixed",
+        "ent_coef_value" => ent_coef.coef
+    )
 end
