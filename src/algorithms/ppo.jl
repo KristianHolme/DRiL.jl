@@ -1,4 +1,3 @@
-#TODO make learning_rate part of algorithm?
 @kwdef struct PPO{T<:AbstractFloat} <: OnPolicyAlgorithm
     gamma::T = 0.99f0
     gae_lambda::T = 0.95f0
