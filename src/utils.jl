@@ -57,8 +57,7 @@ function polyak_update!(target::ComponentArray{T}, source::ComponentArray{T}, ta
     nothing
 end
 
-
-function Base.merge(a1::ComponentArray, a2::ComponentArray)
+function merge_params(a1::ComponentArray, a2::ComponentArray)
     a3 = copy(a1)
     for key in keys(a2)
         a3[key] = a2[key]
