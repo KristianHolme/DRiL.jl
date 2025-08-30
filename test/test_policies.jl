@@ -2,9 +2,6 @@ using Test
 using DRiL
 using TestItems
 
-@testset "policies.jl" begin
-    # TODO: Add tests for policies
-end
 
 @testitem "DiscreteActorCriticPolicy construction" tags = [:policies, :discrete, :construction] setup = [SharedTestSetup] begin
     using Random
@@ -19,14 +16,14 @@ end
     @test policy isa DiscreteActorCriticPolicy
     @test isequal(policy.observation_space, obs_space)
     @test isequal(policy.action_space, action_space)
-    @test policy.shared_features == true
+    @test typeof(policy) <: DiscreteActorCriticPolicy{<:Any,<:Any,SharedFeatures}
 
     # Test with custom parameters
     policy_custom = DiscreteActorCriticPolicy(obs_space, action_space;
         hidden_dims=[32, 16],
         activation=relu,
         shared_features=false)
-    @test policy_custom.shared_features == false
+    @test typeof(policy_custom) <: DiscreteActorCriticPolicy{<:Any,<:Any,SeparateFeatures}
 
     # Test with 1-based action space
     action_space_1 = Discrete(3, 1)  # 1-based
