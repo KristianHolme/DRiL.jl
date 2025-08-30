@@ -264,10 +264,10 @@ function ContinuousActorCriticPolicy(observation_space::Union{Discrete,Box{T}},
         bias_init, hidden_init, actor_init)
     critic_head = get_critic_head(latent_dim, action_space, hidden_dims, activation,
         bias_init, hidden_init, value_init, critic_type)
-    
+
     # Choose feature sharing type based on boolean flag
     F = shared_features ? SharedFeatures : SeparateFeatures
-    
+
     return ContinuousActorCriticPolicy{
         typeof(observation_space),
         typeof(action_space),
@@ -299,11 +299,11 @@ function DiscreteActorCriticPolicy(observation_space::Union{Discrete,Box},
     actor_head = get_actor_head(latent_dim, action_space, hidden_dims, activation,
         bias_init, hidden_init, actor_init)
     critic_head = get_critic_head(latent_dim, action_space, hidden_dims, activation,
-        bias_init, hidden_init, value_init, QCritic())
-    
+        bias_init, hidden_init, value_init, VCritic())
+
     # Choose feature sharing type based on boolean flag
     F = shared_features ? SharedFeatures : SeparateFeatures
-    
+
     return DiscreteActorCriticPolicy{
         typeof(observation_space),
         typeof(action_space),
