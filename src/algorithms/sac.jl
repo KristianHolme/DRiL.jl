@@ -89,7 +89,7 @@ function sac_critic_loss(alg::SAC, policy::ContinuousActorCriticPolicy{<:Any,<:A
     target_q_values = @ignore_derivatives begin
         next_actions, next_log_probs, st = action_log_prob(policy, next_obs, ps, st; rng)
         #replace critic ps and st with target
-        ps_with_target = merge(ps, target_ps)
+        ps_with_target = merge_params(ps, target_ps)
         st_with_target = merge(st, target_st)
         next_q_vals, _ = predict_values(policy, next_obs, next_actions, ps_with_target, st_with_target)
         min_next_q = minimum(next_q_vals, dims=1) |> vec
