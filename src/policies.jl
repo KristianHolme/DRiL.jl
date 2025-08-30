@@ -467,7 +467,7 @@ end
 
 # Type-stable feature extraction using dispatch
 function extract_features(policy::ContinuousActorCriticPolicy{<:Any,<:Any,<:Any,<:Any,SharedFeatures}, obs::AbstractArray, ps, st)
-    feats, feats_st = policy.feature_extractor(obs, ps.feature_extractor, st.feature_extractor)
+    feats, feats_st = _apply_feature_extractor(policy.feature_extractor, obs, ps.feature_extractor, st.feature_extractor)
     actor_feats = feats
     critic_feats = feats
     st = merge(st, (; feature_extractor=feats_st))
@@ -475,15 +475,15 @@ function extract_features(policy::ContinuousActorCriticPolicy{<:Any,<:Any,<:Any,
 end
 
 function extract_features(policy::ContinuousActorCriticPolicy{<:Any,<:Any,<:Any,<:Any,SeparateFeatures}, obs::AbstractArray, ps, st)
-    actor_feats, actor_feats_st = policy.feature_extractor(obs, ps.actor_feature_extractor, st.actor_feature_extractor)
-    critic_feats, critic_feats_st = policy.feature_extractor(obs, ps.critic_feature_extractor, st.critic_feature_extractor)
+    actor_feats, actor_feats_st = _apply_feature_extractor(policy.feature_extractor, obs, ps.actor_feature_extractor, st.actor_feature_extractor)
+    critic_feats, critic_feats_st = _apply_feature_extractor(policy.feature_extractor, obs, ps.critic_feature_extractor, st.critic_feature_extractor)
     st = merge(st, (; actor_feature_extractor=actor_feats_st, critic_feature_extractor=critic_feats_st))
     return actor_feats, critic_feats, st
 end
 
 # For DiscreteActorCriticPolicy (3 type parameters)
 function extract_features(policy::DiscreteActorCriticPolicy{<:Any,<:Any,SharedFeatures}, obs::AbstractArray, ps, st)
-    feats, feats_st = policy.feature_extractor(obs, ps.feature_extractor, st.feature_extractor)
+    feats, feats_st = _apply_feature_extractor(policy.feature_extractor, obs, ps.feature_extractor, st.feature_extractor)
     actor_feats = feats
     critic_feats = feats
     st = merge(st, (; feature_extractor=feats_st))
@@ -491,21 +491,35 @@ function extract_features(policy::DiscreteActorCriticPolicy{<:Any,<:Any,SharedFe
 end
 
 function extract_features(policy::DiscreteActorCriticPolicy{<:Any,<:Any,SeparateFeatures}, obs::AbstractArray, ps, st)
-    actor_feats, actor_feats_st = policy.feature_extractor(obs, ps.actor_feature_extractor, st.actor_feature_extractor)
-    critic_feats, critic_feats_st = policy.feature_extractor(obs, ps.critic_feature_extractor, st.critic_feature_extractor)
+    actor_feats, actor_feats_st = _apply_feature_extractor(policy.feature_extractor, obs, ps.actor_feature_extractor, st.actor_feature_extractor)
+    critic_feats, critic_feats_st = _apply_feature_extractor(policy.feature_extractor, obs, ps.critic_feature_extractor, st.critic_feature_extractor)
     st = merge(st, (; actor_feature_extractor=actor_feats_st, critic_feature_extractor=critic_feats_st))
     return actor_feats, critic_feats, st
 end
 
+# Function barriers to handle type-unstable layer calls
+@inline function _apply_feature_extractor(feature_extractor::AbstractLuxLayer, obs::AbstractArray, ps, st)
+    return feature_extractor(obs, ps, st)
+end
+
+@inline function _apply_actor_head(actor_head::AbstractLuxLayer, feats::AbstractArray, ps, st)
+    return actor_head(feats, ps, st)
+end
+
+@inline function _apply_critic_head(critic_head::AbstractLuxLayer, feats::AbstractArray, ps, st)
+    return critic_head(feats, ps, st)
+end
+
 function get_actions_from_features(policy::AbstractActorCriticPolicy, feats::AbstractArray, ps, st)
-    #TODO: fix runtime dispatch here in actor_head
-    actions, actor_st = policy.actor_head(feats, ps.actor_head, st.actor_head)
+    # Use function barrier to isolate type instability
+    actions, actor_st = _apply_actor_head(policy.actor_head, feats, ps.actor_head, st.actor_head)
     st = merge(st, (; actor_head=actor_st))
     return actions, st
 end
 
 function get_values_from_features(policy::AbstractActorCriticPolicy, feats::AbstractArray, ps, st)
-    values, critic_st = policy.critic_head(feats, ps.critic_head, st.critic_head)
+    # Use function barrier to isolate type instability
+    values, critic_st = _apply_critic_head(policy.critic_head, feats, ps.critic_head, st.critic_head)
     st = merge(st, (; critic_head=critic_st))
     return values, st
 end
@@ -515,7 +529,8 @@ function get_values_from_features(policy::ContinuousActorCriticPolicy{<:Any,<:An
         actions = batch(actions, action_space(policy))
     end
     inputs = vcat(feats, actions)
-    values, critic_st = policy.critic_head(inputs, ps.critic_head, st.critic_head)
+    # Use function barrier to isolate type instability
+    values, critic_st = _apply_critic_head(policy.critic_head, inputs, ps.critic_head, st.critic_head)
     st = merge(st, (; critic_head=critic_st))
     return values, st
 end
