@@ -288,7 +288,9 @@ function collect_rollout!(buffer::ReplayBuffer, agent::SACAgent, alg::SAC, env::
     actions = [traj.actions for traj in trajectories]
     stacked_actions = reduce(hcat, stack.(actions))
     mean_abs_action = mean(abs, stacked_actions)
-    log_value(agent.logger, "train/mean_abs_action", mean_abs_action)
+    if !isnothing(agent.logger)
+        log_value(agent.logger, "train/mean_abs_action", mean_abs_action)
+    end
 
     for traj in trajectories
         push!(buffer, traj)
