@@ -210,7 +210,7 @@ end
 
         # Collect initial rollouts (like in learn!)
         n_steps = 4
-        fps = DRiL.collect_rollout!(replay_buffer, agent, alg, env, n_steps)
+        fps, _ = DRiL.collect_rollout!(replay_buffer, agent, alg, env, n_steps)
 
         @test fps > 0  # Sanity check that collection worked
         @test length(replay_buffer) > 0  # Buffer should have data
@@ -317,11 +317,13 @@ end
                 actor_data,
                 train_state
             )
+            DRiL.zero_critic_grads!(actor_grad, policy)
 
             # Verify gradient computation succeeded
             @test !isnothing(actor_grad)
             @test haskey(actor_grad, :actor_head)
             @test !all(iszero, actor_grad.actor_head)
+            @test all(iszero, actor_grad.critic_head)
             @test isfinite(actor_loss)
             @test actor_loss isa Float32
 
