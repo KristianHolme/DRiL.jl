@@ -46,7 +46,7 @@ function load_policy_params_and_state(agent::ActorCriticAgent, alg::PPO, path::A
     new_policy = data["policy"]
     new_parameters = data["parameters"]
     new_states = data["states"]
-    new_optimizer = make_optimizer(agent.optimizer_type, alg.learning_rate)
+    new_optimizer = make_optimizer(agent.optimizer_type, alg)
     new_train_state = Lux.Training.TrainState(new_policy, new_parameters, new_states, new_optimizer)
     #TODO: check if this is correct, probably it is not
     @reset agent.policy = new_policy
