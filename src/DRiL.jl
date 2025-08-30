@@ -36,6 +36,7 @@ include("policies.jl")
 export AbstractActorCriticPolicy, ActorCriticPolicy, ContinuousActorCriticPolicy
 export DiscreteActorCriticPolicy, AbstractPolicy, AbstractWeightInitializer
 export OrthogonalInitializer, QCritic, VCritic, action_log_prob
+export FeatureSharing, SharedFeatures, SeparateFeatures
 
 
 

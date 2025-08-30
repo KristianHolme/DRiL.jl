@@ -166,20 +166,20 @@ add_gradient_update!(agent::SACAgent, updates::Int=1) = add_gradient_update!(age
 steps_taken(agent::SACAgent) = steps_taken(agent.stats)
 gradient_updates(agent::SACAgent) = gradient_updates(agent.stats)
 
-function copy_critic_parameters(policy::ContinuousActorCriticPolicy{<:Any,<:Any,N,QCritic}, ps::ComponentArray) where N<:AbstractNoise
-    if policy.shared_features
-        ComponentArray((feature_extractor=copy(ps.feature_extractor), critic_head=copy(ps.critic_head)))
-    else
-        ComponentArray((critic_feature_extractor=copy(ps.critic_feature_extractor), critic_head=copy(ps.critic_head)))
-    end
+function copy_critic_parameters(policy::ContinuousActorCriticPolicy{<:Any,<:Any,N,QCritic,SharedFeatures}, ps::ComponentArray) where N<:AbstractNoise
+    ComponentArray((feature_extractor=copy(ps.feature_extractor), critic_head=copy(ps.critic_head)))
 end
 
-function copy_critic_states(policy::ContinuousActorCriticPolicy{<:Any,<:Any,N,QCritic}, st::NamedTuple) where N<:AbstractNoise
-    if policy.shared_features
-        (feature_extractor=deepcopy(st.feature_extractor), critic_head=deepcopy(st.critic_head))
-    else
-        (critic_feature_extractor=deepcopy(st.critic_feature_extractor), critic_head=deepcopy(st.critic_head))
-    end
+function copy_critic_parameters(policy::ContinuousActorCriticPolicy{<:Any,<:Any,N,QCritic,SeparateFeatures}, ps::ComponentArray) where N<:AbstractNoise
+    ComponentArray((critic_feature_extractor=copy(ps.critic_feature_extractor), critic_head=copy(ps.critic_head)))
+end
+
+function copy_critic_states(policy::ContinuousActorCriticPolicy{<:Any,<:Any,N,QCritic,SharedFeatures}, st::NamedTuple) where N<:AbstractNoise
+    (feature_extractor=deepcopy(st.feature_extractor), critic_head=deepcopy(st.critic_head))
+end
+
+function copy_critic_states(policy::ContinuousActorCriticPolicy{<:Any,<:Any,N,QCritic,SeparateFeatures}, st::NamedTuple) where N<:AbstractNoise
+    (critic_feature_extractor=deepcopy(st.critic_feature_extractor), critic_head=deepcopy(st.critic_head))
 end
 
 function init_entropy_coefficient(entropy_coefficient::FixedEntropyCoefficient)
