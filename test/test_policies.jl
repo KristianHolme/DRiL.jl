@@ -16,14 +16,16 @@ using TestItems
     @test policy isa DiscreteActorCriticPolicy
     @test isequal(policy.observation_space, obs_space)
     @test isequal(policy.action_space, action_space)
-    @test typeof(policy) <: DiscreteActorCriticPolicy{<:Any,<:Any,SharedFeatures}
+    @test typeof(policy) <: DiscreteActorCriticPolicy{<:Any, <:Any, SharedFeatures}
 
     # Test with custom parameters
-    policy_custom = DiscreteActorCriticPolicy(obs_space, action_space;
-        hidden_dims=[32, 16],
-        activation=relu,
-        shared_features=false)
-    @test typeof(policy_custom) <: DiscreteActorCriticPolicy{<:Any,<:Any,SeparateFeatures}
+    policy_custom = DiscreteActorCriticPolicy(
+        obs_space, action_space;
+        hidden_dims = [32, 16],
+        activation = relu,
+        shared_features = false
+    )
+    @test typeof(policy_custom) <: DiscreteActorCriticPolicy{<:Any, <:Any, SeparateFeatures}
 
     # Test with 1-based action space
     action_space_1 = Discrete(3, 1)  # 1-based
@@ -76,20 +78,20 @@ end
     # Test single observation prediction (with batch dimension)
     obs = Float32[0.5, -0.3]  # Single observation as column vector
     batched_obs = stack([obs])
-    actions, new_states = DRiL.predict_actions(policy, batched_obs, params, states; deterministic=false, rng=rng)
+    actions, new_states = DRiL.predict_actions(policy, batched_obs, params, states; deterministic = false, rng = rng)
 
     # Actions should be in environment action space after processing
     @test actions[1] ∈ action_space
     @test actions[1] isa Integer
 
     # Test deterministic prediction
-    actions_det, _ = DRiL.predict_actions(policy, batched_obs, params, states; deterministic=true, rng=rng)
+    actions_det, _ = DRiL.predict_actions(policy, batched_obs, params, states; deterministic = true, rng = rng)
     @test actions_det[1] ∈ action_space
     @test actions_det[1] isa Integer
 
     # Test batch prediction
     batch_obs = Float32[0.5 -0.2; -0.3 0.7]  # 2 observations
-    batch_actions, _ = DRiL.predict_actions(policy, batch_obs, params, states; deterministic=false, rng=rng)
+    batch_actions, _ = DRiL.predict_actions(policy, batch_obs, params, states; deterministic = false, rng = rng)
 
     @test length(batch_actions) == 2
     @test all(a -> a ∈ action_space, batch_actions)
@@ -122,13 +124,13 @@ end
     eval_values, eval_log_probs, entropy, _ = DRiL.evaluate_actions(policy, batched_obs, actions, params, states)
 
     # Values should match
-    @test eval_values ≈ values atol = 1e-6
+    @test eval_values ≈ values atol = 1.0e-6
 
     # Log probabilities should match (approximately due to floating point)
-    @test isapprox.(eval_log_probs, log_probs, atol=1e-5) |> all
+    @test isapprox.(eval_log_probs, log_probs, atol = 1.0e-5) |> all
 
     # Entropy should be positive for stochastic policy
-    @test entropy[1] >= 0f0
+    @test entropy[1] >= 0.0f0
 
     # Test batch evaluation
     batch_obs = Float32[0.5 -0.2; -0.3 0.7]
@@ -139,7 +141,7 @@ end
     @test length(eval_batch_values) == 2
     @test length(eval_batch_log_probs) == 2
     @test length(batch_entropy) == 2
-    @test eval_batch_values ≈ batch_values atol = 1e-6
+    @test eval_batch_values ≈ batch_values atol = 1.0e-6
     @test all(eval_batch_log_probs .≈ batch_log_probs)
 end
 
@@ -178,7 +180,7 @@ end
         @test length(eval_log_probs) == 1
         @test length(entropy) == 1
         @test eval_log_probs[1] isa Float32
-        @test entropy[1] >= 0f0
+        @test entropy[1] >= 0.0f0
     end
 end
 
@@ -286,8 +288,10 @@ end
     using Lux
     obs_space = Box(Float32[-1.0, -1.0], Float32[1.0, 1.0])
     action_space = Box(Float32[-1.0], Float32[1.0])
-    policy = ContinuousActorCriticPolicy(obs_space, action_space, activation=relu,
-        critic_type=QCritic(), shared_features=false)
+    policy = ContinuousActorCriticPolicy(
+        obs_space, action_space, activation = relu,
+        critic_type = QCritic(), shared_features = false
+    )
 
     rng = Random.MersenneTwister(42)
     ps, st = Lux.setup(rng, policy)

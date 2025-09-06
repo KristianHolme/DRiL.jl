@@ -15,8 +15,8 @@
 
     # Create policy with constant value function
     policy = SharedTestSetup.ConstantValuePolicy(DRiL.observation_space(env), DRiL.action_space(env), constant_value)
-    alg = PPO(; gamma, gae_lambda, n_steps=max_steps, batch_size=max_steps, epochs=1)
-    agent = ActorCriticAgent(policy, alg; verbose=0)
+    alg = PPO(; gamma, gae_lambda, n_steps = max_steps, batch_size = max_steps, epochs = 1)
+    agent = ActorCriticAgent(policy, alg; verbose = 0)
 
     # Collect rollouts
     roll_buffer = RolloutBuffer(DRiL.observation_space(env), DRiL.action_space(env), gae_lambda, gamma, max_steps, 1)
@@ -28,16 +28,16 @@
     advantages = roll_buffer.advantages
 
     # Should have reward of 1.0 at final step, 0.0 elsewhere
-    @test isapprox(rewards[end], 1.0f0, atol=1e-5)
-    @test all(r -> isapprox(r, 0.0f0, atol=1e-5), rewards[1:end-1])
+    @test isapprox(rewards[end], 1.0f0, atol = 1.0e-5)
+    @test all(r -> isapprox(r, 0.0f0, atol = 1.0e-5), rewards[1:(end - 1)])
 
     # Values should be constant
-    @test all(v -> isapprox(v, constant_value, atol=1e-5), values)
+    @test all(v -> isapprox(v, constant_value, atol = 1.0e-5), values)
 
     # Manually calculated GAE advantages using the formula:
     # A_t = δ_t + (γλ)δ_{t+1} + (γλ)²δ_{t+2} + ...
     # where δ_t = r_t + γV_{t+1} - V_t
-    # 
+    #
     # For this scenario:
     # δ_t = 0 + 0.99×0.5 - 0.5 = -0.005 for t=0...6
     # δ_7 = 1 + 0.99×0 - 0.5 = 0.5 for final step (terminated)
@@ -50,7 +50,7 @@
 
     A_s1[end] = δ_7
     for i in 7:-1:1
-        A_s1[i] = δ_t + γλ * A_s1[i+1]
+        A_s1[i] = δ_t + γλ * A_s1[i + 1]
     end
 
     A_s2 = zeros(Float32, 8)
@@ -59,15 +59,15 @@
         i = ix - 1
         A_s2[ix] = δ_t * ((1 - γλ^(6 - i + 1)) / (1 - γλ)) + γλ^(6 - i + 1) * 0.5f0
     end
-    @test isapprox(A_s1, A_s2, atol=1e-4)
+    @test isapprox(A_s1, A_s2, atol = 1.0e-4)
 
-    expected_advantages = (A_s1 .+ A_s2) ./ 2f0
+    expected_advantages = (A_s1 .+ A_s2) ./ 2.0f0
 
-    @test isapprox(advantages, expected_advantages, atol=1e-4)
+    @test isapprox(advantages, expected_advantages, atol = 1.0e-4)
 
     # Verify returns = advantages + values
     expected_returns = expected_advantages .+ constant_value
-    @test isapprox(roll_buffer.returns, expected_returns, atol=1e-4)
+    @test isapprox(roll_buffer.returns, expected_returns, atol = 1.0e-4)
 end
 
 @testitem "GAE computation cross-validation with different parameters" tags = [:gae, :parametric] setup = [SharedTestSetup] begin
@@ -78,18 +78,18 @@ end
     constant_value = 0.3f0
 
     test_cases = [
-        (gamma=0.95f0, gae_lambda=0.9f0),
-        (gamma=0.99f0, gae_lambda=0.95f0),
-        (gamma=1.0f0, gae_lambda=1.0f0),   # Monte Carlo case
-        (gamma=0.9f0, gae_lambda=0.0f0),   # TD(0) case
-        (gamma=0.8f0, gae_lambda=0.5f0),
+        (gamma = 0.95f0, gae_lambda = 0.9f0),
+        (gamma = 0.99f0, gae_lambda = 0.95f0),
+        (gamma = 1.0f0, gae_lambda = 1.0f0),   # Monte Carlo case
+        (gamma = 0.9f0, gae_lambda = 0.0f0),   # TD(0) case
+        (gamma = 0.8f0, gae_lambda = 0.5f0),
     ]
 
     for (gamma, gae_lambda) in test_cases
         env = BroadcastedParallelEnv([SharedTestSetup.CustomEnv(max_steps)])
         policy = SharedTestSetup.ConstantValuePolicy(DRiL.observation_space(env), DRiL.action_space(env), constant_value)
-        alg = PPO(; gamma, gae_lambda, n_steps=max_steps, batch_size=max_steps, epochs=1)
-        agent = ActorCriticAgent(policy, alg; verbose=0)
+        alg = PPO(; gamma, gae_lambda, n_steps = max_steps, batch_size = max_steps, epochs = 1)
+        agent = ActorCriticAgent(policy, alg; verbose = 0)
 
         roll_buffer = RolloutBuffer(DRiL.observation_space(env), DRiL.action_space(env), gae_lambda, gamma, max_steps, 1)
         DRiL.collect_rollout!(roll_buffer, agent, alg, env)
@@ -99,18 +99,18 @@ end
         advantages = roll_buffer.advantages
 
         # Verify reward pattern
-        @test rewards[end] ≈ 1.0f0 atol = 1e-5
-        @test all(r -> isapprox(r, 0.0f0, atol=1e-5), rewards[1:end-1])
+        @test rewards[end] ≈ 1.0f0 atol = 1.0e-5
+        @test all(r -> isapprox(r, 0.0f0, atol = 1.0e-5), rewards[1:(end - 1)])
 
         # Verify constant values
-        @test all(v -> isapprox(v, constant_value, atol=1e-5), values)
+        @test all(v -> isapprox(v, constant_value, atol = 1.0e-5), values)
 
         # Cross-validation with helper function
         expected_advantages = SharedTestSetup.compute_expected_gae(
-            rewards, values, gamma, gae_lambda; is_terminated=true
+            rewards, values, gamma, gae_lambda; is_terminated = true
         )
 
-        @test isapprox(advantages, expected_advantages, atol=1e-4)
+        @test isapprox(advantages, expected_advantages, atol = 1.0e-4)
     end
 end
 
@@ -128,8 +128,8 @@ end
 
     # Create policy with constant value function
     policy = SharedTestSetup.ConstantValuePolicy(DRiL.observation_space(env), DRiL.action_space(env), constant_value)
-    alg = PPO(; gamma, gae_lambda, n_steps=max_steps, batch_size=max_steps, epochs=1)
-    agent = ActorCriticAgent(policy, alg; verbose=0)
+    alg = PPO(; gamma, gae_lambda, n_steps = max_steps, batch_size = max_steps, epochs = 1)
+    agent = ActorCriticAgent(policy, alg; verbose = 0)
 
     # Collect rollouts
     roll_buffer = RolloutBuffer(DRiL.observation_space(env), DRiL.action_space(env), gae_lambda, gamma, max_steps, 1)
@@ -143,11 +143,11 @@ end
     # Check that rewards are mostly 0 with 1.0 at episode ends
     # Since we have constant episodes of max_steps, every max_steps-th reward should be 1.0
     for i in max_steps:max_steps:length(rewards)
-        @test rewards[i] ≈ 1.0f0 atol = 1e-5
+        @test rewards[i] ≈ 1.0f0 atol = 1.0e-5
     end
 
     # Check that values are constant
-    @test all(v -> isapprox(v, constant_value, atol=1e-5), values)
+    @test all(v -> isapprox(v, constant_value, atol = 1.0e-5), values)
 
     # Find episode boundaries and verify advantages
     episode_ends = findall(i -> i % max_steps == 0, 1:length(rewards))
@@ -157,7 +157,7 @@ end
 
         # Last step of episode should have advantage = 1.0 - constant_value
         expected_last_advantage = 1.0f0 - constant_value
-        @test isapprox(advantages[episode_end], expected_last_advantage, atol=1e-4)
+        @test isapprox(advantages[episode_end], expected_last_advantage, atol = 1.0e-4)
 
         # Verify GAE computation for the episode
         episode_rewards = rewards[episode_start:episode_end]
@@ -166,10 +166,10 @@ end
 
         # Cross-validation with helper function
         expected_advantages = SharedTestSetup.compute_expected_gae(
-            episode_rewards, episode_values, gamma, gae_lambda; is_terminated=true
+            episode_rewards, episode_values, gamma, gae_lambda; is_terminated = true
         )
 
-        @test isapprox(episode_advantages, expected_advantages, atol=1e-4)
+        @test isapprox(episode_advantages, expected_advantages, atol = 1.0e-4)
     end
 end
 
@@ -188,8 +188,8 @@ end
 
     # Create policy with constant value function
     policy = SharedTestSetup.ConstantValuePolicy(DRiL.observation_space(env), DRiL.action_space(env), constant_value)
-    alg = PPO(; gamma, gae_lambda, n_steps=n_total_steps, batch_size=n_total_steps, epochs=1)
-    agent = ActorCriticAgent(policy, alg; verbose=0)
+    alg = PPO(; gamma, gae_lambda, n_steps = n_total_steps, batch_size = n_total_steps, epochs = 1)
+    agent = ActorCriticAgent(policy, alg; verbose = 0)
 
     # Collect rollouts
     roll_buffer = RolloutBuffer(DRiL.observation_space(env), DRiL.action_space(env), gae_lambda, gamma, n_total_steps, 1)
@@ -206,15 +206,15 @@ end
     # Advantages = returns - values = returns - 0.0 = returns
 
     # Check episode boundaries
-    episode_ends = findall(isapprox.(rewards, 1.0f0, atol=1e-5))
+    episode_ends = findall(isapprox.(rewards, 1.0f0, atol = 1.0e-5))
 
     for episode_end in episode_ends
         episode_start = max(1, episode_end - max_steps + 1)
 
         # For Monte Carlo with gamma=1.0, all steps in episode should have return = 1.0
         for step in episode_start:episode_end
-            @test isapprox(returns[step], 1.0f0, atol=1e-4)
-            @test isapprox(advantages[step], 1.0f0, atol=1e-4)  # Since values = 0.0
+            @test isapprox(returns[step], 1.0f0, atol = 1.0e-4)
+            @test isapprox(advantages[step], 1.0f0, atol = 1.0e-4)  # Since values = 0.0
         end
     end
 end
@@ -233,8 +233,8 @@ end
 
     # Create policy with constant value function
     policy = SharedTestSetup.ConstantValuePolicy(DRiL.observation_space(env), DRiL.action_space(env), constant_value)
-    alg = PPO(; gamma, gae_lambda, n_steps=max_steps, batch_size=max_steps, epochs=1)
-    agent = ActorCriticAgent(policy, alg; verbose=0)
+    alg = PPO(; gamma, gae_lambda, n_steps = max_steps, batch_size = max_steps, epochs = 1)
+    agent = ActorCriticAgent(policy, alg; verbose = 0)
 
     # Collect rollouts
     roll_buffer = RolloutBuffer(DRiL.observation_space(env), DRiL.action_space(env), gae_lambda, gamma, max_steps, 1)
@@ -245,10 +245,10 @@ end
     advantages = roll_buffer.advantages
 
     # All rewards should be 1.0 in infinite horizon env
-    @test all(r -> isapprox(r, 1.0f0, atol=1e-5), rewards)
+    @test all(r -> isapprox(r, 1.0f0, atol = 1.0e-5), rewards)
 
     # Values should be constant
-    @test all(v -> isapprox(v, constant_value, atol=1e-5), values)
+    @test all(v -> isapprox(v, constant_value, atol = 1.0e-5), values)
 
     # Since episode doesn't terminate, we expect bootstrapping
     # This tests the rollout-limited case where episode neither terminates nor truncates
@@ -265,7 +265,7 @@ end
     expected_delta = 1.0f0 + (gamma - 1.0f0) * constant_value
 
     # The actual computation depends on bootstrapping, but we can verify basic properties
-    @test !isapprox(advantages[1], advantages[end], atol=1e-6)  # Should vary due to GAE
+    @test !isapprox(advantages[1], advantages[end], atol = 1.0e-6)  # Should vary due to GAE
     @test all(a -> !isnan(a) && isfinite(a), advantages)  # All advantages should be finite
 end
 
@@ -282,8 +282,8 @@ end
 
     env = BroadcastedParallelEnv([SharedTestSetup.CustomEnv(max_steps)])
     policy = SharedTestSetup.ConstantValuePolicy(DRiL.observation_space(env), DRiL.action_space(env), constant_value)
-    alg = PPO(; gamma, gae_lambda, n_steps=max_steps, batch_size=max_steps, epochs=1)
-    agent = ActorCriticAgent(policy, alg; verbose=0)
+    alg = PPO(; gamma, gae_lambda, n_steps = max_steps, batch_size = max_steps, epochs = 1)
+    agent = ActorCriticAgent(policy, alg; verbose = 0)
 
     roll_buffer = RolloutBuffer(DRiL.observation_space(env), DRiL.action_space(env), gae_lambda, gamma, max_steps, 1)
     DRiL.collect_rollout!(roll_buffer, agent, alg, env)
@@ -294,12 +294,12 @@ end
 
     # Single step: reward = 1.0, value = constant_value
     @test length(rewards) == 1
-    @test rewards[1] ≈ 1.0f0 atol = 1e-5
-    @test values[1] ≈ constant_value atol = 1e-5
+    @test rewards[1] ≈ 1.0f0 atol = 1.0e-5
+    @test values[1] ≈ constant_value atol = 1.0e-5
 
     # Advantage should be reward - value = 1.0 - constant_value
     expected_advantage = 1.0f0 - constant_value
-    @test advantages[1] ≈ expected_advantage atol = 1e-4
+    @test advantages[1] ≈ expected_advantage atol = 1.0e-4
 
     # Test zero gamma case
     gamma_zero = 0.0f0
@@ -307,12 +307,12 @@ end
     DRiL.collect_rollout!(roll_buffer_zero, agent, alg, env)
 
     # With gamma=0, advantage should just be immediate reward - value
-    @test roll_buffer_zero.advantages[1] ≈ (1.0f0 - constant_value) atol = 1e-4
+    @test roll_buffer_zero.advantages[1] ≈ (1.0f0 - constant_value) atol = 1.0e-4
 
     # Test zero lambda case (TD(0))
     lambda_zero = 0.0f0
     env_multi = BroadcastedParallelEnv([SharedTestSetup.CustomEnv(3)])  # 3 steps for better testing
-    agent_multi = ActorCriticAgent(policy, alg; verbose=0)
+    agent_multi = ActorCriticAgent(policy, alg; verbose = 0)
     roll_buffer_td0 = RolloutBuffer(DRiL.observation_space(env_multi), DRiL.action_space(env_multi), lambda_zero, gamma, 3, 1)
     DRiL.collect_rollout!(roll_buffer_td0, agent_multi, alg, env_multi)
 

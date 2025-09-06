@@ -168,7 +168,7 @@ end
         action = rand(Float32, act_space.shape...) .* 2.0f0 .- 1.0f0
         for step in 1:3
             DRiL.act!(env, action)
-            
+
             current_obs = DRiL.observe(env)
             @test length(current_obs) == obs_space.shape[1]
             @test current_obs ∈ obs_space
@@ -230,9 +230,11 @@ end
     @test length(results1) == length(results2)
     @test results1[1] ≈ results2[1]  # Initial observations
 
-    @test all(i -> begin
-        obs1, reward1, term1, trunc1 = results1[i]
-        obs2, reward2, term2, trunc2 = results2[i]
-        obs1 ≈ obs2 && reward1 ≈ reward2 && term1 == term2 && trunc1 == trunc2
-    end, eachindex(results1)[2:end])
+    @test all(
+        i -> begin
+            obs1, reward1, term1, trunc1 = results1[i]
+            obs2, reward2, term2, trunc2 = results2[i]
+            obs1 ≈ obs2 && reward1 ≈ reward2 && term1 == term2 && trunc1 == trunc2
+        end, eachindex(results1)[2:end]
+    )
 end

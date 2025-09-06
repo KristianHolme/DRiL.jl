@@ -15,13 +15,13 @@
         _terminated::Bool
         _truncated::Bool
         _last_reward::Float32
-        _info::Dict{String,Any}
+        _info::Dict{String, Any}
         rng::Random.AbstractRNG
 
-        function CustomEnv(max_steps::Int=8, rng::Random.AbstractRNG=Random.Xoshiro())
+        function CustomEnv(max_steps::Int = 8, rng::Random.AbstractRNG = Random.Xoshiro())
             obs_space = Box(Float32[-1.0, -1.0], Float32[1.0, 1.0])
             act_space = Box(Float32[-1.0, -1.0], Float32[1.0, 1.0])
-            new(max_steps, 0, obs_space, act_space, false, false, 0.0f0, Dict{String,Any}(), rng)
+            new(max_steps, 0, obs_space, act_space, false, false, 0.0f0, Dict{String, Any}(), rng)
         end
     end
 
@@ -36,7 +36,7 @@
         env._terminated = false
         env._truncated = false
         env._last_reward = 0.0f0
-        env._info = Dict{String,Any}()
+        env._info = Dict{String, Any}()
         return nothing
     end
 
@@ -51,7 +51,7 @@
         # To simplify GAE computation checks, we do not consider truncation here
         env._truncated = false
         env._last_reward = reward
-        env._info = Dict{String,Any}()
+        env._info = Dict{String, Any}()
 
         return reward
     end
@@ -70,14 +70,14 @@
         _terminated::Bool
         _truncated::Bool
         _last_reward::Float32
-        _info::Dict{String,Any}
+        _info::Dict{String, Any}
         rng::Random.AbstractRNG
 
-        function InfiniteHorizonEnv(n_states::Int=4, rng::Random.AbstractRNG=Random.Xoshiro())
+        function InfiniteHorizonEnv(n_states::Int = 4, rng::Random.AbstractRNG = Random.Xoshiro())
             # Use continuous observation space [0, n_states] to represent the states
             obs_space = Box(Float32[0.0], Float32[Float32(n_states)])
             act_space = Box(Float32[-1.0, -1.0], Float32[1.0, 1.0])
-            new(n_states, 0.0f0, obs_space, act_space, false, false, 0.0f0, Dict{String,Any}(), rng)
+            new(n_states, 0.0f0, obs_space, act_space, false, false, 0.0f0, Dict{String, Any}(), rng)
         end
     end
 
@@ -92,7 +92,7 @@
         env._terminated = false
         env._truncated = false
         env._last_reward = 0.0f0
-        env._info = Dict{String,Any}()
+        env._info = Dict{String, Any}()
         return nothing
     end
 
@@ -106,7 +106,7 @@
         env._terminated = false
         env._truncated = false
         env._last_reward = reward
-        env._info = Dict{String,Any}()
+        env._info = Dict{String, Any}()
 
         return reward
     end
@@ -125,13 +125,13 @@
         _terminated::Bool
         _truncated::Bool
         _last_reward::Float32
-        _info::Dict{String,Any}
+        _info::Dict{String, Any}
         rng::Random.AbstractRNG
 
-        function SimpleRewardEnv(max_steps::Int=8, rng::Random.AbstractRNG=Random.Xoshiro())
+        function SimpleRewardEnv(max_steps::Int = 8, rng::Random.AbstractRNG = Random.Xoshiro())
             obs_space = Box(Float32[-1.0, -1.0], Float32[1.0, 1.0])
             act_space = Box(Float32[-1.0, -1.0], Float32[1.0, 1.0])
-            new(max_steps, 0, obs_space, act_space, false, false, 0.0f0, Dict{String,Any}(), rng)
+            new(max_steps, 0, obs_space, act_space, false, false, 0.0f0, Dict{String, Any}(), rng)
         end
     end
 
@@ -146,7 +146,7 @@
         env._terminated = false
         env._truncated = false
         env._last_reward = 0.0f0
-        env._info = Dict{String,Any}()
+        env._info = Dict{String, Any}()
         return nothing
     end
 
@@ -160,7 +160,7 @@
         env._terminated = env.current_step >= env.max_steps
         env._truncated = false
         env._last_reward = reward
-        env._info = Dict{String,Any}()
+        env._info = Dict{String, Any}()
 
         return reward
     end
@@ -209,7 +209,7 @@
     end
 
     # Implement the main policy call function
-    function (policy::ConstantValuePolicy)(obs::AbstractArray, ps, st; rng::AbstractRNG=Random.default_rng())
+    function (policy::ConstantValuePolicy)(obs::AbstractArray, ps, st; rng::AbstractRNG = Random.default_rng())
         batch_size = size(obs)[end]
         # Random actions in action space bounds
         actions = rand(rng, action_space(policy), batch_size)
@@ -219,13 +219,13 @@
     end
 
     # Implement predict function
-    function DRiL.predict_actions(policy::ConstantValuePolicy, obs::AbstractArray, ps, st; deterministic::Bool=false, rng::AbstractRNG=Random.default_rng())
+    function DRiL.predict_actions(policy::ConstantValuePolicy, obs::AbstractArray, ps, st; deterministic::Bool = false, rng::AbstractRNG = Random.default_rng())
         batch_size = size(obs)[end]
         actions = rand(rng, action_space(policy), batch_size)
         return actions, st
     end
 
-    # Implement evaluate_actions function  
+    # Implement evaluate_actions function
     function DRiL.evaluate_actions(policy::ConstantValuePolicy, obs::AbstractArray, actions::AbstractArray, ps, st)
         batch_size = size(obs)[end]
         values = fill(policy.constant_value, batch_size)
@@ -235,8 +235,10 @@
     end
 
     # Helper function to compute expected GAE advantages analytically.
-    function compute_expected_gae(rewards::Vector{T}, values::Vector{T}, gamma::T, gae_lambda::T;
-        is_terminated::Bool=true, bootstrap_value::Union{Nothing,T}=nothing) where T<:AbstractFloat
+    function compute_expected_gae(
+            rewards::Vector{T}, values::Vector{T}, gamma::T, gae_lambda::T;
+            is_terminated::Bool = true, bootstrap_value::Union{Nothing, T} = nothing
+        ) where {T <: AbstractFloat}
         n = length(rewards)
         expected_advantages = zeros(T, n)
 
@@ -250,9 +252,9 @@
         end
 
         # Backward pass through earlier steps
-        for t in (n-1):-1:1
-            delta = rewards[t] + gamma * values[t+1] - values[t]
-            expected_advantages[t] = delta + gamma * gae_lambda * expected_advantages[t+1]
+        for t in (n - 1):-1:1
+            delta = rewards[t] + gamma * values[t + 1] - values[t]
+            expected_advantages[t] = delta + gamma * gae_lambda * expected_advantages[t + 1]
         end
 
         return expected_advantages
@@ -293,7 +295,7 @@
 
 
     struct CustomShapedBoxEnv <: AbstractEnv
-        shape::Tuple{Int,Vararg{Int}}
+        shape::Tuple{Int, Vararg{Int}}
     end
     DRiL.reset!(env::CustomShapedBoxEnv) = nothing
     DRiL.act!(env::CustomShapedBoxEnv, action::AbstractArray) = rand(Float32)
@@ -302,7 +304,7 @@
     DRiL.action_space(env::CustomShapedBoxEnv) = Box(Float32[-1.0], Float32[1.0], env.shape)
     DRiL.terminated(env::CustomShapedBoxEnv) = false
     DRiL.truncated(env::CustomShapedBoxEnv) = false
-    DRiL.get_info(env::CustomShapedBoxEnv) = Dict{String,Any}()
+    DRiL.get_info(env::CustomShapedBoxEnv) = Dict{String, Any}()
 
     struct RandomDiscreteEnv <: AbstractEnv
         obs_space::Box
@@ -315,5 +317,5 @@
     DRiL.action_space(env::RandomDiscreteEnv) = env.act_space
     DRiL.terminated(env::RandomDiscreteEnv) = false
     DRiL.truncated(env::RandomDiscreteEnv) = false
-    DRiL.get_info(env::RandomDiscreteEnv) = Dict{String,Any}()
+    DRiL.get_info(env::RandomDiscreteEnv) = Dict{String, Any}()
 end

@@ -64,20 +64,20 @@ end
 
     # Expected scaled values:
     # obs[1]: (5.0 - 0.0) / (10.0 - 0.0) * 2 - 1 = 0.0
-    # obs[2]: (0.0 - (-10.0)) / (10.0 - (-10.0)) * 2 - 1 = 0.0  
+    # obs[2]: (0.0 - (-10.0)) / (10.0 - (-10.0)) * 2 - 1 = 0.0
     # obs[3]: (15.0 - 5.0) / (25.0 - 5.0) * 2 - 1 = 0.0
     expected = Float32[0.0, 0.0, 0.0]
-    @test all(abs.(scaled_obs .- expected) .< 1e-6)
+    @test all(abs.(scaled_obs .- expected) .< 1.0e-6)
 
     # Test minimum values
     base_env.obs_value .= Float32[0.0, -10.0, 5.0]
     scaled_obs = observe(scaled_env)
-    @test all(abs.(scaled_obs .- Float32[-1.0, -1.0, -1.0]) .< 1e-6)
+    @test all(abs.(scaled_obs .- Float32[-1.0, -1.0, -1.0]) .< 1.0e-6)
 
     # Test maximum values
     base_env.obs_value .= Float32[10.0, 10.0, 25.0]
     scaled_obs = observe(scaled_env)
-    @test all(abs.(scaled_obs .- Float32[1.0, 1.0, 1.0]) .< 1e-6)
+    @test all(abs.(scaled_obs .- Float32[1.0, 1.0, 1.0]) .< 1.0e-6)
 end
 
 @testitem "ScalingWrapperEnv action scaling" tags = [:scaling, :environments] setup = [SharedTestSetup] begin
@@ -113,19 +113,19 @@ end
     # action[2]: (0.0 + 1) / 2 * (15.0 - (-5.0)) + (-5.0) = 5.0
     # action[3]: (0.0 + 1) / 2 * (10.0 - 0.0) + 0.0 = 5.0
     expected = Float32[5.0, 5.0, 5.0]
-    @test all(abs.(base_env.last_action .- expected) .< 1e-6)
+    @test all(abs.(base_env.last_action .- expected) .< 1.0e-6)
 
     # Test minimum scaled action (-1.0)
     scaled_action = Float32[-1.0, -1.0, -1.0]
     act!(scaled_env, scaled_action)
     expected = Float32[2.0, -5.0, 0.0]  # Should map to minimum bounds
-    @test all(abs.(base_env.last_action .- expected) .< 1e-6)
+    @test all(abs.(base_env.last_action .- expected) .< 1.0e-6)
 
     # Test maximum scaled action (1.0)
     scaled_action = Float32[1.0, 1.0, 1.0]
     act!(scaled_env, scaled_action)
     expected = Float32[8.0, 15.0, 10.0]  # Should map to maximum bounds
-    @test all(abs.(base_env.last_action .- expected) .< 1e-6)
+    @test all(abs.(base_env.last_action .- expected) .< 1.0e-6)
 end
 
 @testitem "ScalingWrapperEnv method forwarding" tags = [:scaling, :environments] setup = [SharedTestSetup] begin
@@ -135,7 +135,7 @@ end
     mutable struct ForwardingTestEnv <: AbstractEnv
         _terminated::Bool
         _truncated::Bool
-        _info::Dict{String,Any}
+        _info::Dict{String, Any}
         reset_called::Bool
     end
     ForwardingTestEnv() = ForwardingTestEnv(false, false, Dict("key" => "value"), false)
@@ -228,13 +228,13 @@ end
     # For obs[1]: (500.0 - (-1000.0)) / (2000.0 - (-1000.0)) * 2 - 1 = 0.0
     # For obs[2]: (500.0 - (-500.0)) / (1500.0 - (-500.0)) * 2 - 1 = 0.0
     expected = Float32[0.0, 0.0]
-    @test all(abs.(scaled_obs .- expected) .< 1e-5)
+    @test all(abs.(scaled_obs .- expected) .< 1.0e-5)
 
     # Test action scaling with large range
     scaled_action = Float32[0.5]  # Should map to 3/4 of the way through the range
     reward = act!(scaled_env, scaled_action)
     # Expected: (0.5 + 1) / 2 * (300.0 - (-100.0)) + (-100.0) = 200.0
-    @test abs(reward - 200.0f0) < 1e-5
+    @test abs(reward - 200.0f0) < 1.0e-5
 end
 
 @testitem "ScalingWrapperEnv multi-dimensional spaces" tags = [:scaling, :environments] setup = [SharedTestSetup] begin
@@ -266,7 +266,7 @@ end
     scaled_obs = observe(scaled_env)
     @test size(scaled_obs) == (3, 2)
     # All values should be 0.0 since we chose mid-range values
-    @test all(abs.(scaled_obs) .< 1e-5)
+    @test all(abs.(scaled_obs) .< 1.0e-5)
 
     # Test multi-dimensional action scaling
     scaled_action = Float32[0.0 -0.5; 0.5 1.0]  # Various scaled values
@@ -279,7 +279,7 @@ end
     # For [2,1]: (0.5 + 1)/2 * (5.0 - 2.0) + 2.0 = 4.25
     # For [2,2]: (1.0 + 1)/2 * (8.0 - 4.0) + 4.0 = 8.0
     expected = Float32[1.5 3.75; 4.25 8.0]
-    @test all(abs.(base_env.last_action .- expected) .< 1e-5)
+    @test all(abs.(base_env.last_action .- expected) .< 1.0e-5)
 end
 
 @testitem "ScalingWrapperEnv Random seeding" tags = [:scaling, :environments] setup = [SharedTestSetup] begin
@@ -296,7 +296,7 @@ end
     DRiL.action_space(::SeededTestEnv) = Box(Float32[0.0], Float32[1.0])
     function DRiL.observe(env::SeededTestEnv)
         env.obs_counter += 1
-        return Float32[rand(env.rng)*10.0]
+        return Float32[rand(env.rng) * 10.0]
     end
     DRiL.terminated(::SeededTestEnv) = false
     DRiL.truncated(::SeededTestEnv) = false

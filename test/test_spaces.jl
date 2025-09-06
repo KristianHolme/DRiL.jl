@@ -99,7 +99,7 @@ end
         Float32[-1.0, 3.0],
         Float32[-2.0, 1.0],  # Lower boundary
         Float32[0.0, 5.0],   # Upper boundary
-        Float32[-1.5, 2.5]
+        Float32[-1.5, 2.5],
     ]
 
     for sample in valid_samples
@@ -112,7 +112,7 @@ end
         Float32[0.5, 3.0],    # First component too high
         Float32[-1.0, 0.5],   # Second component too low
         Float32[-3.0, 6.0],   # Both components out of bounds
-        Float32[-1.0, 3.0, 0.0]  # Wrong dimensions
+        Float32[-1.0, 3.0, 0.0],  # Wrong dimensions
     ]
 
     for sample in invalid_samples
@@ -130,10 +130,10 @@ end
 
 @testitem "Box edge cases and special configurations" tags = [:spaces, :box, :edge_cases] begin
     # Test very small bounds differences
-    tiny_space = Box(Float32[0.0], Float32[1e-6])
+    tiny_space = Box(Float32[0.0], Float32[1.0e-6])
     @test Float32[0.0] ∈ tiny_space
-    @test Float32[1e-6] ∈ tiny_space
-    @test !(Float32[1e-5] ∈ tiny_space)
+    @test Float32[1.0e-6] ∈ tiny_space
+    @test !(Float32[1.0e-5] ∈ tiny_space)
 
     # Test negative bounds
     neg_space = Box(Float32[-10.0, -5.0], Float32[-1.0, -2.0])
@@ -305,7 +305,7 @@ end
     @test_throws AssertionError process_action(10, space_0, alg)   # above valid range
     @test_throws AssertionError process_action(-1, space_0, alg)   # below valid range
     @test_throws MethodError process_action(1.0, space_0, alg)   # not an integer
-    @test_throws MethodError process_action(1f0, space_0, alg)   # not an integer
+    @test_throws MethodError process_action(1.0f0, space_0, alg)   # not an integer
 
     space_1 = Discrete(3, 1)  # Valid actions: 1, 2, 3
 
@@ -318,7 +318,7 @@ end
     @test_throws AssertionError process_action(5, space_custom, alg)   # above valid range
     @test_throws AssertionError process_action(-2, space_custom, alg)   # below valid range
     @test_throws MethodError process_action(1.0, space_custom, alg)   # not an integer
-    @test_throws MethodError process_action(1f0, space_custom, alg)   # not an integer
+    @test_throws MethodError process_action(1.0f0, space_custom, alg)   # not an integer
 end
 
 

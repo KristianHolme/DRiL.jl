@@ -18,10 +18,10 @@ using TestItems
     update!(rms, batch)
 
     @test rms.count == 3
-    expected_mean = mean(batch, dims=2)[:, 1]
-    expected_var = var(batch, dims=2, corrected=false)[:, 1]
-    @test all(abs.(rms.mean .- expected_mean) .< 1e-6)
-    @test all(abs.(rms.var .- expected_var) .< 1e-6)
+    expected_mean = mean(batch, dims = 2)[:, 1]
+    expected_var = var(batch, dims = 2, corrected = false)[:, 1]
+    @test all(abs.(rms.mean .- expected_mean) .< 1.0e-6)
+    @test all(abs.(rms.var .- expected_var) .< 1.0e-6)
 
     # Test multiple updates
     batch2 = Float32[0.0 1.0 2.0; 3.0 4.0 5.0; 6.0 7.0 8.0]
@@ -31,10 +31,10 @@ using TestItems
     @test rms.count == old_count + 3
     # Verify the running average is computed correctly
     combined_batch = hcat(batch, batch2)
-    combined_mean = mean(combined_batch, dims=2)[:, 1]
-    combined_var = var(combined_batch, dims=2, corrected=false)[:, 1]
-    @test all(abs.(rms.mean .- combined_mean) .< 1e-5)
-    @test all(abs.(rms.var .- combined_var) .< 1e-5)
+    combined_mean = mean(combined_batch, dims = 2)[:, 1]
+    combined_var = var(combined_batch, dims = 2, corrected = false)[:, 1]
+    @test all(abs.(rms.mean .- combined_mean) .< 1.0e-5)
+    @test all(abs.(rms.var .- combined_var) .< 1.0e-5)
 end
 
 @testitem "RunningMeanStd edge cases" tags = [:normalization, :running_stats, :edge_cases] begin
@@ -48,7 +48,7 @@ end
 
     @test rms.count == 3
     @test rms.mean ≈ [5.0f0, 3.0f0]
-    @test all(rms.var .< 1e-6)  # Should be nearly zero
+    @test all(rms.var .< 1.0e-6)  # Should be nearly zero
 
     # Test with single sample
     rms_single = RunningMeanStd{Float32}((1,))
@@ -66,7 +66,7 @@ end
 
     @test rms_scalar.count == 3
     @test rms_scalar.mean[1] ≈ 2.0f0
-    @test rms_scalar.var[1] ≈ var([1.0, 2.0, 3.0], corrected=false)
+    @test rms_scalar.var[1] ≈ var([1.0, 2.0, 3.0], corrected = false)
 end
 
 @testitem "NormalizeWrapperEnv dummy environment" tags = [:normalization, :environments] setup = [SharedTestSetup] begin
@@ -113,14 +113,16 @@ end
     base_env = MultiThreadedParallelEnv([DummyEnv2() for _ in 1:2])
 
     # Test custom configuration
-    norm_env = NormalizeWrapperEnv(base_env;
-        training=false,
-        norm_obs=false,
-        norm_reward=true,
-        clip_obs=5.0f0,
-        clip_reward=3.0f0,
-        gamma=0.95f0,
-        epsilon=1f-4)
+    norm_env = NormalizeWrapperEnv(
+        base_env;
+        training = false,
+        norm_obs = false,
+        norm_reward = true,
+        clip_obs = 5.0f0,
+        clip_reward = 3.0f0,
+        gamma = 0.95f0,
+        epsilon = 1.0f-4
+    )
 
     @test norm_env.training == false
     @test norm_env.norm_obs == false
@@ -128,7 +130,7 @@ end
     @test norm_env.clip_obs == 5.0f0
     @test norm_env.clip_reward == 3.0f0
     @test norm_env.gamma == 0.95f0
-    @test norm_env.epsilon == 1f-4
+    @test norm_env.epsilon == 1.0f-4
 
     # Test training mode control
     @test is_training(norm_env) == false
@@ -168,9 +170,9 @@ end
     envs[2].obs_values = [v .+ 10.0f0 for v in envs[2].obs_values]
 
     base_env = MultiThreadedParallelEnv(envs)
-    norm_env = NormalizeWrapperEnv(base_env; training=true, norm_obs=true, norm_reward=false)
+    norm_env = NormalizeWrapperEnv(base_env; training = true, norm_obs = true, norm_reward = false)
 
-    # Reset and collect observations 
+    # Reset and collect observations
     reset!(norm_env)
 
     # Collect data for normalization
@@ -186,10 +188,10 @@ end
     # The normalized observations should be different from original
     @test final_obs != final_original
 
-    # Test unnormalization 
+    # Test unnormalization
     unnorm_obs = copy(final_obs)
     unnormalize_obs!(unnorm_obs, norm_env)
-    @test all(abs.(unnorm_obs .- final_original) .< 1e-5)
+    @test all(abs.(unnorm_obs .- final_original) .< 1.0e-5)
 end
 
 @testitem "NormalizeWrapperEnv reward normalization" tags = [:normalization, :environments] setup = [SharedTestSetup] begin
@@ -216,7 +218,7 @@ end
     DRiL.reset!(env::HighVarRewardEnv) = (env.step_count = 0; nothing)
 
     base_env = MultiThreadedParallelEnv([HighVarRewardEnv() for _ in 1:2])
-    norm_env = NormalizeWrapperEnv(base_env; training=true, norm_obs=false, norm_reward=true)
+    norm_env = NormalizeWrapperEnv(base_env; training = true, norm_obs = false, norm_reward = true)
 
     reset!(norm_env)
     all_rewards = Float32[]
@@ -243,7 +245,7 @@ end
     unnorm_rewards = copy(last_rewards)
     unnormalize_rewards!(unnorm_rewards, norm_env)
 
-    @test all(abs.(unnorm_rewards .- last_original) .< 1e-4)
+    @test all(abs.(unnorm_rewards .- last_original) .< 1.0e-4)
 end
 
 @testitem "NormalizeWrapperEnv clipping behavior" tags = [:normalization, :environments, :clipping] setup = [SharedTestSetup] begin
@@ -261,7 +263,7 @@ end
     base_env = MultiThreadedParallelEnv([ExtremeObsEnv() for _ in 1:1])
 
     # Test with small clipping bounds
-    norm_env = NormalizeWrapperEnv(base_env; clip_obs=2.0f0, training=true)
+    norm_env = NormalizeWrapperEnv(base_env; clip_obs = 2.0f0, training = true)
 
     reset!(norm_env)
     # Build some statistics first
@@ -273,13 +275,13 @@ end
     obs = observe(norm_env)[1]
 
     # All normalized observations should be within clipping bounds
-    @test all(abs.(obs) .<= norm_env.clip_obs + 1e-6)
+    @test all(abs.(obs) .<= norm_env.clip_obs + 1.0e-6)
 end
 
 @testitem "NormalizeWrapperEnv training vs evaluation mode" tags = [:normalization, :environments, :modes] setup = [SharedTestSetup] begin
     using Statistics
 
-    # Simple environment 
+    # Simple environment
     mutable struct SimpleEnv <: AbstractEnv
         value::Float32
     end
@@ -298,7 +300,7 @@ end
     DRiL.reset!(env::SimpleEnv) = (env.value = 1.0f0; nothing)
 
     base_env = MultiThreadedParallelEnv([SimpleEnv() for _ in 1:2])
-    norm_env = NormalizeWrapperEnv(base_env; training=true)
+    norm_env = NormalizeWrapperEnv(base_env; training = true)
 
     reset!(norm_env)
 
@@ -327,7 +329,7 @@ end
         steps::Int
         max_steps::Int
     end
-    TerminalEnv(max_steps=3) = TerminalEnv(0, max_steps)
+    TerminalEnv(max_steps = 3) = TerminalEnv(0, max_steps)
 
     DRiL.observation_space(::TerminalEnv) = Box(Float32[0.0], Float32[10.0])
     DRiL.action_space(::TerminalEnv) = Box(Float32[-1.0], Float32[1.0])
@@ -338,16 +340,15 @@ end
         env.steps += 1
         return Float32(env.steps)
     end
-    DRiL.get_info(::TerminalEnv) = Dict{String,Any}()
+    DRiL.get_info(::TerminalEnv) = Dict{String, Any}()
     function DRiL.reset!(env::TerminalEnv)
         env.steps = 0
         nothing
     end
 
 
-
     base_env = BroadcastedParallelEnv([TerminalEnv(2) for _ in 1:2])
-    norm_env = NormalizeWrapperEnv(base_env; training=true)
+    norm_env = NormalizeWrapperEnv(base_env; training = true)
 
     reset!(norm_env)
 

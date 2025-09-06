@@ -52,25 +52,25 @@ mean_reward, std_reward = evaluate_agent(agent, env;
 ```
 """
 function evaluate_agent(
-    agent,
-    env::AbstractParallelEnv;
-    n_eval_episodes::Int=10,
-    deterministic::Bool=true,
-    reward_threshold::Union{Nothing,Real}=nothing,
-    return_stats::Bool=true,
-    warn::Bool=true,
-    rng::AbstractRNG=agent.rng,
-    show_progress::Bool=false
-)
+        agent,
+        env::AbstractParallelEnv;
+        n_eval_episodes::Int = 10,
+        deterministic::Bool = true,
+        reward_threshold::Union{Nothing, Real} = nothing,
+        return_stats::Bool = true,
+        warn::Bool = true,
+        rng::AbstractRNG = agent.rng,
+        show_progress::Bool = false
+    )
 
     # Check if environment is wrapped with Monitor (when Monitor is implemented)
     is_monitor_wrapped = is_monitored(env)
 
     if !is_monitor_wrapped && warn
         @warn """Evaluation environment is not wrapped with a Monitor wrapper. 
-                 This may result in reporting modified episode lengths and rewards, 
-                 if other wrappers happen to modify these. Consider wrapping 
-                 environment first with Monitor wrapper."""
+        This may result in reporting modified episode lengths and rewards, 
+        if other wrappers happen to modify these. Consider wrapping 
+        environment first with Monitor wrapper."""
     end
 
     # Initialize tracking variables
@@ -88,7 +88,7 @@ function evaluate_agent(
     reset!(env)
     observations = observe(env)
 
-    p = Progress(n_eval_episodes; enabled=show_progress)
+    p = Progress(n_eval_episodes; enabled = show_progress)
     while length(episode_rewards) < n_eval_episodes
         # Get actions from agent
         actions = predict_actions(agent, observations; deterministic, rng)
@@ -130,13 +130,13 @@ function evaluate_agent(
     # Check reward threshold if specified
     if reward_threshold !== nothing
         if mean_reward < reward_threshold
-            error("Mean reward below threshold: $(round(mean_reward, digits=2)) < $(reward_threshold)")
+            error("Mean reward below threshold: $(round(mean_reward, digits = 2)) < $(reward_threshold)")
         end
     end
 
     # Return results
     if return_stats
-        return (; mean_reward, std_reward, mean_length=mean(episode_lengths), std_length=std(episode_lengths))
+        return (; mean_reward, std_reward, mean_length = mean(episode_lengths), std_length = std(episode_lengths))
     else
         return episode_rewards, episode_lengths
     end

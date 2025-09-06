@@ -7,8 +7,8 @@
 
     shapes = [(1,), (1, 1), (2,), (2, 3), (2, 3, 1), (2, 3, 4)]
     for shape in shapes
-        low = rand(Float32, shape...) .- 1f0
-        high = rand(Float32, shape...) .+ 1f0
+        low = rand(Float32, shape...) .- 1.0f0
+        high = rand(Float32, shape...) .+ 1.0f0
         action_space = Box(low, high, shape)
 
         same_outputs = Bool[]
@@ -42,11 +42,11 @@ end
     using Random
     using DRiL.DRiLDistributions
 
-    make_triplet(::Type{T}) where {T<:AbstractFloat} = (rand(T, 2, 3), rand(T, 2, 3), rand(T, 2, 3))
+    make_triplet(::Type{T}) where {T <: AbstractFloat} = (rand(T, 2, 3), rand(T, 2, 3), rand(T, 2, 3))
 
-    function check_ok_with_eps(::Type{T}) where {T<:AbstractFloat}
+    function check_ok_with_eps(::Type{T}) where {T <: AbstractFloat}
         mean, log_std, x = make_triplet(T)
-        d = SquashedDiagGaussian(mean, log_std; eps=T(1e-6))
+        d = SquashedDiagGaussian(mean, log_std, T(1.0e-6))
         y = DRiLDistributions.logpdf(d, x)
         @test y isa T
         @test d.epsilon isa T
@@ -60,9 +60,9 @@ end
     # mismatched epsilon type should fail
     mean32, logstd32, _ = make_triplet(Float32)
     mean64, logstd64, _ = make_triplet(Float64)
-    @test_throws TypeError SquashedDiagGaussian(mean32, logstd32; eps=Float64(1e-6))
-    @test_throws TypeError SquashedDiagGaussian(mean64, logstd64; eps=Float32(1e-6))
-    @test_throws TypeError SquashedDiagGaussian(mean64, logstd64; eps=Float16(1e-6))
+    @test_throws MethodError SquashedDiagGaussian(mean32, logstd32, Float64(1.0e-6))
+    @test_throws MethodError SquashedDiagGaussian(mean64, logstd64, Float32(1.0e-6))
+    @test_throws MethodError SquashedDiagGaussian(mean64, logstd64, Float16(1.0e-6))
 end
 
 
@@ -70,9 +70,9 @@ end
     using Random
     using DRiL.DRiLDistributions
 
-    make_triplet(::Type{T}) where {T<:AbstractFloat} = (rand(T, 2, 3), rand(T, 2, 3), rand(T, 2, 3))
+    make_triplet(::Type{T}) where {T <: AbstractFloat} = (rand(T, 2, 3), rand(T, 2, 3), rand(T, 2, 3))
 
-    function check_ok_and_type(::Type{T}) where {T<:AbstractFloat}
+    function check_ok_and_type(::Type{T}) where {T <: AbstractFloat}
         mean, log_std, x = make_triplet(T)
         d = SquashedDiagGaussian(mean, log_std)
         y = DRiLDistributions.logpdf(d, x)
@@ -124,9 +124,9 @@ end
     same_outputs = Bool[]
 
     #test strict types
-    @test_throws MethodError DiagGaussian([1.0], [2f0])
+    @test_throws MethodError DiagGaussian([1.0], [2.0f0])
 
-    d = DiagGaussian([1.0f0], [2f0])
+    d = DiagGaussian([1.0f0], [2.0f0])
     @test_throws MethodError DRiLDistributions.logpdf(d, [1.0])
 
 
@@ -136,17 +136,17 @@ end
     x_batch = rand(Float32, 2, 2, 7)
 
     @test begin
-        ds = DiagGaussian.(eachslice(mean_batch, dims=ndims(mean_batch)), eachslice(std_batch, dims=ndims(std_batch)))
+        ds = DiagGaussian.(eachslice(mean_batch, dims = ndims(mean_batch)), eachslice(std_batch, dims = ndims(std_batch)))
         entropies = DRiLDistributions.entropy.(ds)
-        logpdfs = DRiLDistributions.logpdf.(ds, eachslice(x_batch, dims=ndims(x_batch)))
+        logpdfs = DRiLDistributions.logpdf.(ds, eachslice(x_batch, dims = ndims(x_batch)))
         true
     end
 
     single_std = rand(Float32, 2, 2)
     @test begin
-        ds = DiagGaussian.(eachslice(mean_batch, dims=ndims(mean_batch)), Ref(single_std))
+        ds = DiagGaussian.(eachslice(mean_batch, dims = ndims(mean_batch)), Ref(single_std))
         entropies = DRiLDistributions.entropy.(ds)
-        logpdfs = DRiLDistributions.logpdf.(ds, eachslice(x_batch, dims=ndims(x_batch)))
+        logpdfs = DRiLDistributions.logpdf.(ds, eachslice(x_batch, dims = ndims(x_batch)))
         true
     end
 end

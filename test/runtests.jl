@@ -11,7 +11,7 @@ end
 
 @testitem "Code linting (JET.jl)" tags = [:quality] begin
     using JET
-    JET.test_package(DRiL; target_defined_modules=true)
+    JET.test_package(DRiL; target_defined_modules = true)
 end
 
 # Run all tests

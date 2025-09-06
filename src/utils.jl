@@ -1,8 +1,10 @@
-function collect_trajectory(agent::AbstractAgent,
-    env::AbstractEnv;
-    max_steps::Union{Int,Nothing}=nothing,
-    norm_env::Union{NormalizeWrapperEnv,Nothing}=nothing,
-    deterministic::Bool=true)
+function collect_trajectory(
+        agent::AbstractAgent,
+        env::AbstractEnv;
+        max_steps::Union{Int, Nothing} = nothing,
+        norm_env::Union{NormalizeWrapperEnv, Nothing} = nothing,
+        deterministic::Bool = true
+    )
     reset!(env)
     original_training = is_training(env)
     env = set_training(env, false)
@@ -45,16 +47,16 @@ function collect_trajectory(agent::AbstractAgent,
 end
 
 
-function polyak_update!(target::AbstractArray{T}, source::AbstractArray{T}, tau::T) where T<:AbstractFloat
+function polyak_update!(target::AbstractArray{T}, source::AbstractArray{T}, tau::T) where {T <: AbstractFloat}
     target .= tau .* source .+ (one(T) - tau) .* target
-    nothing
+    return nothing
 end
 
-function polyak_update!(target::ComponentArray{T}, source::ComponentArray{T}, tau::T) where T<:AbstractFloat
+function polyak_update!(target::ComponentArray{T}, source::ComponentArray{T}, tau::T) where {T <: AbstractFloat}
     for key in keys(target)
         target[key] .= tau .* source[key] .+ (one(T) - tau) .* target[key]
     end
-    nothing
+    return nothing
 end
 
 function merge_params(a1::ComponentArray, a2::ComponentArray)

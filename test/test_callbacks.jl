@@ -1,13 +1,13 @@
 @testitem "callbacks locals" tags = [:callbacks, :locals] setup = [SharedTestSetup] begin
     using Zygote
     ##
-    alg = PPO(; ent_coef=0.1f0, n_steps=256, batch_size=64, epochs=10)
+    alg = PPO(; ent_coef = 0.1f0, n_steps = 256, batch_size = 64, epochs = 10)
     env = BroadcastedParallelEnv([SharedTestSetup.CustomEnv() for _ in 1:8])
     env = MonitorWrapperEnv(env)
-    env = NormalizeWrapperEnv(env, gamma=alg.gamma)
+    env = NormalizeWrapperEnv(env, gamma = alg.gamma)
 
     policy = ActorCriticPolicy(observation_space(env), action_space(env))
-    agent = ActorCriticAgent(policy, alg; verbose=0)
+    agent = ActorCriticAgent(policy, alg; verbose = 0)
 
     function test_keys(locals::Dict, keys_to_check::Vector{Symbol})
         for key in keys_to_check
@@ -21,8 +21,10 @@
     end
 
     @kwdef struct OnTrainingStartCheckLocalsCallback <: AbstractCallback
-        keys::Vector{Symbol} = [:agent, :env, :alg, :iterations, :total_steps, :max_steps,
-            :n_steps, :n_envs, :roll_buffer, :iterations, :total_fps, :callbacks]
+        keys::Vector{Symbol} = [
+            :agent, :env, :alg, :iterations, :total_steps, :max_steps,
+            :n_steps, :n_envs, :roll_buffer, :iterations, :total_fps, :callbacks,
+        ]
     end
     function DRiL.on_training_start(callback::OnTrainingStartCheckLocalsCallback, locals::Dict)
         test_keys(locals, callback.keys)
@@ -30,8 +32,10 @@
     end
 
     @kwdef struct OnRolloutStartCheckLocalsCallback <: AbstractCallback
-        first_keys::Vector{Symbol} = [:agent, :env, :alg, :iterations, :total_steps,
-            :max_steps, :i, :learning_rate]
+        first_keys::Vector{Symbol} = [
+            :agent, :env, :alg, :iterations, :total_steps,
+            :max_steps, :i, :learning_rate,
+        ]
         subsequent_keys::Vector{Symbol} = [:agent, :env, :alg, :iterations, :total_steps, :max_steps]
     end
     function DRiL.on_rollout_start(callback::OnRolloutStartCheckLocalsCallback, locals::Dict)
@@ -41,23 +45,24 @@
         end
         true
     end
-    learn!(agent, env, alg, 3000; callbacks=[
-        OnTrainingStartCheckLocalsCallback(),
-        OnRolloutStartCheckLocalsCallback()
-    ]
+    learn!(
+        agent, env, alg, 3000; callbacks = [
+            OnTrainingStartCheckLocalsCallback(),
+            OnRolloutStartCheckLocalsCallback(),
+        ]
     )
 end
 
 @testitem "callbacks early stopping" tags = [:callbacks, :early_stopping] setup = [SharedTestSetup] begin
     using Zygote
     function setup_agent_env_alg()
-        alg = PPO(; ent_coef=0.1f0, n_steps=64, batch_size=64, epochs=10)
+        alg = PPO(; ent_coef = 0.1f0, n_steps = 64, batch_size = 64, epochs = 10)
         env = BroadcastedParallelEnv([SharedTestSetup.CustomEnv() for _ in 1:8])
         env = MonitorWrapperEnv(env)
-        env = NormalizeWrapperEnv(env, gamma=alg.gamma)
+        env = NormalizeWrapperEnv(env, gamma = alg.gamma)
 
         policy = ActorCriticPolicy(observation_space(env), action_space(env))
-        agent = ActorCriticAgent(policy, alg; verbose=0)
+        agent = ActorCriticAgent(policy, alg; verbose = 0)
         return agent, env, alg
     end
 
@@ -67,9 +72,11 @@ end
         return false
     end
     agent, env, alg = setup_agent_env_alg()
-    learn!(agent, env, alg, 3000; callbacks=[
-        OnTrainingStartStopEarlyCallback()
-    ])
+    learn!(
+        agent, env, alg, 3000; callbacks = [
+            OnTrainingStartStopEarlyCallback(),
+        ]
+    )
     @test steps_taken(agent) == 0
 
     agent, env, alg = setup_agent_env_alg()
@@ -77,7 +84,7 @@ end
     function DRiL.on_rollout_start(callback::OnRolloutStartStopEarlyCallback, locals::Dict)
         return false
     end
-    learn!(agent, env, alg, 3000; callbacks=[OnRolloutStartStopEarlyCallback()])
+    learn!(agent, env, alg, 3000; callbacks = [OnRolloutStartStopEarlyCallback()])
     @test steps_taken(agent) == 0
 
     agent, env, alg = setup_agent_env_alg()
@@ -88,6 +95,6 @@ end
         continue_training = steps_taken(locals[:agent]) < callback.threshold
         return continue_training
     end
-    learn!(agent, env, alg, 3000; callbacks=[OnStepStopEarlyCallback(500)])
+    learn!(agent, env, alg, 3000; callbacks = [OnStepStopEarlyCallback(500)])
     @test steps_taken(agent) == 512
 end

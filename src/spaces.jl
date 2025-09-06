@@ -1,30 +1,30 @@
 abstract type AbstractSpace end
 
-struct Box{T<:Number} <: AbstractSpace
+struct Box{T <: Number} <: AbstractSpace
     low::Array{T}
     high::Array{T}
     shape::Tuple{Vararg{Int}}
 end
-function Box{T}(low::Array{T}, high::Array{T}) where T<:Number
+function Box{T}(low::Array{T}, high::Array{T}) where {T <: Number}
     @assert size(low) == size(high) "Low and high arrays must have the same shape"
     @assert all(low .<= high) "All low values must be <= corresponding high values"
     shape = size(low)
     return Box{T}(low, high, shape)
 end
-function Box(low::T, high::T, shape::Tuple{Vararg{Int}}) where T<:Number
+function Box(low::T, high::T, shape::Tuple{Vararg{Int}}) where {T <: Number}
     return Box{T}(low * ones(T, shape), high * ones(T, shape), shape)
 end
 
 # Convenience constructors
-Box(low::Array{T}, high::Array{T}) where T<:Number = Box{T}(low, high)
+Box(low::Array{T}, high::Array{T}) where {T <: Number} = Box{T}(low, high)
 
 Base.ndims(space::Box) = length(size(space))
 
-Base.eltype(::Box{T}) where T = T
+Base.eltype(::Box{T}) where {T} = T
 
 #TODO fix comparison of spaces
-function Base.isequal(box1::Box{T1}, box2::Box{T2}) where {T1,T2}
-    T1 == T2 && box1.low == box2.low && box1.high == box2.high && box1.shape == box2.shape
+function Base.isequal(box1::Box{T1}, box2::Box{T2}) where {T1, T2}
+    return T1 == T2 && box1.low == box2.low && box1.high == box2.high && box1.shape == box2.shape
 end
 
 # Extend Random.rand for Box spaces
@@ -41,7 +41,7 @@ space = Box(low, high)
 sample = rand(space)  # Returns a 2-element Float32 array with values in [-1,1] and [-2,3] respectively
 ```
 """
-function Random.rand(rng::AbstractRNG, space::Box{T}) where T
+function Random.rand(rng::AbstractRNG, space::Box{T}) where {T}
     # Generate random values in [0, 1] with correct type and shape
     unit_random = rand(rng, T, space.shape...)
     # Scale to [low, high] range element-wise
@@ -56,8 +56,8 @@ Sample `n` random values from the box space.
 
 Returns a vector of length `n`.
 """
-function Random.rand(rng::AbstractRNG, space::Box{T}, n::Integer) where T
-    [rand(rng, space) for _ in 1:n]
+function Random.rand(rng::AbstractRNG, space::Box{T}, n::Integer) where {T}
+    return [rand(rng, space) for _ in 1:n]
 end
 
 Random.rand(space::Box, n::Integer) = rand(Random.default_rng(), space, n)
@@ -79,7 +79,7 @@ Float32[1.5, 0.0] in space  # Returns false (first element out of bounds)
 @test action ∈ action_space
 ```
 """
-function Base.in(sample, space::Box{T}) where T
+function Base.in(sample, space::Box{T}) where {T}
     if !isa(sample, AbstractArray)
         return false
     end
@@ -105,10 +105,7 @@ function Base.in(sample, space::Box{T}) where T
 end
 
 
-
-
-
-function scale_to_space(action, action_space::Box{T}) where T
+function scale_to_space(action, action_space::Box{T}) where {T}
     low = action_space.low
     high = action_space.high
     x = action
@@ -116,17 +113,17 @@ function scale_to_space(action, action_space::Box{T}) where T
 end
 
 
-struct Discrete{T<:Integer} <: AbstractSpace
+struct Discrete{T <: Integer} <: AbstractSpace
     n::T
     start::T
-    function Discrete(n::T, start::T=1) where T<:Integer
+    function Discrete(n::T, start::T = 1) where {T <: Integer}
         @assert n > 0 "n must be positive"
         return new{T}(n, start)
     end
 end
 
 Base.ndims(::Discrete) = 1  # Discrete spaces are 1-dimensional even though they are single values, to work with batch dim
-Base.eltype(::Discrete{T}) where T = T
+Base.eltype(::Discrete{T}) where {T} = T
 
 function Base.isequal(disc1::Discrete, disc2::Discrete)
     return disc1.n == disc2.n && disc1.start == disc2.start
@@ -150,7 +147,7 @@ sample = rand(space)    # Returns 0, 1, or 2
 ```
 """
 function Random.rand(rng::AbstractRNG, space::Discrete)
-    return rand(rng, space.start:space.start+space.n-1)
+    return rand(rng, space.start:(space.start + space.n - 1))
 end
 
 # Default RNG version
@@ -195,7 +192,6 @@ function Base.in(sample, space::Discrete)
     # Check if within valid range
     return space.start <= sample <= space.start + space.n - 1
 end
-
 
 
 # Handle case where action might be in an array (for consistency with Box spaces)
