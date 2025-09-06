@@ -39,7 +39,6 @@ export OrthogonalInitializer, QCritic, VCritic, action_log_prob
 export FeatureSharing, SharedFeatures, SeparateFeatures
 
 
-
 include("agents.jl")
 export ActorCriticAgent, predict_actions, predict_values, steps_taken
 
@@ -61,8 +60,6 @@ export save_normalization_stats, load_normalization_stats!, set_training, is_tra
 export get_original_obs, get_original_rewards, normalize_obs!, normalize_rewards!, unnormalize_obs!, unnormalize_rewards!
 export MonitorWrapperEnv, EpisodeStats, is_wrapper, unwrap, unwrap_all
 export MultiAgentParallelEnv
-
-
 
 
 include("utils.jl")

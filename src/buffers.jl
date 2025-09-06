@@ -1,4 +1,4 @@
-struct RolloutBuffer{T<:AbstractFloat,O,A} <: AbstractBuffer
+struct RolloutBuffer{T <: AbstractFloat, O, A} <: AbstractBuffer
     observations::Array{O}
     actions::Array{A}
     rewards::Vector{T}
@@ -15,7 +15,7 @@ end
 Base.length(rb::RolloutBuffer) = rb.n_steps * rb.n_envs
 
 #TODO:fix types here
-function RolloutBuffer(observation_space::AbstractSpace, action_space::AbstractSpace, gae_lambda::T, gamma::T, n_steps::Int, n_envs::Int) where {T<:AbstractFloat}
+function RolloutBuffer(observation_space::AbstractSpace, action_space::AbstractSpace, gae_lambda::T, gamma::T, n_steps::Int, n_envs::Int) where {T <: AbstractFloat}
     total_steps = n_steps * n_envs
     obs_eltype = eltype(observation_space)
     action_eltype = eltype(action_space)
@@ -26,7 +26,7 @@ function RolloutBuffer(observation_space::AbstractSpace, action_space::AbstractS
     returns = Vector{T}(undef, total_steps)
     logprobs = Vector{T}(undef, total_steps)
     values = Vector{T}(undef, total_steps)
-    return RolloutBuffer{T,obs_eltype,action_eltype}(observations, actions, rewards, advantages, returns, logprobs, values, gae_lambda, gamma, n_steps, n_envs)
+    return RolloutBuffer{T, obs_eltype, action_eltype}(observations, actions, rewards, advantages, returns, logprobs, values, gae_lambda, gamma, n_steps, n_envs)
 end
 
 
@@ -38,10 +38,10 @@ function reset!(rollout_buffer::RolloutBuffer)
     rollout_buffer.returns .= 0
     rollout_buffer.logprobs .= 0
     rollout_buffer.values .= 0
-    nothing
+    return nothing
 end
 
-mutable struct Trajectory{T<:AbstractFloat,O,A}
+mutable struct Trajectory{T <: AbstractFloat, O, A}
     observations::Vector{O}
     actions::Vector{A}
     rewards::Vector{T}
@@ -49,9 +49,9 @@ mutable struct Trajectory{T<:AbstractFloat,O,A}
     values::Vector{T}
     terminated::Bool
     truncated::Bool
-    bootstrap_value::Union{Nothing,T}  # Value of the next state for truncated episodes
+    bootstrap_value::Union{Nothing, T}  # Value of the next state for truncated episodes
 end
-function Trajectory{T}(observation_space::AbstractSpace, action_space::AbstractSpace) where {T<:AbstractFloat}
+function Trajectory{T}(observation_space::AbstractSpace, action_space::AbstractSpace) where {T <: AbstractFloat}
     obs_type = typeof(rand(observation_space))
     action_type = typeof(rand(action_space))
     observations = Array{obs_type}[]
@@ -62,7 +62,7 @@ function Trajectory{T}(observation_space::AbstractSpace, action_space::AbstractS
     terminated = false
     truncated = false
     bootstrap_value = nothing
-    return Trajectory{T,obs_type,action_type}(observations, actions, rewards, logprobs, values, terminated, truncated, bootstrap_value)
+    return Trajectory{T, obs_type, action_type}(observations, actions, rewards, logprobs, values, terminated, truncated, bootstrap_value)
 end
 
 Trajectory(observation_space::AbstractSpace, action_space::AbstractSpace) = Trajectory{Float32}(observation_space, action_space)
@@ -71,8 +71,10 @@ Base.length(trajectory::Trajectory) = length(trajectory.rewards)
 total_reward(trajectory::Trajectory) = sum(trajectory.rewards)
 
 
-function collect_trajectories(agent::ActorCriticAgent, env::AbstractParallelEnv, alg::AbstractAlgorithm, n_steps::Int,
-    progress_meter::Union{Progress,Nothing}=nothing; callbacks::Union{Vector{<:AbstractCallback},Nothing}=nothing)
+function collect_trajectories(
+        agent::ActorCriticAgent, env::AbstractParallelEnv, alg::AbstractAlgorithm, n_steps::Int,
+        progress_meter::Union{Progress, Nothing} = nothing; callbacks::Union{Vector{<:AbstractCallback}, Nothing} = nothing
+    )
     # reset!(env)
     trajectories = Trajectory[]
     obs_space = observation_space(env)
@@ -122,18 +124,19 @@ function collect_trajectories(agent::ActorCriticAgent, env::AbstractParallelEnv,
                 current_trajectories[j] = Trajectory(obs_space, act_space)
             end
         end
-        !isnothing(progress_meter) && next!(progress_meter, step=number_of_envs(env))
+        !isnothing(progress_meter) && next!(progress_meter, step = number_of_envs(env))
     end
     return trajectories, true
 end
 
-function collect_rollout!(rollout_buffer::RolloutBuffer,
-    agent::ActorCriticAgent,
-    alg::OnPolicyAlgorithm,
-    env::AbstractEnv,
-    progress_meter::Union{Progress,Nothing}=nothing;
-    callbacks::Union{Vector{<:AbstractCallback},Nothing}=nothing
-)
+function collect_rollout!(
+        rollout_buffer::RolloutBuffer,
+        agent::ActorCriticAgent,
+        alg::OnPolicyAlgorithm,
+        env::AbstractEnv,
+        progress_meter::Union{Progress, Nothing} = nothing;
+        callbacks::Union{Vector{<:AbstractCallback}, Nothing} = nothing
+    )
     # reset!(env) #we dont reset the, we continue from where we left off
 
     obs_space = observation_space(env)
@@ -142,7 +145,7 @@ function collect_rollout!(rollout_buffer::RolloutBuffer,
     reset!(rollout_buffer)
 
     t_start = time()
-    trajectories, success = collect_trajectories(agent, env, alg, rollout_buffer.n_steps, progress_meter; callbacks=callbacks)
+    trajectories, success = collect_trajectories(agent, env, alg, rollout_buffer.n_steps, progress_meter; callbacks = callbacks)
     t_collect = time() - t_start
     total_steps = sum(length.(trajectories))
     fps = total_steps / t_collect
@@ -154,8 +157,8 @@ function collect_rollout!(rollout_buffer::RolloutBuffer,
     traj_lengths = length.(trajectories)
     positions = cumsum([1; traj_lengths])
     for (i, traj) in enumerate(trajectories)
-        #transfer data to the Rolloutbuffer 
-        traj_inds = positions[i]:positions[i+1]-1
+        #transfer data to the Rolloutbuffer
+        traj_inds = positions[i]:(positions[i + 1] - 1)
         # @debug "traj_inds: $(traj_inds)"
         selectdim(rollout_buffer.observations, ndims(obs_space) + 1, traj_inds) .= batch(traj.observations, obs_space)
         selectdim(rollout_buffer.actions, ndims(act_space) + 1, traj_inds) .= batch(traj.actions, act_space)
@@ -164,8 +167,10 @@ function collect_rollout!(rollout_buffer::RolloutBuffer,
         rollout_buffer.values[traj_inds] .= traj.values
 
         #compute advantages and returns
-        compute_advantages!(@view(rollout_buffer.advantages[traj_inds]),
-            traj, rollout_buffer.gamma, rollout_buffer.gae_lambda)
+        compute_advantages!(
+            @view(rollout_buffer.advantages[traj_inds]),
+            traj, rollout_buffer.gamma, rollout_buffer.gae_lambda
+        )
         rollout_buffer.returns[traj_inds] .= rollout_buffer.advantages[traj_inds] .+ rollout_buffer.values[traj_inds]
     end
     return fps, true
@@ -187,12 +192,12 @@ function compute_advantages!(advantages::AbstractArray, traj::Trajectory, gamma:
     advantages[end] = delta
 
     # Compute advantages for earlier steps using the standard GAE recursion
-    for i in (n-1):-1:1
-        delta = traj.rewards[i] + gamma * traj.values[i+1] - traj.values[i]
-        advantages[i] = delta + gamma * gae_lambda * advantages[i+1]
+    for i in (n - 1):-1:1
+        delta = traj.rewards[i] + gamma * traj.values[i + 1] - traj.values[i]
+        advantages[i] = delta + gamma * gae_lambda * advantages[i + 1]
     end
 
-    nothing
+    return nothing
 end
 
 
@@ -201,13 +206,13 @@ end
 
 A mutable container for storing a single trajectory of off-policy experience data including observations, actions, rewards, and termination information.
 """
-mutable struct OffPolicyTrajectory{T<:AbstractFloat,O,A}
+mutable struct OffPolicyTrajectory{T <: AbstractFloat, O, A}
     observations::Vector{O}
     actions::Vector{A}
     rewards::Vector{T}
     terminated::Bool
     truncated::Bool
-    truncated_observation::Union{Nothing,O}
+    truncated_observation::Union{Nothing, O}
 end
 
 function OffPolicyTrajectory(observation_space::AbstractSpace, action_space::AbstractSpace)
@@ -217,12 +222,10 @@ function OffPolicyTrajectory(observation_space::AbstractSpace, action_space::Abs
     action_scalar_type = eltype(action_space)
     @assert obs_scalar_type == action_scalar_type "Observation and action types must be the same"
     T = obs_scalar_type
-    return OffPolicyTrajectory{T,obs_type,action_type}(obs_type[], action_type[], T[], false, false, nothing)
+    return OffPolicyTrajectory{T, obs_type, action_type}(obs_type[], action_type[], T[], false, false, nothing)
 end
 
 Base.length(traj::OffPolicyTrajectory) = length(traj.rewards)
-
-
 
 
 """
@@ -235,7 +238,7 @@ A circular buffer for storing multiple trajectories of off-policy experience dat
 - If `truncated = true`, then there should be a `truncated_observation`  
 - If `terminated = false` and `truncated = false`, then we stopped in the middle of an episode, so there should be a `truncated_observation`
 """
-struct ReplayBuffer{T,O,A}
+struct ReplayBuffer{T, O, A}
     observation_space::AbstractSpace
     action_space::Box
     observations::CircularBuffer{O}
@@ -243,7 +246,7 @@ struct ReplayBuffer{T,O,A}
     rewards::CircularBuffer{T}
     terminated::CircularBuffer{Bool}
     truncated::CircularBuffer{Bool}
-    truncated_observations::CircularBuffer{Union{Nothing,O}}
+    truncated_observations::CircularBuffer{Union{Nothing, O}}
 end
 function ReplayBuffer(observation_space::AbstractSpace, action_space::Box, capacity::Int)
     O = typeof(rand(observation_space))
@@ -252,7 +255,7 @@ function ReplayBuffer(observation_space::AbstractSpace, action_space::Box, capac
     action_scalar_type = eltype(action_space)
     @assert obs_scalar_type == action_scalar_type "Observation and action types must be the same"
     T = obs_scalar_type
-    return ReplayBuffer{T,O,A}(
+    return ReplayBuffer{T, O, A}(
         observation_space,
         action_space,
         CircularBuffer{O}(capacity),
@@ -260,7 +263,7 @@ function ReplayBuffer(observation_space::AbstractSpace, action_space::Box, capac
         CircularBuffer{T}(capacity),
         CircularBuffer{Bool}(capacity),
         CircularBuffer{Bool}(capacity),
-        CircularBuffer{Union{Nothing,O}}(capacity)
+        CircularBuffer{Union{Nothing, O}}(capacity)
     )
 end
 
@@ -297,7 +300,7 @@ function Base.empty!(buffer::ReplayBuffer)
     empty!(buffer.terminated)
     empty!(buffer.truncated)
     empty!(buffer.truncated_observations)
-    nothing
+    return nothing
 end
 
 function Base.isempty(buffer::ReplayBuffer)
@@ -307,8 +310,12 @@ function Base.isempty(buffer::ReplayBuffer)
     terminated_empty = isempty(buffer.terminated)
     truncated_empty = isempty(buffer.truncated)
     truncated_obs_empty = isempty(buffer.truncated_observations)
-    @assert allequal([true, obs_empty, action_empty, reward_empty, terminated_empty,
-        truncated_empty, truncated_obs_empty]) "All buffers must have the same length"
+    @assert allequal(
+        [
+            true, obs_empty, action_empty, reward_empty, terminated_empty,
+            truncated_empty, truncated_obs_empty,
+        ]
+    ) "All buffers must have the same length"
     return obs_empty
 end
 
@@ -335,16 +342,16 @@ function Base.push!(buffer::ReplayBuffer, traj::OffPolicyTrajectory)
     vec_truncated[end] = traj.truncated
     push!(buffer.truncated, vec_truncated...)
     O = typeof(traj.observations[1])
-    vec_truncated_obs = Vector{Union{Nothing,O}}(nothing, length(traj.observations))
+    vec_truncated_obs = Vector{Union{Nothing, O}}(nothing, length(traj.observations))
     vec_truncated_obs[end] = traj.truncated_observation
     push!(buffer.truncated_observations, vec_truncated_obs...)
-    nothing
+    return nothing
 end
 
-function get_data_loader(buffer::ReplayBuffer{T,O,A}, batch_size::Int, batches::Int, shuffle::Bool, parallel::Bool, rng::AbstractRNG) where {T,O,A}
+function get_data_loader(buffer::ReplayBuffer{T, O, A}, batch_size::Int, batches::Int, shuffle::Bool, parallel::Bool, rng::AbstractRNG) where {T, O, A}
     buffer_size = length(buffer)
     samples = batch_size * batches
-    sample_inds = sample(rng, 1:buffer_size, samples, replace=true)
+    sample_inds = sample(rng, 1:buffer_size, samples, replace = true)
 
     obs_sample = batch(buffer.observations[sample_inds], observation_space(buffer))
     action_sample = batch(buffer.actions[sample_inds], action_space(buffer))
@@ -358,7 +365,7 @@ function get_data_loader(buffer::ReplayBuffer{T,O,A}, batch_size::Int, batches::
         if !terminated_sample[i]
             next_obs = if isnothing(truncated_obs_sample[i])
                 #step is in the middle of a rollout, so we just take the next observation
-                buffer.observations[sample_inds[i]+1]
+                buffer.observations[sample_inds[i] + 1]
             else
                 #step is at end of rollout, or truncated by episode time limit
                 truncated_obs_sample[i]
@@ -375,9 +382,12 @@ function get_data_loader(buffer::ReplayBuffer{T,O,A}, batch_size::Int, batches::
     #check that all elements are assigned
     @assert all(x -> isassigned(next_obs_sample, x), eachindex(next_obs_sample))
 
-    return DataLoader((observations=obs_sample, actions=action_sample,
-            rewards=reward_sample, terminated=terminated_sample,
-            truncated=truncated_sample, next_observations=next_obs_sample);
-        batchsize=batch_size, shuffle, parallel, rng)
+    return DataLoader(
+        (
+            observations = obs_sample, actions = action_sample,
+            rewards = reward_sample, terminated = terminated_sample,
+            truncated = truncated_sample, next_observations = next_obs_sample,
+        );
+        batchsize = batch_size, shuffle, parallel, rng
+    )
 end
-

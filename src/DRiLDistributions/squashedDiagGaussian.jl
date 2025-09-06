@@ -8,12 +8,15 @@ A squashed diagonal Gaussian distribution.
 - `log_std::AbstractArray`: The log of the standard deviation of the Gaussian distribution.
 - `eps::Real`: The epsilon value to avoid numerical instability when inverting the tanh function.
 """
-struct SquashedDiagGaussian{T<:Real,M<:AbstractArray{T},S<:AbstractArray{T}} <: AbstractContinuousDistribution
-    DiagGaussian::DiagGaussian{T,M,S}
+struct SquashedDiagGaussian{T <: Real, M <: AbstractArray{T}, S <: AbstractArray{T}} <: AbstractContinuousDistribution
+    DiagGaussian::DiagGaussian{T, M, S}
     epsilon::T
-    function SquashedDiagGaussian(mean::M, log_std::S; eps::T=T(1e-6)) where {T<:Real,M<:AbstractArray{T},S<:AbstractArray{T}}
+    @inline function SquashedDiagGaussian(mean::M, log_std::S, eps::T) where {T <: Real, M <: AbstractArray{T}, S <: AbstractArray{T}}
         @assert size(mean) == size(log_std) "Mean and log_std must have the same shape"
-        return new{T,M,S}(DiagGaussian(mean, log_std), eps)
+        return new{T, M, S}(DiagGaussian(mean, log_std), eps)
+    end
+    @inline function SquashedDiagGaussian(mean::M, log_std::S) where {T <: Real, M <: AbstractArray{T}, S <: AbstractArray{T}}
+        return SquashedDiagGaussian(mean, log_std, T(1.0e-6))
     end
 end
 
@@ -26,17 +29,17 @@ function Random.rand(rng::AbstractRNG, d::SquashedDiagGaussian, n::Integer)
     return [rand(rng, d) for _ in 1:n]
 end
 
-function logpdf(d::SquashedDiagGaussian{T,M,S}, x::AbstractArray{T}) where {T<:Real,M,S}
-    gaussian_action = atanh.(clamp.(x, -1 + d.epsilon, 1 - d.epsilon))
+function logpdf(d::SquashedDiagGaussian{T, M, S}, x::AbstractArray{T}) where {T <: Real, M, S}
+    gaussian_action = atanh.(clamp.(x, -T(1) + d.epsilon, T(1) - d.epsilon))
     gaussian_logpdf = logpdf(d.DiagGaussian, gaussian_action)
     # More numerically stable formula: 2*(log(2) - x - softplus(-2*x)) instead of log(1 - tanh(x)^2)
     # https://github.com/openai/spinningup/blob/master/spinup/algos/pytorch/sac/core.py
     #TODO: type stability, getting Float64
     #TODO: make test for this
     #TODO: fix runtime dispatch here
-    correction = T(2) * (log(T(2)) .- gaussian_action .- Lux.softplus.(-T(2) .* gaussian_action))
-    squashed_logpdf = gaussian_logpdf .- sum(correction)
-    return squashed_logpdf
+    correction = T(2) * (log(T(2)) .- gaussian_action - Lux.softplus.(-T(2) * gaussian_action))
+    squashed_logpdf = gaussian_logpdf - sum(correction)
+    return squashed_logpdf::T
 end
 
 #not implemented: entropy, as its implemented directly in the loss

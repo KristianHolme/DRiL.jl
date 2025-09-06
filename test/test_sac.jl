@@ -12,7 +12,7 @@
             obs_space = Box(Float32[-1.0, -1.0], Float32[1.0, 1.0])  # 2D obs
             action_space = Box(Float32[-1.0, -1.0], Float32[1.0, 1.0])  # 2D action
 
-            policy = ContinuousActorCriticPolicy(obs_space, action_space; hidden_dims=[4, 4], critic_type=QCritic())
+            policy = ContinuousActorCriticPolicy(obs_space, action_space; hidden_dims = [4, 4], critic_type = QCritic())
             ps = Lux.initialparameters(rng, policy)
             st = Lux.initialstates(rng, policy)
 
@@ -35,7 +35,7 @@
                 obs_space = Box(Float32[-1.0, -1.0], Float32[1.0, 1.0])  # 2D obs
                 action_space = Box(Float32[-1.0, -1.0], Float32[1.0, 1.0])  # 2D action
 
-                policy = ContinuousActorCriticPolicy(obs_space, action_space; hidden_dims=[4, 4], critic_type=QCritic())
+                policy = ContinuousActorCriticPolicy(obs_space, action_space; hidden_dims = [4, 4], critic_type = QCritic())
                 ps = Lux.initialparameters(rng, policy)
                 st = Lux.initialstates(rng, policy)
 
@@ -49,7 +49,7 @@
                 obs_space = Box(Float32[-1.0, -1.0], Float32[1.0, 1.0])  # 2D obs
                 action_space = Box(Float32[-1.0, -1.0], Float32[1.0, 1.0])  # 2D action
 
-                policy = ContinuousActorCriticPolicy(obs_space, action_space; hidden_dims=[6, 4], critic_type=QCritic())
+                policy = ContinuousActorCriticPolicy(obs_space, action_space; hidden_dims = [6, 4], critic_type = QCritic())
                 ps = Lux.initialparameters(rng, policy)
                 st = Lux.initialstates(rng, policy)
 
@@ -59,7 +59,7 @@
                 wrong_feats = randn(Float32, 4, batch_size)
                 @test_throws Exception DRiL.get_actions_from_features(policy, wrong_feats, ps, st)
 
-                # Wrong feature dimensions (should be 2D, not 1D)  
+                # Wrong feature dimensions (should be 2D, not 1D)
                 wrong_feats_1d = randn(Float32, 1, batch_size)
                 @test_throws Exception DRiL.get_actions_from_features(policy, wrong_feats_1d, ps, st)
             end
@@ -71,7 +71,7 @@
                 (1, 1), (1, 2), (1, 4),
                 (2, 1), (2, 2), (2, 4),
                 (4, 1), (4, 2), (4, 4),
-                (8, 2), (8, 4)  # Including the original error case
+                (8, 2), (8, 4),  # Including the original error case
             ]
 
             for (obs_dim, action_dim) in test_cases
@@ -81,9 +81,11 @@
 
                     # Adjust hidden dimensions based on input/output sizes
                     hidden_dim = max(obs_dim, action_dim) * 2
-                    policy = ContinuousActorCriticPolicy(obs_space, action_space;
-                        hidden_dims=[hidden_dim, hidden_dim],
-                        critic_type=QCritic())
+                    policy = ContinuousActorCriticPolicy(
+                        obs_space, action_space;
+                        hidden_dims = [hidden_dim, hidden_dim],
+                        critic_type = QCritic()
+                    )
                     ps = Lux.initialparameters(rng, policy)
                     st = Lux.initialstates(rng, policy)
 
@@ -103,7 +105,7 @@
             obs_space = Box(Float32[-1.0, -1.0], Float32[1.0, 1.0])  # 2D obs
             action_space = Box(Float32[-1.0, -1.0], Float32[1.0, 1.0])  # 2D action
 
-            policy = ContinuousActorCriticPolicy(obs_space, action_space; hidden_dims=[4, 4], critic_type=QCritic())
+            policy = ContinuousActorCriticPolicy(obs_space, action_space; hidden_dims = [4, 4], critic_type = QCritic())
             ps = Lux.initialparameters(rng, policy)
             st = Lux.initialstates(rng, policy)
 
@@ -123,17 +125,19 @@
             # Test different hidden layer configurations that might cause issues
             hidden_configs = [
                 [2, 2],     # Same as input/output
-                [4, 2],     # Expand then contract  
+                [4, 2],     # Expand then contract
                 [2, 4],     # Contract then expand
                 [8, 4, 2],  # Multiple layers
-                [16, 8]     # Large hidden layers
+                [16, 8],     # Large hidden layers
             ]
 
             for hidden_dims in hidden_configs
                 @testset "Hidden dims: $(hidden_dims)" begin
-                    policy = ContinuousActorCriticPolicy(obs_space, action_space;
-                        hidden_dims=hidden_dims,
-                        critic_type=QCritic())
+                    policy = ContinuousActorCriticPolicy(
+                        obs_space, action_space;
+                        hidden_dims = hidden_dims,
+                        critic_type = QCritic()
+                    )
                     ps = Lux.initialparameters(rng, policy)
                     st = Lux.initialstates(rng, policy)
 
@@ -155,7 +159,7 @@
             obs_space = Box(Float32[-1.0, -1.0], Float32[1.0, 1.0])  # 2D obs from SimpleRewardEnv
             action_space = Box(Float32[-1.0, -1.0], Float32[1.0, 1.0])  # 2D action from SimpleRewardEnv
 
-            policy = ContinuousActorCriticPolicy(obs_space, action_space; hidden_dims=[64, 64], critic_type=QCritic())
+            policy = ContinuousActorCriticPolicy(obs_space, action_space; hidden_dims = [64, 64], critic_type = QCritic())
             ps = Lux.initialparameters(rng, policy)
             st = Lux.initialstates(rng, policy)
 
@@ -174,7 +178,7 @@
             wrong_feats_1d = randn(Float32, 1, batch_size)
             @test_throws Exception DRiL.get_actions_from_features(policy, wrong_feats_1d, ps, st)
 
-            # Test with 4D features (wrong) - this should fail gracefully  
+            # Test with 4D features (wrong) - this should fail gracefully
             wrong_feats_4d = randn(Float32, 4, batch_size)
             @test_throws Exception DRiL.get_actions_from_features(policy, wrong_feats_4d, ps, st)
         end
@@ -200,10 +204,12 @@ end
         action_space = DRiL.action_space(env)
 
         # Create SAC agent and algorithm
-        policy = ContinuousActorCriticPolicy(obs_space, action_space; hidden_dims=[8, 4],
-            critic_type=QCritic())
-        alg = SAC(; start_steps=4, batch_size=4)
-        agent = SACAgent(policy, alg; rng=rng, verbose=0)
+        policy = ContinuousActorCriticPolicy(
+            obs_space, action_space; hidden_dims = [8, 4],
+            critic_type = QCritic()
+        )
+        alg = SAC(; start_steps = 4, batch_size = 4)
+        agent = SACAgent(policy, alg; rng = rng, verbose = 0)
 
         # Create replay buffer and collect some rollouts
         replay_buffer = ReplayBuffer(obs_space, action_space, 100)
@@ -226,12 +232,12 @@ end
                 target_entropy = DRiL.get_target_entropy(alg.ent_coef, action_space)
 
                 ent_data = (
-                    observations=batch_data.observations,
-                    policy_ps=agent.train_state.parameters,
-                    policy_st=agent.train_state.states,
-                    target_entropy=target_entropy,
-                    target_ps=agent.Q_target_parameters,
-                    target_st=agent.Q_target_states
+                    observations = batch_data.observations,
+                    policy_ps = agent.train_state.parameters,
+                    policy_st = agent.train_state.states,
+                    target_entropy = target_entropy,
+                    target_ps = agent.Q_target_parameters,
+                    target_st = agent.Q_target_states,
                 )
 
                 # Compute gradients exactly like in learn!
@@ -251,7 +257,7 @@ end
 
                 # Verify gradient magnitude is reasonable
                 grad_magnitude = abs(ent_grad.log_ent_coef[1])
-                @test 1e-6 < grad_magnitude < 100.0  # Reasonable range
+                @test 1.0e-6 < grad_magnitude < 100.0  # Reasonable range
             end
         end
 
@@ -260,15 +266,15 @@ end
             train_state = agent.train_state
 
             critic_data = (
-                observations=batch_data.observations,
-                actions=batch_data.actions,
-                rewards=batch_data.rewards,
-                terminated=batch_data.terminated,
-                truncated=batch_data.truncated,
-                next_observations=batch_data.next_observations,
-                log_ent_coef=agent.ent_train_state.parameters,
-                target_ps=agent.Q_target_parameters,
-                target_st=agent.Q_target_states
+                observations = batch_data.observations,
+                actions = batch_data.actions,
+                rewards = batch_data.rewards,
+                terminated = batch_data.terminated,
+                truncated = batch_data.truncated,
+                next_observations = batch_data.next_observations,
+                log_ent_coef = agent.ent_train_state.parameters,
+                target_ps = agent.Q_target_parameters,
+                target_st = agent.Q_target_states,
             )
 
             # Compute gradients exactly like in learn!
@@ -291,8 +297,8 @@ end
             # Verify gradient magnitudes are reasonable
             critic_grad_norm = norm(critic_grad.critic_head)
             actor_grad_norm = norm(critic_grad.actor_head)
-            @test actor_grad_norm < 1f-10
-            @test critic_grad_norm > 1f-10  # Should have meaningful gradients
+            @test actor_grad_norm < 1.0f-10
+            @test critic_grad_norm > 1.0f-10  # Should have meaningful gradients
             @test critic_grad_norm < 1000.0  # But not exploding
         end
 
@@ -301,13 +307,13 @@ end
             train_state = agent.train_state
 
             actor_data = (
-                observations=batch_data.observations,
-                actions=batch_data.actions,
-                rewards=batch_data.rewards,
-                terminated=batch_data.terminated,
-                truncated=batch_data.truncated,
-                next_observations=batch_data.next_observations,
-                log_ent_coef=agent.ent_train_state.parameters
+                observations = batch_data.observations,
+                actions = batch_data.actions,
+                rewards = batch_data.rewards,
+                terminated = batch_data.terminated,
+                truncated = batch_data.truncated,
+                next_observations = batch_data.next_observations,
+                log_ent_coef = agent.ent_train_state.parameters,
             )
 
             # Compute gradients exactly like in learn!
@@ -334,9 +340,9 @@ end
             # Verify gradient magnitudes are reasonable
             actor_grad_norm = norm(actor_grad.actor_head)
             critic_grad_norm = norm(actor_grad.critic_head)
-            @test actor_grad_norm > 1f-10  # Should have meaningful gradients
+            @test actor_grad_norm > 1.0f-10  # Should have meaningful gradients
             @test actor_grad_norm < 1000.0  # But not exploding
-            @test critic_grad_norm < 1f-10
+            @test critic_grad_norm < 1.0f-10
         end
     end
 end
