@@ -23,28 +23,28 @@ Check that an environment follows the DRiL interface and respects space constrai
 # Throws
 - `AssertionError`: If critical interface violations are found
 """
-function check_env(env::AbstractEnv; warn::Bool=true, skip_render_check::Bool=false, verbose::Bool=true)
+function check_env(env::AbstractEnv; warn::Bool = true, skip_render_check::Bool = false, verbose::Bool = true)
     verbose && @info "Checking environment implementation..."
 
     # Check required methods exist
-    _check_required_methods(env; verbose=verbose)
+    _check_required_methods(env; verbose = verbose)
 
     # Check spaces are properly defined
     obs_space = observation_space(env)
     act_space = action_space(env)
-    _check_spaces(obs_space, act_space; verbose=verbose)
+    _check_spaces(obs_space, act_space; verbose = verbose)
 
     # Test environment dynamics
-    _check_environment_dynamics(env, obs_space, act_space; warn=warn, verbose=verbose)
+    _check_environment_dynamics(env, obs_space, act_space; warn = warn, verbose = verbose)
 
     # Test reset functionality
-    _check_reset_functionality(env, obs_space; warn=warn, verbose=verbose)
+    _check_reset_functionality(env, obs_space; warn = warn, verbose = verbose)
 
-    # Test step functionality  
-    _check_step_functionality(env, obs_space, act_space; warn=warn, verbose=verbose)
+    # Test step functionality
+    _check_step_functionality(env, obs_space, act_space; warn = warn, verbose = verbose)
 
     # Test space constraints
-    _check_space_constraints(env, obs_space, act_space; warn=warn, verbose=verbose)
+    _check_space_constraints(env, obs_space, act_space; warn = warn, verbose = verbose)
 
     verbose && @info "✅ Environment check completed successfully!"
     return true
@@ -53,7 +53,7 @@ end
 """
 Check that all required methods from basic_types.jl are implemented.
 """
-function _check_required_methods(env::AbstractEnv; verbose::Bool=true)
+function _check_required_methods(env::AbstractEnv; verbose::Bool = true)
     verbose && @info "Checking required method implementations..."
 
     # Methods required for all environments
@@ -65,7 +65,7 @@ function _check_required_methods(env::AbstractEnv; verbose::Bool=true)
         (action_space, "action_space(env)"),
         (observation_space, "observation_space(env)"),
         (act!, "act!(env, action)"),
-        (get_info, "get_info(env)")
+        (get_info, "get_info(env)"),
     ]
 
     # Check common methods
@@ -75,36 +75,37 @@ function _check_required_methods(env::AbstractEnv; verbose::Bool=true)
         end
         verbose && @info "  ✓ $method_name implemented"
     end
+    return
 end
 
 """
 Check that observation and action spaces are properly defined.
 """
-function _check_spaces(obs_space::AbstractSpace, act_space::AbstractSpace; verbose::Bool=true)
+function _check_spaces(obs_space::AbstractSpace, act_space::AbstractSpace; verbose::Bool = true)
     verbose && @info "Checking space definitions..."
 
     # Use multiple dispatch for space-specific checks
-    _check_space_properties(obs_space, "observation_space"; verbose=verbose)
-    _check_space_properties(act_space, "action_space"; verbose=verbose)
+    _check_space_properties(obs_space, "observation_space"; verbose = verbose)
+    return _check_space_properties(act_space, "action_space"; verbose = verbose)
 end
 
 # Multiple dispatch methods for different space types
-function _check_space_properties(space::Box, space_name::String; verbose::Bool=true)
+function _check_space_properties(space::Box, space_name::String; verbose::Bool = true)
     @assert all(space.low .<= space.high) "$space_name: low bounds must be <= high bounds"
     @assert length(space.shape) > 0 "$space_name: shape must be non-empty"
-    verbose && @info "  ✓ $(space_name): $(space.shape) $(eltype(space)) [$(space.low), $(space.high)]"
+    return verbose && @info "  ✓ $(space_name): $(space.shape) $(eltype(space)) [$(space.low), $(space.high)]"
 end
 
 # Fallback for unsupported space types
-function _check_space_properties(space::AbstractSpace, space_name::String; verbose::Bool=true)
+function _check_space_properties(space::AbstractSpace, space_name::String; verbose::Bool = true)
     @warn "Space type $(typeof(space)) not fully supported in checker"
-    verbose && @info "  ⚠ $(space_name): $(typeof(space)) (limited checks)"
+    return verbose && @info "  ⚠ $(space_name): $(typeof(space)) (limited checks)"
 end
 
 """
 Check basic environment dynamics and state consistency.
 """
-function _check_environment_dynamics(env::AbstractEnv, obs_space, act_space; warn::Bool=true, verbose::Bool=true)
+function _check_environment_dynamics(env::AbstractEnv, obs_space, act_space; warn::Bool = true, verbose::Bool = true)
     verbose && @info "Checking environment dynamics..."
 
     # Test that environment starts in consistent state
@@ -119,7 +120,7 @@ function _check_environment_dynamics(env::AbstractEnv, obs_space, act_space; war
     verbose && @info "  ✓ Environment state methods return correct types"
 
     # Test that observe works without reset
-    try
+    return try
         obs = observe(env)
         _check_observation_shape(obs, obs_space, "observe() before reset")
         verbose && @info "  ✓ observe() works before reset"
@@ -131,7 +132,7 @@ end
 """
 Check reset functionality.
 """
-function _check_reset_functionality(env::AbstractEnv, obs_space; warn::Bool=true, verbose::Bool=true)
+function _check_reset_functionality(env::AbstractEnv, obs_space; warn::Bool = true, verbose::Bool = true)
     verbose && @info "Checking reset functionality..."
 
     rng = MersenneTwister(42)
@@ -146,7 +147,7 @@ function _check_reset_functionality(env::AbstractEnv, obs_space; warn::Bool=true
 
     # Test that observe returns same observation as reset
     current_obs = observe(env)
-    if !isapprox(reset_obs, current_obs; atol=1e-6)
+    if !isapprox(reset_obs, current_obs; atol = 1.0e-6)
         warn && @warn "observe() after reset returns different observation than reset! returned"
     end
 
@@ -154,13 +155,13 @@ function _check_reset_functionality(env::AbstractEnv, obs_space; warn::Bool=true
     reset_obs2 = reset!(env)
     _check_observation_shape(reset_obs2, obs_space, "reset!(env) without RNG")
 
-    verbose && @info "  ✓ Reset functionality works correctly"
+    return verbose && @info "  ✓ Reset functionality works correctly"
 end
 
 """
 Check step functionality for both single and parallel environments.
 """
-function _check_step_functionality(env::AbstractEnv, obs_space, act_space; warn::Bool=true, verbose::Bool=true)
+function _check_step_functionality(env::AbstractEnv, obs_space, act_space; warn::Bool = true, verbose::Bool = true)
     verbose && @info "Checking step functionality..."
 
     # Reset environment first
@@ -169,7 +170,7 @@ function _check_step_functionality(env::AbstractEnv, obs_space, act_space; warn:
     # Generate a valid action
     action = rand(act_space)
 
-    if env isa AbstractParallelEnv
+    return if env isa AbstractParallelEnv
         # Test parallel environment act!
         try
             rewards = act!(env, action)
@@ -210,7 +211,7 @@ end
 """
 Check that environment respects observation and action space constraints.
 """
-function _check_space_constraints(env::AbstractEnv, obs_space, act_space; warn::Bool=true, verbose::Bool=true)
+function _check_space_constraints(env::AbstractEnv, obs_space, act_space; warn::Bool = true, verbose::Bool = true)
     verbose && @info "Checking space constraints..."
 
     # Test multiple episodes to check constraint adherence
@@ -249,7 +250,7 @@ function _check_space_constraints(env::AbstractEnv, obs_space, act_space; warn::
         end
     end
 
-    if constraint_violations > 0
+    return if constraint_violations > 0
         warn && @warn "Found $constraint_violations observation space constraint violations"
     else
         verbose && @info "  ✓ Environment respects space constraints"
@@ -261,7 +262,7 @@ function _check_observation_shape(obs, obs_space::Box, context::String)
     expected_shape = obs_space.shape
     expected_type = eltype(obs_space)
 
-    if isa(obs, AbstractArray)
+    return if isa(obs, AbstractArray)
         obs_shape = size(obs)
         obs_type = eltype(obs)
 
@@ -271,7 +272,7 @@ function _check_observation_shape(obs, obs_space::Box, context::String)
             @assert obs_shape == expected_shape "$context: observation shape $obs_shape != expected $expected_shape"
         elseif length(obs_shape) == length(expected_shape) + 1
             # Batched observations
-            @assert obs_shape[1:end-1] == expected_shape "$context: observation batch shape mismatch"
+            @assert obs_shape[1:(end - 1)] == expected_shape "$context: observation batch shape mismatch"
         elseif obs isa Vector && length(obs) > 0 && size(obs[1]) == expected_shape
             # vector of observations
             @assert all(size(o) == expected_shape for o in obs) "$context: observation batch shape mismatch"

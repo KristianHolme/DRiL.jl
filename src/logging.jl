@@ -1,15 +1,15 @@
 function get_hparams(alg::AbstractAlgorithm)
     @warn "get_hparams is not implemented for $(typeof(alg)). No hyperparameters will be logged."
-    return Dict{String,Any}()
+    return Dict{String, Any}()
 end
 
 function get_hparams(agent::AbstractAgent)
     @warn "get_hparams is not implemented for $(typeof(agent)). No hyperparameters will be logged."
-    return Dict{String,Any}()
+    return Dict{String, Any}()
 end
 
 function get_hparams(alg::PPO)
-    hparams = Dict{String,Any}(
+    hparams = Dict{String, Any}(
         "gamma" => alg.gamma,
         "gae_lambda" => alg.gae_lambda,
         "clip_range" => alg.clip_range,
@@ -35,7 +35,7 @@ function get_hparams(alg::PPO)
 end
 
 function get_hparams(alg::SAC)
-    hparams = Dict{String,Any}(
+    hparams = Dict{String, Any}(
         "learning_rate" => alg.learning_rate,
         "buffer_capacity" => alg.buffer_capacity,
         "start_steps" => alg.start_steps,
@@ -52,14 +52,14 @@ function get_hparams(alg::SAC)
 end
 
 function get_hparams(ent_coef::AutoEntropyCoefficient)
-    return Dict{String,Any}(
+    return Dict{String, Any}(
         "ent_coef_mode" => "auto",
         "ent_coef_value" => ent_coef.initial_value
     )
 end
 
 function get_hparams(ent_coef::FixedEntropyCoefficient)
-    return Dict{String,Any}(
+    return Dict{String, Any}(
         "ent_coef_mode" => "fixed",
         "ent_coef_value" => ent_coef.coef
     )

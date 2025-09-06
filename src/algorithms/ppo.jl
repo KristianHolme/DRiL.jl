@@ -1,26 +1,28 @@
-@kwdef struct PPO{T<:AbstractFloat} <: OnPolicyAlgorithm
+@kwdef struct PPO{T <: AbstractFloat} <: OnPolicyAlgorithm
     gamma::T = 0.99f0
     gae_lambda::T = 0.95f0
     clip_range::T = 0.2f0
-    clip_range_vf::Union{T,Nothing} = nothing
+    clip_range_vf::Union{T, Nothing} = nothing
     ent_coef::T = 0.0f0
     vf_coef::T = 0.5f0
     max_grad_norm::T = 0.5f0
-    target_kl::Union{T,Nothing} = nothing
+    target_kl::Union{T, Nothing} = nothing
     normalize_advantage::Bool = true
     # Agent parameters moved from ActorCriticAgent
     n_steps::Int = 2048
     batch_size::Int = 64
     epochs::Int = 10
-    learning_rate::T = 3f-4
+    learning_rate::T = 3.0f-4
 end
 
-function ActorCriticAgent(policy::AbstractActorCriticPolicy, alg::PPO;
-    optimizer_type::Type{<:Optimisers.AbstractRule}=Optimisers.Adam,
-    stats_window::Int=100,#TODO not used
-    verbose::Int=1,
-    log_dir::Union{Nothing,String}=nothing,
-    rng::AbstractRNG=Random.default_rng())
+function ActorCriticAgent(
+        policy::AbstractActorCriticPolicy, alg::PPO;
+        optimizer_type::Type{<:Optimisers.AbstractRule} = Optimisers.Adam,
+        stats_window::Int = 100, #TODO not used
+        verbose::Int = 1,
+        log_dir::Union{Nothing, String} = nothing,
+        rng::AbstractRNG = Random.default_rng()
+    )
 
     optimizer = make_optimizer(optimizer_type, alg)
     ps, st = Lux.setup(rng, policy)
@@ -31,15 +33,17 @@ function ActorCriticAgent(policy::AbstractActorCriticPolicy, alg::PPO;
         logger = nothing
     end
     train_state = Lux.Training.TrainState(policy, ps, st, optimizer)
-    return ActorCriticAgent(policy, train_state, optimizer_type, stats_window,
-        logger, verbose, rng, AgentStats(0, 0))
+    return ActorCriticAgent(
+        policy, train_state, optimizer_type, stats_window,
+        logger, verbose, rng, AgentStats(0, 0)
+    )
 end
 
 function make_optimizer(optimizer_type::Type{<:Optimisers.Adam}, alg::PPO)
-    return optimizer_type(eta=alg.learning_rate, epsilon=1f-5)
+    return optimizer_type(eta = alg.learning_rate, epsilon = 1.0f-5)
 end
 
-function load_policy_params_and_state(agent::ActorCriticAgent, alg::PPO, path::AbstractString; suffix::String=".jld2")
+function load_policy_params_and_state(agent::ActorCriticAgent, alg::PPO, path::AbstractString; suffix::String = ".jld2")
     file_path = endswith(path, suffix) ? path : path * suffix
     @info "Loading policy, parameters, and state from $file_path"
     data = load(file_path)
@@ -56,10 +60,11 @@ end
 
 #TODO make parameters n_steps, batch_size, epochs, max_steps kwargs, default to values from agent
 #TODO refactor, separate out learnig loop and logging
-function learn!(agent::ActorCriticAgent, env::AbstractParallelEnv, alg::PPO{T}, max_steps::Int; ad_type::Lux.Training.AbstractADType=AutoZygote(), callbacks::Union{Vector{<:AbstractCallback},Nothing}=nothing) where T
+function learn!(agent::ActorCriticAgent, env::AbstractParallelEnv, alg::PPO{T}, max_steps::Int; ad_type::Lux.Training.AbstractADType = AutoZygote(), callbacks::Union{Vector{<:AbstractCallback}, Nothing} = nothing) where {T}
     n_steps = alg.n_steps
     n_envs = number_of_envs(env)
-    roll_buffer = RolloutBuffer(observation_space(env), action_space(env),
+    roll_buffer = RolloutBuffer(
+        observation_space(env), action_space(env),
         alg.gae_lambda, alg.gamma, n_steps, n_envs
     )
 
@@ -69,8 +74,9 @@ function learn!(agent::ActorCriticAgent, env::AbstractParallelEnv, alg::PPO{T}, 
     agent.verbose > 0 && @info "Training with total_steps: $total_steps, 
     iterations: $iterations, n_steps: $n_steps, n_envs: $n_envs"
 
-    progress_meter = Progress(total_steps, desc="Training...",
-        showspeed=true, enabled=agent.verbose > 0
+    progress_meter = Progress(
+        total_steps, desc = "Training...",
+        showspeed = true, enabled = agent.verbose > 0
     )
 
     train_state = agent.train_state
@@ -104,7 +110,7 @@ function learn!(agent::ActorCriticAgent, env::AbstractParallelEnv, alg::PPO{T}, 
                 return nothing
             end
         end
-        fps, success = collect_rollout!(roll_buffer, agent, alg, env, progress_meter; callbacks=callbacks)
+        fps, success = collect_rollout!(roll_buffer, agent, alg, env, progress_meter; callbacks = callbacks)
         if !success
             @warn "Training stopped due to callback failure"
             return nothing
@@ -124,10 +130,14 @@ function learn!(agent::ActorCriticAgent, env::AbstractParallelEnv, alg::PPO{T}, 
             end
         end
 
-        data_loader = DataLoader((roll_buffer.observations, roll_buffer.actions,
+        data_loader = DataLoader(
+            (
+                roll_buffer.observations, roll_buffer.actions,
                 roll_buffer.advantages, roll_buffer.returns,
-                roll_buffer.logprobs, roll_buffer.values),
-            batchsize=alg.batch_size, shuffle=true, parallel=true, rng=agent.rng)
+                roll_buffer.logprobs, roll_buffer.values,
+            ),
+            batchsize = alg.batch_size, shuffle = true, parallel = true, rng = agent.rng
+        )
         continue_training = true
         entropy_losses = Float32[]
         entropy = Float32[]
@@ -143,14 +153,14 @@ function learn!(agent::ActorCriticAgent, env::AbstractParallelEnv, alg::PPO{T}, 
 
                 if epoch == 1 && i_batch == 1
                     mean_ratio = stats["ratio"]
-                    isapprox(mean_ratio - one(mean_ratio), zero(mean_ratio), atol=eps(typeof(mean_ratio))) || @warn "ratios is not 1.0, iter $i, epoch $epoch, batch $i_batch, $mean_ratio"
+                    isapprox(mean_ratio - one(mean_ratio), zero(mean_ratio), atol = eps(typeof(mean_ratio))) || @warn "ratios is not 1.0, iter $i, epoch $epoch, batch $i_batch, $mean_ratio"
                 end
                 @assert !any(isnan, grads) "gradient contains nan, iter $i, epoch $epoch, batch $i_batch"
                 @assert !any(isinf, grads) "gradient not finite, iter $i, epoch $epoch, batch $i_batch"
 
                 current_grad_norm = norm(grads)
                 # @info "actor grad norm: $(norm(grads.actor_head))"
-                if norm(grads.actor_head) < 1e-3
+                if norm(grads.actor_head) < 1.0e-3
                     @info "actor grad" grads.actor_head
                 end
                 # @info "critic grad norm: $(norm(grads.critic_head))"
@@ -161,7 +171,7 @@ function learn!(agent::ActorCriticAgent, env::AbstractParallelEnv, alg::PPO{T}, 
                     grads = grads .* alg.max_grad_norm ./ current_grad_norm
                     clipped_grads_norm = norm(grads)
                     @assert clipped_grads_norm < alg.max_grad_norm ||
-                            clipped_grads_norm ≈ alg.max_grad_norm "gradient norm 
+                        clipped_grads_norm ≈ alg.max_grad_norm "gradient norm 
                             ($(clipped_grads_norm)) is greater than
                             max_grad_norm ($(alg.max_grad_norm)), iter $i, epoch $epoch, batch $i_batch"
                 end
@@ -197,18 +207,20 @@ function learn!(agent::ActorCriticAgent, env::AbstractParallelEnv, alg::PPO{T}, 
         push!(total_losses, mean(losses))
         push!(total_grad_norms, mean(grad_norms))
         if agent.verbose > 1
-            ProgressMeter.update!(progress_meter; showvalues=[
-                ("explained_variance", explained_variance),
-                ("entropy_loss", total_entropy_losses[i]),
-                ("policy_loss", total_policy_losses[i]),
-                ("value_loss", total_value_losses[i]),
-                ("approx_kl_div", total_approx_kl_divs[i]),
-                ("clip_fraction", total_clip_fractions[i]),
-                ("loss", total_losses[i]),
-                ("fps", total_fps[i]),
-                ("grad_norm", total_grad_norms[i]),
-                ("learning_rate", learning_rate)
-            ])
+            ProgressMeter.update!(
+                progress_meter; showvalues = [
+                    ("explained_variance", explained_variance),
+                    ("entropy_loss", total_entropy_losses[i]),
+                    ("policy_loss", total_policy_losses[i]),
+                    ("value_loss", total_value_losses[i]),
+                    ("approx_kl_div", total_approx_kl_divs[i]),
+                    ("clip_fraction", total_clip_fractions[i]),
+                    ("loss", total_losses[i]),
+                    ("fps", total_fps[i]),
+                    ("grad_norm", total_grad_norms[i]),
+                    ("learning_rate", learning_rate),
+                ]
+            )
         end
         if !isnothing(agent.logger)
             log_value(agent.logger, "train/entropy_loss", total_entropy_losses[i])
@@ -246,28 +258,28 @@ function learn!(agent::ActorCriticAgent, env::AbstractParallelEnv, alg::PPO{T}, 
     return learn_stats
 end
 
-function normalize(advantages::Vector{T}) where T
+function normalize(advantages::Vector{T}) where {T}
     mean_adv = mean(advantages)
     std_adv = std(advantages)
-    epsilon = T(1e-8)
+    epsilon = T(1.0e-8)
     norm_advantages = (advantages .- mean_adv) ./ (std_adv + epsilon)
     return norm_advantages
 end
 
-function clip_range!(values::Vector{T}, old_values::Vector{T}, clip_range::T) where T
+function clip_range!(values::Vector{T}, old_values::Vector{T}, clip_range::T) where {T}
     for i in eachindex(values)
         diff = values[i] - old_values[i]
         clipped_diff = clamp(diff, -clip_range, clip_range)
         values[i] = old_values[i] + clipped_diff
     end
-    nothing
+    return nothing
 end
 
-function clip_range(old_values::Vector{T}, values::Vector{T}, clip_range::T) where T
+function clip_range(old_values::Vector{T}, values::Vector{T}, clip_range::T) where {T}
     return old_values .+ clamp(values .- old_values, -clip_range, clip_range)
 end
 
-function (alg::PPO{T})(policy::AbstractActorCriticPolicy, ps, st, batch_data) where T
+function (alg::PPO{T})(policy::AbstractActorCriticPolicy, ps, st, batch_data) where {T}
     observations = batch_data[1]
     actions = batch_data[2]
     advantages = batch_data[3]
@@ -313,7 +325,7 @@ end
 
 # Helper function to process actions: ensure correct type and clipping for Box
 #TODO performance
-function process_action(action, action_space::Box{T}, ::PPO) where T
+function process_action(action, action_space::Box{T}, ::PPO) where {T}
     # First check if type conversion is needed
     if eltype(action) != T
         @warn "Action type mismatch: $(eltype(action)) != $T"

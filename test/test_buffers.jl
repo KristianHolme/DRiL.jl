@@ -8,8 +8,8 @@ using TestItems
     pend_env() = PendulumEnv()
     env = MultiThreadedParallelEnv([pend_env() for _ in 1:4])
     policy = ActorCriticPolicy(DRiL.observation_space(env), DRiL.action_space(env))
-    alg = PPO(; n_steps=8, batch_size=8, epochs=1)
-    agent = ActorCriticAgent(policy, alg; verbose=0)
+    alg = PPO(; n_steps = 8, batch_size = 8, epochs = 1)
+    agent = ActorCriticAgent(policy, alg; verbose = 0)
     n_steps = alg.n_steps
     n_envs = DRiL.number_of_envs(env)
     roll_buffer = RolloutBuffer(DRiL.observation_space(env), DRiL.action_space(env), alg.gae_lambda, alg.gamma, n_steps, n_envs)
@@ -22,7 +22,7 @@ using TestItems
         ps = agent.train_state.parameters
         st = agent.train_state.states
         _, new_logprobs, _, _ = DRiL.evaluate_actions(policy, obs, act, ps, st)
-        @test isapprox(vec(logprobs), vec(new_logprobs); atol=1e-5, rtol=1e-5)
+        @test isapprox(vec(logprobs), vec(new_logprobs); atol = 1.0e-5, rtol = 1.0e-5)
     end
 end
 
@@ -92,9 +92,9 @@ end
     DRiL.compute_advantages!(advantages_terminated, traj, gamma, gae_lambda)
 
     expected_terminated = SharedTestSetup.compute_expected_gae(
-        traj.rewards, traj.values, gamma, gae_lambda; is_terminated=true
+        traj.rewards, traj.values, gamma, gae_lambda; is_terminated = true
     )
-    @test isapprox(advantages_terminated, expected_terminated, atol=1e-4)
+    @test isapprox(advantages_terminated, expected_terminated, atol = 1.0e-4)
 
     # Test truncated trajectory (with bootstrap)
     traj.terminated = false
@@ -106,12 +106,12 @@ end
 
     expected_truncated = SharedTestSetup.compute_expected_gae(
         traj.rewards, traj.values, gamma, gae_lambda;
-        is_terminated=false, bootstrap_value=bootstrap_value
+        is_terminated = false, bootstrap_value = bootstrap_value
     )
-    @test isapprox(advantages_truncated, expected_truncated, atol=1e-4)
+    @test isapprox(advantages_truncated, expected_truncated, atol = 1.0e-4)
 
     # Verify that bootstrapped case gives different results
-    @test !isapprox(advantages_terminated, advantages_truncated, atol=1e-3)
+    @test !isapprox(advantages_terminated, advantages_truncated, atol = 1.0e-3)
 end
 
 @testitem "Buffer data integrity" tags = [:buffers, :integrity] setup = [SharedTestSetup] begin
@@ -137,8 +137,8 @@ end
 
 
     policy = SharedTestSetup.ConstantValuePolicy(env_obs_space, env_act_space, 0.5f0)
-    alg = PPO(n_steps=n_steps, batch_size=16, epochs=1)
-    agent = ActorCriticAgent(policy, alg; verbose=0)
+    alg = PPO(n_steps = n_steps, batch_size = 16, epochs = 1)
+    agent = ActorCriticAgent(policy, alg; verbose = 0)
 
     # Collect rollouts
     DRiL.collect_rollout!(roll_buffer, agent, alg, env)
@@ -160,7 +160,7 @@ end
     @test all(isfinite, roll_buffer.values)
 
     # Verify returns = advantages + values relationship
-    @test isapprox(roll_buffer.returns, roll_buffer.advantages .+ roll_buffer.values, atol=1e-5)
+    @test isapprox(roll_buffer.returns, roll_buffer.advantages .+ roll_buffer.values, atol = 1.0e-5)
 end
 
 @testitem "RolloutBuffer with discrete actions" tags = [:buffers, :rollouts, :discrete] setup = [SharedTestSetup] begin
@@ -171,8 +171,8 @@ end
     cartpole_env() = CartPoleEnv()
     env = MultiThreadedParallelEnv([cartpole_env() for _ in 1:4])
     policy = DiscreteActorCriticPolicy(DRiL.observation_space(env), DRiL.action_space(env))
-    alg = PPO(; n_steps=8, batch_size=8, epochs=1)
-    agent = ActorCriticAgent(policy, alg; verbose=0)
+    alg = PPO(; n_steps = 8, batch_size = 8, epochs = 1)
+    agent = ActorCriticAgent(policy, alg; verbose = 0)
 
     n_steps = alg.n_steps
     n_envs = DRiL.number_of_envs(env)
@@ -208,8 +208,8 @@ end
     st = agent.train_state.states
     eval_values, eval_logprobs, entropy, _ = DRiL.evaluate_actions(policy, obs, actions, ps, st)
 
-    @test isapprox(vec(values), vec(eval_values); atol=1e-5, rtol=1e-5)
-    @test isapprox(vec(logprobs), vec(eval_logprobs); atol=1e-5, rtol=1e-5)
+    @test isapprox(vec(values), vec(eval_values); atol = 1.0e-5, rtol = 1.0e-5)
+    @test isapprox(vec(logprobs), vec(eval_logprobs); atol = 1.0e-5, rtol = 1.0e-5)
     @test all(entropy .>= 0.0f0)  # Entropy should be non-negative
 end
 
@@ -219,16 +219,16 @@ end
 
     # Test: Compare buffer behavior between discrete and continuous action spaces
 
-    alg = PPO(n_steps=4, batch_size=4, epochs=1)
+    alg = PPO(n_steps = 4, batch_size = 4, epochs = 1)
     # Discrete environment (CartPole)
     discrete_env = MultiThreadedParallelEnv([CartPoleEnv() for _ in 1:2])
     discrete_policy = DiscreteActorCriticPolicy(DRiL.observation_space(discrete_env), DRiL.action_space(discrete_env))
-    discrete_agent = ActorCriticAgent(discrete_policy, alg; verbose=0)
+    discrete_agent = ActorCriticAgent(discrete_policy, alg; verbose = 0)
 
     # Continuous environment (Pendulum)
     continuous_env = MultiThreadedParallelEnv([PendulumEnv() for _ in 1:2])
     continuous_policy = ContinuousActorCriticPolicy(DRiL.observation_space(continuous_env), DRiL.action_space(continuous_env))
-    continuous_agent = ActorCriticAgent(continuous_policy, alg; verbose=0)
+    continuous_agent = ActorCriticAgent(continuous_policy, alg; verbose = 0)
 
 
     # Create buffers
@@ -262,17 +262,19 @@ end
 
     # Discrete evaluation
     discrete_eval_values, discrete_eval_logprobs, discrete_entropy, _ = DRiL.evaluate_actions(
-        discrete_policy, discrete_buffer.observations, discrete_buffer.actions, discrete_ps, discrete_st)
+        discrete_policy, discrete_buffer.observations, discrete_buffer.actions, discrete_ps, discrete_st
+    )
 
     # Continuous evaluation
     continuous_eval_values, continuous_eval_logprobs, continuous_entropy, _ = DRiL.evaluate_actions(
-        continuous_policy, continuous_buffer.observations, continuous_buffer.actions, continuous_ps, continuous_st)
+        continuous_policy, continuous_buffer.observations, continuous_buffer.actions, continuous_ps, continuous_st
+    )
 
     # Test evaluation consistency
-    @test isapprox(vec(discrete_buffer.values), vec(discrete_eval_values); atol=1e-5, rtol=1e-5)
-    @test isapprox(vec(continuous_buffer.values), vec(continuous_eval_values); atol=1e-5, rtol=1e-5)
-    @test isapprox(vec(discrete_buffer.logprobs), vec(discrete_eval_logprobs); atol=1e-5, rtol=1e-5)
-    @test isapprox(vec(continuous_buffer.logprobs), vec(continuous_eval_logprobs); atol=1e-5, rtol=1e-5)
+    @test isapprox(vec(discrete_buffer.values), vec(discrete_eval_values); atol = 1.0e-5, rtol = 1.0e-5)
+    @test isapprox(vec(continuous_buffer.values), vec(continuous_eval_values); atol = 1.0e-5, rtol = 1.0e-5)
+    @test isapprox(vec(discrete_buffer.logprobs), vec(discrete_eval_logprobs); atol = 1.0e-5, rtol = 1.0e-5)
+    @test isapprox(vec(continuous_buffer.logprobs), vec(continuous_eval_logprobs); atol = 1.0e-5, rtol = 1.0e-5)
 end
 
 @testitem "RolloutBuffer with different box shapes" tags = [:buffers, :rollouts] setup = [SharedTestSetup] begin
@@ -285,7 +287,7 @@ end
         #TODO: use a simpler random agent/policy instead?
         policy = ActorCriticPolicy(obs_space, act_space)
         alg = PPO()
-        agent = ActorCriticAgent(policy, alg; verbose=0)
+        agent = ActorCriticAgent(policy, alg; verbose = 0)
         roll_buffer = RolloutBuffer(obs_space, act_space, alg.gae_lambda, alg.gamma, n_steps, DRiL.number_of_envs(env))
         DRiL.collect_rollout!(roll_buffer, agent, alg, env)
         return roll_buffer
@@ -321,8 +323,8 @@ end
     cartpole_env() = CartPoleEnv()
     env = MultiThreadedParallelEnv([cartpole_env() for _ in 1:n_envs])
     policy = DiscreteActorCriticPolicy(DRiL.observation_space(env), DRiL.action_space(env))
-    alg = PPO(n_steps=n_steps, batch_size=n_steps, epochs=1)
-    agent = ActorCriticAgent(policy, alg; verbose=0)
+    alg = PPO(n_steps = n_steps, batch_size = n_steps, epochs = 1)
+    agent = ActorCriticAgent(policy, alg; verbose = 0)
     roll_buffer = RolloutBuffer(DRiL.observation_space(env), DRiL.action_space(env), alg.gae_lambda, alg.gamma, n_steps, n_envs)
 
     # Test rollout collection
@@ -350,7 +352,7 @@ end
 
     alg = SAC()
     env = BroadcastedParallelEnv([SharedTestSetup.SimpleRewardEnv(8) for _ in 1:n_envs])
-    policy = ContinuousActorCriticPolicy(DRiL.observation_space(env), DRiL.action_space(env), critic_type=QCritic())
+    policy = ContinuousActorCriticPolicy(DRiL.observation_space(env), DRiL.action_space(env), critic_type = QCritic())
     agent = SACAgent(policy, alg)
     buffer = ReplayBuffer(DRiL.observation_space(env), DRiL.action_space(env), buffer_capacity)
     @test capacity(buffer) == buffer_capacity

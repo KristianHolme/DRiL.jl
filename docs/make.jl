@@ -1,3 +1,3 @@
 using Documenter, DRiL
 
-makedocs(sitename="DRiL.jl")
+makedocs(sitename = "DRiL.jl")

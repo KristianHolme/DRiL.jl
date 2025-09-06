@@ -124,8 +124,8 @@ abstract type AbstractAgent end
 
 abstract type AbstractBuffer end
 
-abstract type AbstractEnvWrapper{E<:AbstractEnv} <: AbstractEnv end
-abstract type AbstractParallelEnvWrapper{E<:AbstractParallelEnv} <: AbstractParallelEnv end
+abstract type AbstractEnvWrapper{E <: AbstractEnv} <: AbstractEnv end
+abstract type AbstractParallelEnvWrapper{E <: AbstractParallelEnv} <: AbstractParallelEnv end
 
 
 """
@@ -171,7 +171,7 @@ Log environment-specific statistics to a logger (optional interface).
 Default implementation does nothing. Environments can override to log custom metrics.
 """
 function log_stats(env::AbstractEnv, logger::AbstractLogger)
-    nothing
+    return nothing
 end
 
 abstract type AbstractAlgorithm end
@@ -182,7 +182,7 @@ abstract type AbstractCallback end
 
 abstract type AbstractEntropyTarget end
 
-struct FixedEntropyTarget{T<:AbstractFloat} <: AbstractEntropyTarget
+struct FixedEntropyTarget{T <: AbstractFloat} <: AbstractEntropyTarget
     target::T
 end
 
@@ -190,11 +190,11 @@ struct AutoEntropyTarget <: AbstractEntropyTarget end
 
 abstract type AbstractEntropyCoefficient end
 
-struct FixedEntropyCoefficient{T<:AbstractFloat} <: AbstractEntropyCoefficient
+struct FixedEntropyCoefficient{T <: AbstractFloat} <: AbstractEntropyCoefficient
     coef::T
 end
 
-@kwdef struct AutoEntropyCoefficient{T<:AbstractFloat,E<:AbstractEntropyTarget} <: AbstractEntropyCoefficient
+@kwdef struct AutoEntropyCoefficient{T <: AbstractFloat, E <: AbstractEntropyTarget} <: AbstractEntropyCoefficient
     target::E = AutoEntropyTarget()
     initial_value::T = 1.0f0
 end

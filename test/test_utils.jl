@@ -9,8 +9,8 @@ using DRiL
     DRiL.polyak_update!(target, source, tau)
     @test target == [0.5, 1.0, 1.5]
 
-    target = ComponentArray(a=[1.0], b=[2.0], c=[3.0])
-    source = ComponentArray(a=[0.0], b=[0.0], c=[0.0], d=[0.0])
+    target = ComponentArray(a = [1.0], b = [2.0], c = [3.0])
+    source = ComponentArray(a = [0.0], b = [0.0], c = [0.0], d = [0.0])
     tau = 0.5
     DRiL.polyak_update!(target, source, tau)
     @test target.a[1] == 0.5
