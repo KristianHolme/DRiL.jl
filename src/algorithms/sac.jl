@@ -79,6 +79,7 @@ function sac_critic_loss(
         alg::SAC, policy::ContinuousActorCriticPolicy{<:Any, <:Any, <:Any, QCritic}, ps, st, data;
         rng::AbstractRNG = Random.default_rng()
     )
+    #TODO: add types here??
     obs, actions, rewards, terminated, _, next_obs = data.observations, data.actions, data.rewards, data.terminated, data.truncated, data.next_observations
     gamma = alg.gamma
     ent_coef = data.log_ent_coef[1] |> exp
@@ -110,6 +111,7 @@ function sac_critic_loss(
 
     # Critic loss (sum over all Q-networks)
     T = eltype(current_q_values)
+    #TODO: type stability here?
     critic_loss = T(0.5) * sum(mean((current_q .- target_q_values) .^ 2) for current_q in eachrow(current_q_values))
 
     stats = Dict("mean_q_values" => mean(current_q_values))
@@ -506,7 +508,7 @@ function learn!(
                 target_ps = agent.Q_target_parameters,
                 target_st = agent.Q_target_states,
             )
-
+            #TODO: are these closures bad for performance/type stability?
             critic_grad, critic_loss, critic_stats, train_state = Lux.Training.compute_gradients(
                 ad_type,
                 (model, ps, st, data) -> sac_critic_loss(alg, policy, ps, st, data; rng = agent.rng),
