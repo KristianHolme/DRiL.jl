@@ -16,7 +16,8 @@ struct SquashedDiagGaussian{T <: Real, M <: AbstractArray{T}, S <: AbstractArray
         return new{T, M, S}(DiagGaussian(mean, log_std), eps)
     end
     @inline function SquashedDiagGaussian(mean::M, log_std::S) where {T <: Real, M <: AbstractArray{T}, S <: AbstractArray{T}}
-        return SquashedDiagGaussian(mean, log_std, T(1.0e-6))
+        @assert size(mean) == size(log_std) "Mean and log_std must have the same shape"
+        return new{T, M, S}(DiagGaussian(mean, log_std), T(1.0e-6))
     end
 end
 
@@ -30,7 +31,7 @@ function Random.rand(rng::AbstractRNG, d::SquashedDiagGaussian, n::Integer)
 end
 
 function logpdf(d::SquashedDiagGaussian{T, M, S}, x::AbstractArray{T}) where {T <: Real, M, S}
-    gaussian_action = atanh.(clamp.(x, -T(1) + d.epsilon, T(1) - d.epsilon))
+    gaussian_action = atanh.(clamp.(x, Ref(-T(1) + d.epsilon::T), Ref(T(1) - d.epsilon::T)))
     gaussian_logpdf = logpdf(d.DiagGaussian, gaussian_action)
     # More numerically stable formula: 2*(log(2) - x - softplus(-2*x)) instead of log(1 - tanh(x)^2)
     # https://github.com/openai/spinningup/blob/master/spinup/algos/pytorch/sac/core.py
