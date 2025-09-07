@@ -570,6 +570,7 @@ end
 
 function get_actions_from_features(policy::AbstractActorCriticPolicy, feats::AbstractArray, ps, st)
     # Use function barrier to isolate type instability
+    #TODO: runtime dispatch
     actions, actor_st = _apply_actor_head(policy.actor_head, feats, ps.actor_head, st.actor_head)
     st = merge(st, (; actor_head = actor_st))
     return actions, st
@@ -588,6 +589,7 @@ function get_values_from_features(policy::ContinuousActorCriticPolicy{<:Any, <:A
     end
     inputs = vcat(feats, actions)
     # Use function barrier to isolate type instability
+    #TODO: runtime dispatch
     values, critic_st = _apply_critic_head(policy.critic_head, inputs, ps.critic_head, st.critic_head)
     st = merge(st, (; critic_head = critic_st))
     return values, st
@@ -595,38 +597,46 @@ end
 
 # For continuous action spaces
 # Dispatch on noise type for VCritic policies
-function get_distributions(policy::ContinuousActorCriticPolicy{<:Any, <:Any, StateIndependantNoise, VCritic}, action_means::AbstractArray, log_std::AbstractArray)
+function get_distributions(policy::ContinuousActorCriticPolicy{<:Any, <:Any, StateIndependantNoise, VCritic}, action_means::AbstractArray{T}, log_std::AbstractArray{T}) where {T <: Real}
     batch_dim = ndims(action_means)
-    return DiagGaussian.(eachslice(action_means, dims = batch_dim), Ref(log_std))
+    action_means_vec = collect(eachslice(action_means, dims = batch_dim))::Vector{Array{T, ndims(action_means) - 1}}
+    return DiagGaussian.(action_means_vec, Ref(log_std))
 end
 
-function get_distributions(policy::ContinuousActorCriticPolicy{<:Any, <:Any, StateDependentNoise, VCritic}, action_means::AbstractArray, log_std::AbstractArray)
+function get_distributions(policy::ContinuousActorCriticPolicy{<:Any, <:Any, StateDependentNoise, VCritic}, action_means::AbstractArray{T}, log_std::AbstractArray{T}) where {T <: Real}
     batch_dim = ndims(action_means)
     @assert size(log_std) == size(action_means) "log_std and action_means have different shapes"
-    return DiagGaussian.(eachslice(action_means, dims = batch_dim), eachslice(log_std, dims = batch_dim))
+    action_means_vec = collect(eachslice(action_means, dims = batch_dim))::Vector{Array{T, ndims(action_means) - 1}}
+    log_std_vec = collect(eachslice(log_std, dims = batch_dim))::Vector{Array{T, ndims(log_std) - 1}}
+    return DiagGaussian.(action_means_vec, log_std_vec)
 end
 
 # Dispatch on noise type for QCritic policies
-function get_distributions(policy::ContinuousActorCriticPolicy{<:Any, <:Any, StateIndependantNoise, QCritic}, action_means::AbstractArray, log_std::AbstractArray)
+function get_distributions(policy::ContinuousActorCriticPolicy{<:Any, <:Any, StateIndependantNoise, QCritic}, action_means::AbstractArray{T}, log_std::AbstractArray{T}) where {T <: Real}
     batch_dim = ndims(action_means)
     #FIXME: runtime dispatch here in SquashedDiagGaussian
-    return SquashedDiagGaussian.(eachslice(action_means, dims = batch_dim), Ref(log_std))
+    #TODO: is collect needed here?
+    action_means_vec = collect(eachslice(action_means, dims = batch_dim))::Vector{<:AbstractArray{T, batch_dim - 1}}
+    return SquashedDiagGaussian.(action_means_vec, Ref(log_std))
 end
 
-function get_distributions(policy::ContinuousActorCriticPolicy{<:Any, <:Any, StateDependentNoise, QCritic}, action_means::AbstractArray, log_std::AbstractArray)
+function get_distributions(policy::ContinuousActorCriticPolicy{<:Any, <:Any, StateDependentNoise, QCritic}, action_means::AbstractArray{T}, log_std::AbstractArray{T}) where {T <: Real}
     batch_dim = ndims(action_means)
     @assert size(log_std) == size(action_means) "log_std and action_means have different shapes"
-    return SquashedDiagGaussian.(eachslice(action_means, dims = batch_dim), eachslice(log_std, dims = batch_dim))
+    action_means_vec = collect(eachslice(action_means, dims = batch_dim))::Vector{<:AbstractArray{T, ndims(action_means) - 1}}
+    log_std_vec = collect(eachslice(log_std, dims = batch_dim))::Vector{<:AbstractArray{T, ndims(log_std) - 1}}
+    return SquashedDiagGaussian.(action_means_vec, log_std_vec)
 end
 
 # For discrete action spaces
-function get_distributions(policy::DiscreteActorCriticPolicy, action_logits::AbstractArray)
+function get_distributions(policy::DiscreteActorCriticPolicy, action_logits::AbstractArray{T}) where {T <: Real}
     # For discrete actions, action_logits are the raw outputs from the network
     # std is not used for discrete actions
     probs = Lux.softmax(action_logits)
     batch_dim = ndims(action_logits)
     start = action_space(policy).start
-    return Categorical.(eachslice(probs, dims = batch_dim), start)
+    probs_vec = collect(eachslice(probs, dims = batch_dim))::Vector{<:AbstractArray{T, ndims(probs) - 1}}
+    return Categorical.(probs_vec, start)
 end
 
 function predict_actions(policy::ContinuousActorCriticPolicy, obs::AbstractArray, ps, st; deterministic::Bool = false, rng::AbstractRNG = Random.default_rng())
@@ -654,12 +664,13 @@ function predict_actions(policy::DiscreteActorCriticPolicy, obs::AbstractArray, 
     return actions, st
 end
 
-function evaluate_actions(policy::ContinuousActorCriticPolicy, obs::AbstractArray, actions::AbstractArray, ps, st)
+function evaluate_actions(policy::ContinuousActorCriticPolicy, obs::AbstractArray{T}, actions::AbstractArray{T}, ps, st) where {T <: Real}
     actor_feats, critic_feats, st = extract_features(policy, obs, ps, st)
     new_action_means, st = get_actions_from_features(policy, actor_feats, ps, st)
     values, st = get_values_from_features(policy, critic_feats, ps, st)
     distributions = get_distributions(policy, new_action_means, ps.log_std)
-    log_probs = logpdf.(distributions, eachslice(actions, dims = ndims(actions)))
+    actions_vec = collect(eachslice(actions, dims = ndims(actions)))::Vector{<:AbstractArray{T, ndims(actions) - 1}}
+    log_probs = logpdf.(distributions, actions_vec)
     entropies = entropy.(distributions)
     return evaluate_actions_returns(policy, values, log_probs, entropies, st)
 end
@@ -676,7 +687,8 @@ function evaluate_actions(policy::DiscreteActorCriticPolicy, obs::AbstractArray,
     new_action_logits, st = get_actions_from_features(policy, actor_feats, ps, st)  # For discrete, these are logits
     values, st = get_values_from_features(policy, critic_feats, ps, st)
     ds = get_distributions(policy, new_action_logits)
-    log_probs = logpdf.(ds, eachslice(actions, dims = ndims(actions)))
+    actions_vec = collect(eachslice(actions, dims = ndims(actions)))::Vector{AbstractArray{T, ndims(actions) - 1}}
+    log_probs = logpdf.(ds, actions_vec)
     entropies = entropy.(ds)
     return vec(values), log_probs, entropies, st
 end
