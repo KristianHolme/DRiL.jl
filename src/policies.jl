@@ -599,7 +599,7 @@ end
 # Dispatch on noise type for VCritic policies
 function get_distributions(policy::ContinuousActorCriticPolicy{<:Any, <:Any, StateIndependantNoise, VCritic}, action_means::AbstractArray{T}, log_std::AbstractArray{T}) where {T <: Real}
     batch_dim = ndims(action_means)
-    action_means_vec = collect(eachslice(action_means, dims = batch_dim))::Vector{Array{T, ndims(action_means) - 1}}
+    action_means_vec = collect(eachslice(action_means, dims = batch_dim))#::Vector{Array{T, ndims(action_means) - 1}}
     return DiagGaussian.(action_means_vec, Ref(log_std))
 end
 
