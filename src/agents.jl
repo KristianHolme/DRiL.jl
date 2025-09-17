@@ -74,7 +74,7 @@ function get_action_and_values(agent::ActorCriticAgent, observations::AbstractVe
     # Convert observations vector to batched matrix for policy
     batched_obs = batch(observations, observation_space(policy))
     actions, values, logprobs, st = policy(batched_obs, ps, st)
-    train_state.states = st
+    @reset train_state.states = st
     agent.train_state = train_state
     return actions, values, logprobs
 end
