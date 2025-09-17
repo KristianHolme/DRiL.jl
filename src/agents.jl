@@ -19,6 +19,11 @@ function gradient_updates(stats::AgentStats)
     return stats.gradient_updates
 end
 
+function Random.seed!(agent::AbstractAgent, seed::Integer)
+    Random.seed!(agent.rng, seed)
+    return agent
+end
+
 """
 Agent for Actor-Critic algorithms
 
