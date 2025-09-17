@@ -126,7 +126,7 @@ function (alg::SAC)(::ContinuousActorCriticPolicy, ps, st, batch_data)
 end
 
 # SACAgent and related helper functions moved from agents.jl
-struct SACAgent <: AbstractAgent
+mutable struct SACAgent <: AbstractAgent
     policy::ContinuousActorCriticPolicy
     train_state::Lux.Training.TrainState
     Q_target_parameters::ComponentArray
@@ -207,12 +207,15 @@ function predict_actions(
         rng::AbstractRNG = agent.rng,
         raw::Bool = false
     )
+    #TODO add !to name?
+    train_state = agent.train_state
     policy = agent.policy
-    ps = agent.train_state.parameters
-    st = agent.train_state.states
+    ps = train_state.parameters
+    st = train_state.states
     batched_obs = batch(observations, observation_space(policy))
     actions, st = predict_actions(policy, batched_obs, ps, st; deterministic, rng)
-    #TODO: handle update of st? make agent mutable and set new train_state with @set?
+    @reset train_state.states = st
+    agent.train_state = train_state
     if raw
         return actions
     else
@@ -483,6 +486,7 @@ function learn!(
                     target_ps = agent.Q_target_parameters,
                     target_st = agent.Q_target_states,
                 )
+                #TODO: use single_train_step! instead??
                 ent_grad, ent_loss, _, ent_train_state = Lux.Training.compute_gradients(
                     ad_type,
                     (model, ps, st, data) -> sac_ent_coef_loss(alg, policy, ps, st, data; rng = agent.rng),
@@ -490,9 +494,9 @@ function learn!(
                     ent_train_state
                 )
 
-                Lux.Training.apply_gradients!(ent_train_state, ent_grad)
+                ent_train_state = Lux.Training.apply_gradients!(ent_train_state, ent_grad)
                 push!(training_stats.entropy_losses, ent_loss)
-                @reset agent.ent_train_state = ent_train_state
+                agent.ent_train_state = ent_train_state
             end
 
 
@@ -547,12 +551,12 @@ function learn!(
 
             # Update target networks
             if gradient_updates_performed % alg.target_update_interval == 0
-                @set agent.Q_target_states = copy_critic_states(policy, train_state.states)
+                agent.Q_target_states = copy_critic_states(policy, train_state.states)
                 polyak_update!(agent.Q_target_parameters, train_state.parameters, alg.tau)
 
             end
 
-            @reset agent.train_state = train_state
+            agent.train_state = train_state
 
             # Record statistics
             current_ent_coef = exp(agent.ent_train_state.parameters[1])

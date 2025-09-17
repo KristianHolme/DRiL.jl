@@ -43,7 +43,7 @@ function make_optimizer(optimizer_type::Type{<:Optimisers.Adam}, alg::PPO)
     return optimizer_type(eta = alg.learning_rate, epsilon = 1.0f-5)
 end
 
-function load_policy_params_and_state(agent::ActorCriticAgent, alg::PPO, path::AbstractString; suffix::String = ".jld2")
+function load_policy_params_and_state!(agent::ActorCriticAgent, alg::PPO, path::AbstractString; suffix::String = ".jld2")
     file_path = endswith(path, suffix) ? path : path * suffix
     @info "Loading policy, parameters, and state from $file_path"
     data = load(file_path)
@@ -52,9 +52,8 @@ function load_policy_params_and_state(agent::ActorCriticAgent, alg::PPO, path::A
     new_states = data["states"]
     new_optimizer = make_optimizer(agent.optimizer_type, alg)
     new_train_state = Lux.Training.TrainState(new_policy, new_parameters, new_states, new_optimizer)
-    #TODO: check if this is correct, probably it is not
-    @reset agent.policy = new_policy
-    @reset agent.train_state = new_train_state
+    agent.policy = new_policy
+    agent.train_state = new_train_state
     return agent
 end
 
@@ -232,11 +231,13 @@ function learn!(agent::ActorCriticAgent, env::AbstractParallelEnv, alg::PPO{T}, 
             log_value(agent.logger, "train/loss", total_losses[i])
             log_value(agent.logger, "train/grad_norm", total_grad_norms[i])
             log_value(agent.logger, "train/learning_rate", learning_rate)
-            if haskey(agent.train_state.parameters, :log_std)
-                log_value(agent.logger, "train/std", mean(exp.(agent.train_state.parameters[:log_std])))
+            if haskey(train_state.parameters, :log_std)
+                log_value(agent.logger, "train/std", mean(exp.(train_state.parameters[:log_std])))
             end
         end
     end
+    agent.train_state = train_state
+    
     learn_stats = Dict(
         "entropy_losses" => total_entropy_losses,
         "policy_losses" => total_policy_losses,
