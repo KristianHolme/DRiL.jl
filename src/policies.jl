@@ -599,7 +599,7 @@ end
 # Dispatch on noise type for VCritic policies
 function get_distributions(policy::ContinuousActorCriticPolicy{<:Any, <:Any, StateIndependantNoise, VCritic}, action_means::AbstractArray{T}, log_std::AbstractArray{T}) where {T <: Real}
     batch_dim = ndims(action_means)
-    action_means_vec = collect(eachslice(action_means, dims = batch_dim))#::Vector{Array{T, ndims(action_means) - 1}}
+    action_means_vec = collect(eachslice(action_means, dims = batch_dim)) #::Vector{Array{T, ndims(action_means) - 1}}
     return DiagGaussian.(action_means_vec, Ref(log_std))
 end
 
@@ -687,7 +687,7 @@ function evaluate_actions(policy::DiscreteActorCriticPolicy, obs::AbstractArray,
     new_action_logits, st = get_actions_from_features(policy, actor_feats, ps, st)  # For discrete, these are logits
     values, st = get_values_from_features(policy, critic_feats, ps, st)
     ds = get_distributions(policy, new_action_logits)
-    actions_vec = collect(eachslice(actions, dims = ndims(actions)))::Vector{AbstractArray{T, ndims(actions) - 1}}
+    actions_vec = collect(eachslice(actions, dims = ndims(actions))) #::Vector{AbstractArray{T, ndims(actions) - 1}}
     log_probs = logpdf.(ds, actions_vec)
     entropies = entropy.(ds)
     return vec(values), log_probs, entropies, st
