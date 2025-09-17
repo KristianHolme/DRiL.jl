@@ -402,7 +402,7 @@ function Random.seed!(env::AbstractEnv, seed::Integer)
     if hasfield(typeof(env), :rng)
         Random.seed!(env.rng, seed)
     else
-        @warn "Environment $(typeof(env)) does not have an rng field - seeding has no effect"
+        @debug "Environment $(typeof(env)) does not have an rng field - seeding has no effect"
     end
     return env
 end
@@ -420,18 +420,6 @@ function Random.seed!(env::AbstractParallelEnv, seed::Integer)
     return env
 end
 
-"""
-    Random.seed!(env::BroadcastedParallelEnv, seed::Integer)
-
-Seed all sub-environments in a broadcasted parallel environment with incremented seeds.
-Each sub-environment gets seeded with `seed + i - 1` where `i` is the environment index.
-"""
-function Random.seed!(env::BroadcastedParallelEnv, seed::Integer)
-    for (i, sub_env) in enumerate(env.envs)
-        Random.seed!(sub_env, seed + i - 1)
-    end
-    return env
-end
 
 """
     Random.seed!(env::ScalingWrapperEnv, seed::Integer)
@@ -776,6 +764,7 @@ get_info(monitor_env::MonitorWrapperEnv{E, T}) where {E, T} = get_info(monitor_e
 action_space(monitor_env::MonitorWrapperEnv{E, T}) where {E, T} = action_space(monitor_env.env)
 observation_space(monitor_env::MonitorWrapperEnv{E, T}) where {E, T} = observation_space(monitor_env.env)
 number_of_envs(monitor_env::MonitorWrapperEnv{E, T}) where {E, T} = number_of_envs(monitor_env.env)
+Random.seed!(monitor_env::MonitorWrapperEnv{E, T}, seed::Integer) where {E, T} = Random.seed!(monitor_env.env, seed)
 
 function reset!(monitor_env::MonitorWrapperEnv{E, T}) where {E, T}
     DRiL.reset!(monitor_env.env)
