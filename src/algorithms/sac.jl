@@ -1,12 +1,12 @@
 @kwdef struct SAC{T <: AbstractFloat, E <: AbstractEntropyCoefficient} <: OffPolicyAlgorithm
     learning_rate::T = 3.0f-4 #learning rate
     buffer_capacity::Int = 1_000_000
-    start_steps::Int = 100 # how many steps to collect with random actions before first gradient update
+    start_steps::Int = 100 # how many total steps to collect with random actions before first gradient update
     batch_size::Int = 256
     tau::T = 0.005f0 #soft update rate
     gamma::T = 0.99f0 #discount
-    train_freq::Int = 1
-    gradient_steps::Int = 1 # number of gradient updates per train_freq steps, -1 to do as many updates as steps (train_freq)
+    train_freq::Int = 1 # how many steps to take between gradient updates (train_freq*n_envs data points)
+    gradient_steps::Int = 1 # number of gradient updates per rollout, -1 to do as many updates as steps (train_freq*n_envs)
     ent_coef::E = AutoEntropyCoefficient()
     target_update_interval::Int = 1 # how often to update the target networks
 end
@@ -23,9 +23,9 @@ function get_target_entropy(ent_coef::AutoEntropyCoefficient{T}, action_space) w
     end
 end
 
-function get_gradient_steps(alg::SAC, train_freq::Int = alg.train_freq)
+function get_gradient_steps(alg::SAC, train_freq::Int = alg.train_freq, n_envs::Int = 1)
     if alg.gradient_steps == -1
-        return train_freq
+        return train_freq * n_envs
     else
         return alg.gradient_steps
     end
@@ -141,7 +141,8 @@ struct SACAgent <: AbstractAgent
 end
 
 function SACAgent(
-        policy::ContinuousActorCriticPolicy, alg::SAC;
+        policy::ContinuousActorCriticPolicy,
+        alg::SAC;
         optimizer_type::Type{<:Optimisers.AbstractRule} = Optimisers.Adam,
         log_dir::Union{Nothing, String} = nothing,
         stats_window::Int = 100,
@@ -405,16 +406,16 @@ function learn!(
 
     gradient_updates_performed = 0
 
-    start_steps = alg.start_steps > 0 ? alg.start_steps : alg.train_freq
-    n_steps = div(start_steps, number_of_envs(env))
+    total_start_steps = alg.start_steps > 0 ? alg.start_steps : alg.train_freq*n_envs
+    adjusted_total_start_steps = max(1, div(total_start_steps, n_envs)) * n_envs
+    n_steps = div(adjusted_total_start_steps, n_envs)
 
 
     # Main training loop
     training_iteration = 0
-    adjusted_train_freq = max(1, div(alg.train_freq, number_of_envs(env))) * number_of_envs(env)
-    iterations = div(max_steps - n_steps * n_envs, adjusted_train_freq) + 1
+    iterations = div(max_steps - adjusted_total_start_steps, alg.train_freq) + 1
 
-    total_steps = n_steps * n_envs + adjusted_train_freq * (iterations - 1)
+    total_steps = n_steps * n_envs + alg.train_freq * (iterations - 1)
 
     progress_meter = Progress(
         total_steps, desc = "Training...",
@@ -423,7 +424,7 @@ function learn!(
 
     agent.verbose > 0 && @info "Starting SAC training with buffer size: $(length(replay_buffer)),
     start_steps: $(alg.start_steps), train_freq: $(alg.train_freq), number_of_envs: $(n_envs),
-    adjusted_train_freq: $(adjusted_train_freq), iterations: $(iterations), total_steps: $(total_steps)"
+    adjusted (total) start_steps: $(adjusted_total_start_steps), iterations: $(iterations), total_steps: $(total_steps)"
 
     # Callbacks: training start
     if !isnothing(callbacks)
@@ -463,10 +464,10 @@ function learn!(
         #set steps to train_freq after first (potentially larger) rollout
         push!(training_stats.fps, fps)
         add_step!(agent, n_steps * n_envs)
-        n_steps = div(adjusted_train_freq, n_envs)
+        n_steps = alg.train_freq
 
         # Perform gradient updates
-        n_updates = get_gradient_steps(alg, adjusted_train_freq)
+        n_updates = get_gradient_steps(alg, alg.train_freq, n_envs)
         data_loader = get_data_loader(replay_buffer, alg.batch_size, n_updates, true, true, agent.rng)
 
         for (i, batch_data) in enumerate(data_loader)
