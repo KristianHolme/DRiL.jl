@@ -307,7 +307,8 @@ function collect_rollout!(
     stacked_actions = reduce(hcat, stack.(actions))
     mean_abs_action = mean(abs, stacked_actions)
     if !isnothing(agent.logger)
-        log_value(agent.logger, "train/mean_abs_action", mean_abs_action)
+        logger = agent.logger::TensorBoardLogger.TBLogger
+        log_value(logger, "train/mean_abs_action", mean_abs_action)
     end
 
     for traj in trajectories
@@ -333,44 +334,46 @@ function SACTrainingStats{T}() where {T <: AbstractFloat}
     return SACTrainingStats{T}(T[], T[], T[], T[], T[], T[], T[], T[], T[])
 end
 
-function log_sac_training(agent::SACAgent, stats::SACTrainingStats, step::Int, env::AbstractParallelEnv)
-    return if !isnothing(agent.logger)
-        set_step!(agent.logger, step)
+function log_sac_training!(agent::SACAgent, stats::SACTrainingStats, step::Int, env::AbstractParallelEnv)
+    if !isnothing(agent.logger)
+        logger = agent.logger::TensorBoardLogger.TBLogger
+        set_step!(logger, step)
         if !isempty(stats.actor_losses)
-            log_value(agent.logger, "train/actor_loss", stats.actor_losses[end])
+            log_value(logger, "train/actor_loss", stats.actor_losses[end])
         end
         if !isempty(stats.critic_losses)
-            log_value(agent.logger, "train/critic_loss", stats.critic_losses[end])
+            log_value(logger, "train/critic_loss", stats.critic_losses[end])
         end
         if !isempty(stats.entropy_losses)
-            log_value(agent.logger, "train/entropy_loss", stats.entropy_losses[end])
+            log_value(logger, "train/entropy_loss", stats.entropy_losses[end])
         end
         if !isempty(stats.entropy_coefficients)
-            log_value(agent.logger, "train/entropy_coefficient", stats.entropy_coefficients[end])
+            log_value(logger, "train/entropy_coefficient", stats.entropy_coefficients[end])
         end
         if !isempty(stats.q_values)
-            log_value(agent.logger, "train/q_values", stats.q_values[end])
+            log_value(logger, "train/q_values", stats.q_values[end])
         end
         if !isempty(stats.learning_rates)
-            log_value(agent.logger, "train/learning_rate", stats.learning_rates[end])
+            log_value(logger, "train/learning_rate", stats.learning_rates[end])
         end
         if !isempty(stats.grad_norms)
-            log_value(agent.logger, "train/grad_norm", stats.grad_norms[end])
+            log_value(logger, "train/grad_norm", stats.grad_norms[end])
         end
         if !isempty(stats.fps)
-            log_value(agent.logger, "env/fps", stats.fps[end])
+            log_value(logger, "env/fps", stats.fps[end])
         end
-        log_value(agent.logger, "train/total_steps", steps_taken(agent))
+        log_value(logger, "train/total_steps", steps_taken(agent))
 
         # Log mean std (exp of log_std) if present, consistent with PPO logging
         if haskey(agent.train_state.parameters, :log_std)
             mean_std = Statistics.mean(exp.(agent.train_state.parameters[:log_std]))
-            log_value(agent.logger, "train/std", mean_std)
+            log_value(logger, "train/std", mean_std)
         end
 
         # Log episode statistics
-        log_stats(env, agent.logger)
+        log_stats(env, logger)
     end
+    return nothing
 end
 
 function learn!(
@@ -409,7 +412,7 @@ function learn!(
 
     gradient_updates_performed = 0
 
-    total_start_steps = alg.start_steps > 0 ? alg.start_steps : alg.train_freq*n_envs
+    total_start_steps = alg.start_steps > 0 ? alg.start_steps : alg.train_freq * n_envs
     adjusted_total_start_steps = max(1, div(total_start_steps, n_envs)) * n_envs
     n_steps = div(adjusted_total_start_steps, n_envs)
 
@@ -571,7 +574,7 @@ function learn!(
         end
 
         # Log training statistics
-        log_sac_training(agent, training_stats, steps_taken(agent), env)
+        log_sac_training!(agent, training_stats, steps_taken(agent), env)
     end
 
     # Callbacks: training end

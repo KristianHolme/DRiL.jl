@@ -117,9 +117,10 @@ function learn!(agent::ActorCriticAgent, env::AbstractParallelEnv, alg::PPO{T}, 
         push!(total_fps, fps)
         add_step!(agent, n_steps * n_envs)
         if !isnothing(agent.logger)
-            set_step!(agent.logger, steps_taken(agent))
-            log_value(agent.logger, "env/fps", fps)
-            log_stats(env, agent.logger)
+            logger = agent.logger::TensorBoardLogger.TBLogger
+            set_step!(logger, steps_taken(agent))
+            log_value(logger, "env/fps", fps)
+            log_stats(env, logger)
         end
 
         if !isnothing(callbacks)
@@ -222,22 +223,23 @@ function learn!(agent::ActorCriticAgent, env::AbstractParallelEnv, alg::PPO{T}, 
             )
         end
         if !isnothing(agent.logger)
-            log_value(agent.logger, "train/entropy_loss", total_entropy_losses[i])
-            log_value(agent.logger, "train/explained_variance", explained_variance)
-            log_value(agent.logger, "train/policy_loss", total_policy_losses[i])
-            log_value(agent.logger, "train/value_loss", total_value_losses[i])
-            log_value(agent.logger, "train/approx_kl_div", total_approx_kl_divs[i])
-            log_value(agent.logger, "train/clip_fraction", total_clip_fractions[i])
-            log_value(agent.logger, "train/loss", total_losses[i])
-            log_value(agent.logger, "train/grad_norm", total_grad_norms[i])
-            log_value(agent.logger, "train/learning_rate", learning_rate)
+            logger = agent.logger::TensorBoardLogger.TBLogger #to satisfy JET
+            log_value(logger, "train/entropy_loss", total_entropy_losses[i])
+            log_value(logger, "train/explained_variance", explained_variance)
+            log_value(logger, "train/policy_loss", total_policy_losses[i])
+            log_value(logger, "train/value_loss", total_value_losses[i])
+            log_value(logger, "train/approx_kl_div", total_approx_kl_divs[i])
+            log_value(logger, "train/clip_fraction", total_clip_fractions[i])
+            log_value(logger, "train/loss", total_losses[i])
+            log_value(logger, "train/grad_norm", total_grad_norms[i])
+            log_value(logger, "train/learning_rate", learning_rate)
             if haskey(train_state.parameters, :log_std)
-                log_value(agent.logger, "train/std", mean(exp.(train_state.parameters[:log_std])))
+                log_value(logger, "train/std", mean(exp.(train_state.parameters[:log_std])))
             end
         end
     end
     agent.train_state = train_state
-    
+
     learn_stats = Dict(
         "entropy_losses" => total_entropy_losses,
         "policy_losses" => total_policy_losses,
