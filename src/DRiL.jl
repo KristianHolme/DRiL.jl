@@ -49,7 +49,7 @@ include("algorithms/sac.jl")
 export SAC, SACAgent, SACPolicy
 
 include("algorithms/ppo.jl")
-export learn!, PPO, load_policy_params_and_state
+export learn!, PPO, load_policy_params_and_state!
 
 include("callbacks.jl")
 export AbstractCallback, on_training_start, on_training_end, on_rollout_start, on_rollout_end, on_step
