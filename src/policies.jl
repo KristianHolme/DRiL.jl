@@ -141,25 +141,29 @@ struct ContinuousActorCriticPolicy{
         N <: AbstractNoise,
         C <: CriticType,
         F <: FeatureSharing,
+        FE <: AbstractLuxLayer,
+        AH <: AbstractLuxLayer,
+        CH <: AbstractLuxLayer,
+        LS,
     } <: AbstractActorCriticPolicy
     observation_space::O
     action_space::A
-    feature_extractor::AbstractLuxLayer
-    actor_head::AbstractLuxLayer
-    critic_head::AbstractLuxLayer
-    log_std_init::Union{AbstractFloat, AbstractArray{AbstractFloat}}
+    feature_extractor::FE
+    actor_head::AH
+    critic_head::CH
+    log_std_init::LS
 end
 
-struct DiscreteActorCriticPolicy{O <: AbstractSpace, A <: Discrete, F <: FeatureSharing} <: AbstractActorCriticPolicy
+struct DiscreteActorCriticPolicy{O <: AbstractSpace, A <: Discrete, F <: FeatureSharing, FE <: AbstractLuxLayer, AH <: AbstractLuxLayer, CH <: AbstractLuxLayer} <: AbstractActorCriticPolicy
     observation_space::O
     action_space::A
-    feature_extractor::AbstractLuxLayer
-    actor_head::AbstractLuxLayer
-    critic_head::AbstractLuxLayer
+    feature_extractor::FE
+    actor_head::AH
+    critic_head::CH
 end
 
-noise(policy::ContinuousActorCriticPolicy{<:Any, <:Any, N, <:Any, <:Any}) where {N <: AbstractNoise} = N()
-noise(policy::DiscreteActorCriticPolicy{<:Any, <:Any, <:Any}) = NoNoise()
+noise(policy::ContinuousActorCriticPolicy{<:Any, <:Any, N, <:Any, <:Any, <:Any, <:Any, <:Any}) where {N <: AbstractNoise} = N()
+noise(policy::DiscreteActorCriticPolicy{<:Any, <:Any, <:Any, <:Any, <:Any, <:Any}) = NoNoise()
 
 
 observation_space(policy::AbstractActorCriticPolicy) = policy.observation_space
@@ -306,6 +310,10 @@ function ContinuousActorCriticPolicy(
         StateIndependantNoise,
         typeof(critic_type),
         F,
+        typeof(feature_extractor),
+        typeof(actor_head),
+        typeof(critic_head),
+        typeof(log_std_init),
     }(
         observation_space,
         action_space,
@@ -345,6 +353,9 @@ function DiscreteActorCriticPolicy(
         typeof(observation_space),
         typeof(action_space),
         F,
+        typeof(feature_extractor),
+        typeof(actor_head),
+        typeof(critic_head),
     }(
         observation_space, action_space, feature_extractor,
         actor_head, critic_head
@@ -359,7 +370,7 @@ ActorCriticPolicy(observation_space::Union{Discrete, Box}, action_space::Discret
     DiscreteActorCriticPolicy(observation_space, action_space; kwargs...)
 
 #TODO: add ent_coef as parameter for Q-value critics?
-function Lux.initialparameters(rng::AbstractRNG, policy::ContinuousActorCriticPolicy{<:Any, <:Any, <:Any, <:Any, SharedFeatures})
+function Lux.initialparameters(rng::AbstractRNG, policy::ContinuousActorCriticPolicy{<:Any, <:Any, <:Any, <:Any, SharedFeatures, <:Any, <:Any, <:Any})
     feats_params = (feature_extractor = Lux.initialparameters(rng, policy.feature_extractor),)
     head_params = (
         actor_head = Lux.initialparameters(rng, policy.actor_head),
@@ -372,7 +383,7 @@ function Lux.initialparameters(rng::AbstractRNG, policy::ContinuousActorCriticPo
     return params
 end
 
-function Lux.initialparameters(rng::AbstractRNG, policy::ContinuousActorCriticPolicy{<:Any, <:Any, <:Any, <:Any, SeparateFeatures})
+function Lux.initialparameters(rng::AbstractRNG, policy::ContinuousActorCriticPolicy{<:Any, <:Any, <:Any, <:Any, SeparateFeatures, <:Any, <:Any, <:Any})
     feats_params = (
         actor_feature_extractor = Lux.initialparameters(rng, policy.feature_extractor),
         critic_feature_extractor = Lux.initialparameters(rng, policy.feature_extractor),
@@ -388,7 +399,7 @@ function Lux.initialparameters(rng::AbstractRNG, policy::ContinuousActorCriticPo
     return params
 end
 
-function Lux.initialparameters(rng::AbstractRNG, policy::DiscreteActorCriticPolicy{<:Any, <:Any, SharedFeatures})
+function Lux.initialparameters(rng::AbstractRNG, policy::DiscreteActorCriticPolicy{<:Any, <:Any, SharedFeatures, <:Any, <:Any, <:Any})
     feats_params = (feature_extractor = Lux.initialparameters(rng, policy.feature_extractor),)
     head_params = (
         actor_head = Lux.initialparameters(rng, policy.actor_head),
@@ -399,7 +410,7 @@ function Lux.initialparameters(rng::AbstractRNG, policy::DiscreteActorCriticPoli
     return params
 end
 
-function Lux.initialparameters(rng::AbstractRNG, policy::DiscreteActorCriticPolicy{<:Any, <:Any, SeparateFeatures})
+function Lux.initialparameters(rng::AbstractRNG, policy::DiscreteActorCriticPolicy{<:Any, <:Any, SeparateFeatures, <:Any, <:Any, <:Any})
     feats_params = (
         actor_feature_extractor = Lux.initialparameters(rng, policy.feature_extractor),
         critic_feature_extractor = Lux.initialparameters(rng, policy.feature_extractor),
@@ -413,7 +424,7 @@ function Lux.initialparameters(rng::AbstractRNG, policy::DiscreteActorCriticPoli
     return params
 end
 
-function Lux.initialstates(rng::AbstractRNG, policy::Union{ContinuousActorCriticPolicy{<:Any, <:Any, <:Any, <:Any, SharedFeatures}, DiscreteActorCriticPolicy{<:Any, <:Any, SharedFeatures}})
+function Lux.initialstates(rng::AbstractRNG, policy::Union{ContinuousActorCriticPolicy{<:Any, <:Any, <:Any, <:Any, SharedFeatures, <:Any, <:Any, <:Any}, DiscreteActorCriticPolicy{<:Any, <:Any, SharedFeatures, <:Any, <:Any, <:Any}})
     feats_states = (feature_extractor = Lux.initialstates(rng, policy.feature_extractor),)
     head_states = (
         actor_head = Lux.initialstates(rng, policy.actor_head),
@@ -423,7 +434,7 @@ function Lux.initialstates(rng::AbstractRNG, policy::Union{ContinuousActorCritic
     return states
 end
 
-function Lux.initialstates(rng::AbstractRNG, policy::Union{ContinuousActorCriticPolicy{<:Any, <:Any, <:Any, <:Any, SeparateFeatures}, DiscreteActorCriticPolicy{<:Any, <:Any, SeparateFeatures}})
+function Lux.initialstates(rng::AbstractRNG, policy::Union{ContinuousActorCriticPolicy{<:Any, <:Any, <:Any, <:Any, SeparateFeatures, <:Any, <:Any, <:Any}, DiscreteActorCriticPolicy{<:Any, <:Any, SeparateFeatures, <:Any, <:Any, <:Any}})
     feats_states = (
         actor_feature_extractor = Lux.initialstates(rng, policy.feature_extractor),
         critic_feature_extractor = Lux.initialstates(rng, policy.feature_extractor),
@@ -437,7 +448,7 @@ function Lux.initialstates(rng::AbstractRNG, policy::Union{ContinuousActorCritic
 end
 
 #TODO: add ent_coef as parameter for Q-value critics?
-function Lux.parameterlength(policy::ContinuousActorCriticPolicy{<:Any, <:Any, <:Any, <:Any, SharedFeatures})
+function Lux.parameterlength(policy::ContinuousActorCriticPolicy{<:Any, <:Any, <:Any, <:Any, SharedFeatures, <:Any, <:Any, <:Any})
     feats_len = Lux.parameterlength(policy.feature_extractor)
     head_len = Lux.parameterlength(policy.actor_head) +
         Lux.parameterlength(policy.critic_head)
@@ -445,7 +456,7 @@ function Lux.parameterlength(policy::ContinuousActorCriticPolicy{<:Any, <:Any, <
     return total_len
 end
 
-function Lux.parameterlength(policy::ContinuousActorCriticPolicy{<:Any, <:Any, <:Any, <:Any, SeparateFeatures})
+function Lux.parameterlength(policy::ContinuousActorCriticPolicy{<:Any, <:Any, <:Any, <:Any, SeparateFeatures, <:Any, <:Any, <:Any})
     feats_len = Lux.parameterlength(policy.feature_extractor) +
         Lux.parameterlength(policy.feature_extractor)
     head_len = Lux.parameterlength(policy.actor_head) +
@@ -454,14 +465,14 @@ function Lux.parameterlength(policy::ContinuousActorCriticPolicy{<:Any, <:Any, <
     return total_len
 end
 
-function Lux.parameterlength(policy::DiscreteActorCriticPolicy{<:Any, <:Any, SharedFeatures})
+function Lux.parameterlength(policy::DiscreteActorCriticPolicy{<:Any, <:Any, SharedFeatures, <:Any, <:Any, <:Any})
     feats_len = Lux.parameterlength(policy.feature_extractor)
     head_len = Lux.parameterlength(policy.actor_head) +
         Lux.parameterlength(policy.critic_head)
     return feats_len + head_len
 end
 
-function Lux.parameterlength(policy::DiscreteActorCriticPolicy{<:Any, <:Any, SeparateFeatures})
+function Lux.parameterlength(policy::DiscreteActorCriticPolicy{<:Any, <:Any, SeparateFeatures, <:Any, <:Any, <:Any})
     feats_len = Lux.parameterlength(policy.feature_extractor) +
         Lux.parameterlength(policy.feature_extractor)
     head_len = Lux.parameterlength(policy.actor_head) +
@@ -469,14 +480,14 @@ function Lux.parameterlength(policy::DiscreteActorCriticPolicy{<:Any, <:Any, Sep
     return feats_len + head_len
 end
 
-function Lux.statelength(policy::Union{ContinuousActorCriticPolicy{<:Any, <:Any, <:Any, <:Any, SharedFeatures}, DiscreteActorCriticPolicy{<:Any, <:Any, SharedFeatures}})
+function Lux.statelength(policy::Union{ContinuousActorCriticPolicy{<:Any, <:Any, <:Any, <:Any, SharedFeatures, <:Any, <:Any, <:Any}, DiscreteActorCriticPolicy{<:Any, <:Any, SharedFeatures, <:Any, <:Any, <:Any}})
     feats_len = Lux.statelength(policy.feature_extractor)
     head_len = Lux.statelength(policy.actor_head) +
         Lux.statelength(policy.critic_head)
     return feats_len + head_len
 end
 
-function Lux.statelength(policy::Union{ContinuousActorCriticPolicy{<:Any, <:Any, <:Any, <:Any, SeparateFeatures}, DiscreteActorCriticPolicy{<:Any, <:Any, SeparateFeatures}})
+function Lux.statelength(policy::Union{ContinuousActorCriticPolicy{<:Any, <:Any, <:Any, <:Any, SeparateFeatures, <:Any, <:Any, <:Any}, DiscreteActorCriticPolicy{<:Any, <:Any, SeparateFeatures, <:Any, <:Any, <:Any}})
     feats_len = Lux.statelength(policy.feature_extractor) +
         Lux.statelength(policy.feature_extractor)
     head_len = Lux.statelength(policy.actor_head) +
@@ -497,7 +508,7 @@ function (policy::ContinuousActorCriticPolicy)(obs::AbstractArray, ps, st)
     return actions, vec(values), log_probs, st
 end
 
-function (policy::ContinuousActorCriticPolicy{<:Any, <:Any, N, QCritic})(
+function (policy::ContinuousActorCriticPolicy{<:Any, <:Any, N, QCritic, <:Any, <:Any, <:Any, <:Any})(
         obs::AbstractArray,
         actions::AbstractArray, ps, st
     ) where {N <: AbstractNoise}
@@ -524,7 +535,7 @@ function (policy::DiscreteActorCriticPolicy)(obs::AbstractArray, ps, st)
 end
 
 # Type-stable feature extraction using dispatch
-function extract_features(policy::ContinuousActorCriticPolicy{<:Any, <:Any, <:Any, <:Any, SharedFeatures}, obs::AbstractArray, ps, st)
+function extract_features(policy::ContinuousActorCriticPolicy{<:Any, <:Any, <:Any, <:Any, SharedFeatures, <:Any, <:Any, <:Any, <:Any}, obs::AbstractArray, ps, st)
     feats, feats_st = _apply_feature_extractor(policy.feature_extractor, obs, ps.feature_extractor, st.feature_extractor)
     actor_feats = feats
     critic_feats = feats
@@ -532,7 +543,7 @@ function extract_features(policy::ContinuousActorCriticPolicy{<:Any, <:Any, <:An
     return actor_feats, critic_feats, st
 end
 
-function extract_features(policy::ContinuousActorCriticPolicy{<:Any, <:Any, <:Any, <:Any, SeparateFeatures}, obs::AbstractArray, ps, st)
+function extract_features(policy::ContinuousActorCriticPolicy{<:Any, <:Any, <:Any, <:Any, SeparateFeatures, <:Any, <:Any, <:Any, <:Any}, obs::AbstractArray, ps, st)
     actor_feats, actor_feats_st = _apply_feature_extractor(policy.feature_extractor, obs, ps.actor_feature_extractor, st.actor_feature_extractor)
     critic_feats, critic_feats_st = _apply_feature_extractor(policy.feature_extractor, obs, ps.critic_feature_extractor, st.critic_feature_extractor)
     st = merge(st, (; actor_feature_extractor = actor_feats_st, critic_feature_extractor = critic_feats_st))
@@ -540,7 +551,7 @@ function extract_features(policy::ContinuousActorCriticPolicy{<:Any, <:Any, <:An
 end
 
 # For DiscreteActorCriticPolicy (3 type parameters)
-function extract_features(policy::DiscreteActorCriticPolicy{<:Any, <:Any, SharedFeatures}, obs::AbstractArray, ps, st)
+function extract_features(policy::DiscreteActorCriticPolicy{<:Any, <:Any, SharedFeatures, <:Any, <:Any, <:Any}, obs::AbstractArray, ps, st)
     feats, feats_st = _apply_feature_extractor(policy.feature_extractor, obs, ps.feature_extractor, st.feature_extractor)
     actor_feats = feats
     critic_feats = feats
@@ -548,7 +559,7 @@ function extract_features(policy::DiscreteActorCriticPolicy{<:Any, <:Any, Shared
     return actor_feats, critic_feats, st
 end
 
-function extract_features(policy::DiscreteActorCriticPolicy{<:Any, <:Any, SeparateFeatures}, obs::AbstractArray, ps, st)
+function extract_features(policy::DiscreteActorCriticPolicy{<:Any, <:Any, SeparateFeatures, <:Any, <:Any, <:Any}, obs::AbstractArray, ps, st)
     actor_feats, actor_feats_st = _apply_feature_extractor(policy.feature_extractor, obs, ps.actor_feature_extractor, st.actor_feature_extractor)
     critic_feats, critic_feats_st = _apply_feature_extractor(policy.feature_extractor, obs, ps.critic_feature_extractor, st.critic_feature_extractor)
     st = merge(st, (; actor_feature_extractor = actor_feats_st, critic_feature_extractor = critic_feats_st))
@@ -556,16 +567,16 @@ function extract_features(policy::DiscreteActorCriticPolicy{<:Any, <:Any, Separa
 end
 
 # Function barriers to handle type-unstable layer calls
-@inline function _apply_feature_extractor(feature_extractor::AbstractLuxLayer, obs::AbstractArray, ps, st)
-    return feature_extractor(obs, ps, st)
+@inline function _apply_feature_extractor(feature_extractor::FE, obs::AbstractArray, ps, st) where {FE <: AbstractLuxLayer}
+    return feature_extractor(obs, ps, st) #::Tuple{<:AbstractArray, <:NamedTuple}
 end
 
-@inline function _apply_actor_head(actor_head::AbstractLuxLayer, feats::AbstractArray, ps, st)
-    return actor_head(feats, ps, st)
+@inline function _apply_actor_head(actor_head::AH, feats::AbstractArray, ps, st) where {AH <: AbstractLuxLayer}
+    return actor_head(feats, ps, st) #::Tuple{<:AbstractArray, <:NamedTuple}
 end
 
-@inline function _apply_critic_head(critic_head::AbstractLuxLayer, feats::AbstractArray, ps, st)
-    return critic_head(feats, ps, st)
+@inline function _apply_critic_head(critic_head::CH, feats::AbstractArray, ps, st) where {CH <: AbstractLuxLayer}
+    return critic_head(feats, ps, st) #::Tuple{<:AbstractArray, <:NamedTuple}
 end
 
 function get_actions_from_features(policy::AbstractActorCriticPolicy, feats::AbstractArray, ps, st)
@@ -583,7 +594,7 @@ function get_values_from_features(policy::AbstractActorCriticPolicy, feats::Abst
     return values, st
 end
 
-function get_values_from_features(policy::ContinuousActorCriticPolicy{<:Any, <:Any, N, QCritic}, feats::AbstractArray, actions::AbstractArray, ps, st) where {N <: AbstractNoise}
+function get_values_from_features(policy::ContinuousActorCriticPolicy{<:Any, <:Any, N, QCritic, <:Any, <:Any, <:Any, <:Any}, feats::AbstractArray, actions::AbstractArray, ps, st) where {N <: AbstractNoise}
     if ndims(actions) == 1
         actions = batch(actions, action_space(policy))
     end
@@ -597,22 +608,23 @@ end
 
 # For continuous action spaces
 # Dispatch on noise type for VCritic policies
-function get_distributions(policy::ContinuousActorCriticPolicy{<:Any, <:Any, StateIndependantNoise, VCritic}, action_means::AbstractArray{T}, log_std::AbstractArray{T}) where {T <: Real}
+function get_distributions(policy::ContinuousActorCriticPolicy{<:Any, <:Any, StateIndependantNoise, VCritic, <:Any, <:Any, <:Any, <:Any}, action_means::AbstractArray{T}, log_std::AbstractArray{T}) where {T <: Real}
     batch_dim = ndims(action_means)
-    action_means_vec = collect(eachslice(action_means, dims = batch_dim)) #::Vector{Array{T, ndims(action_means) - 1}}
+    action_means_vec = collect.(eachslice(action_means, dims = batch_dim)) #::Vector{Array{T, ndims(action_means) - 1}}
+    #FIXME: runtime dispatch here in DiagGaussian, types not known??
     return DiagGaussian.(action_means_vec, Ref(log_std))
 end
 
-function get_distributions(policy::ContinuousActorCriticPolicy{<:Any, <:Any, StateDependentNoise, VCritic}, action_means::AbstractArray{T}, log_std::AbstractArray{T}) where {T <: Real}
+function get_distributions(policy::ContinuousActorCriticPolicy{<:Any, <:Any, StateDependentNoise, VCritic, <:Any, <:Any, <:Any, <:Any}, action_means::AbstractArray{T}, log_std::AbstractArray{T}) where {T <: Real}
     batch_dim = ndims(action_means)
     @assert size(log_std) == size(action_means) "log_std and action_means have different shapes"
-    action_means_vec = collect(eachslice(action_means, dims = batch_dim))::Vector{Array{T, ndims(action_means) - 1}}
-    log_std_vec = collect(eachslice(log_std, dims = batch_dim))::Vector{Array{T, ndims(log_std) - 1}}
+    action_means_vec = collect.(eachslice(action_means, dims = batch_dim))::Vector{Array{T, ndims(action_means) - 1}}
+    log_std_vec = collect.(eachslice(log_std, dims = batch_dim))::Vector{Array{T, ndims(log_std) - 1}}
     return DiagGaussian.(action_means_vec, log_std_vec)
 end
 
 # Dispatch on noise type for QCritic policies
-function get_distributions(policy::ContinuousActorCriticPolicy{<:Any, <:Any, StateIndependantNoise, QCritic}, action_means::AbstractArray{T}, log_std::AbstractArray{T}) where {T <: Real}
+function get_distributions(policy::ContinuousActorCriticPolicy{<:Any, <:Any, StateIndependantNoise, QCritic, <:Any, <:Any, <:Any, <:Any}, action_means::AbstractArray{T}, log_std::AbstractArray{T}) where {T <: Real}
     batch_dim = ndims(action_means)
     #FIXME: runtime dispatch here in SquashedDiagGaussian
     #TODO: is collect needed here?
@@ -620,7 +632,7 @@ function get_distributions(policy::ContinuousActorCriticPolicy{<:Any, <:Any, Sta
     return SquashedDiagGaussian.(action_means_vec, Ref(log_std))
 end
 
-function get_distributions(policy::ContinuousActorCriticPolicy{<:Any, <:Any, StateDependentNoise, QCritic}, action_means::AbstractArray{T}, log_std::AbstractArray{T}) where {T <: Real}
+function get_distributions(policy::ContinuousActorCriticPolicy{<:Any, <:Any, StateDependentNoise, QCritic, <:Any, <:Any, <:Any, <:Any}, action_means::AbstractArray{T}, log_std::AbstractArray{T}) where {T <: Real}
     batch_dim = ndims(action_means)
     @assert size(log_std) == size(action_means) "log_std and action_means have different shapes"
     action_means_vec = collect(eachslice(action_means, dims = batch_dim))::Vector{<:AbstractArray{T, ndims(action_means) - 1}}
@@ -639,7 +651,7 @@ function get_distributions(policy::DiscreteActorCriticPolicy, action_logits::Abs
     return Categorical.(probs_vec, start)
 end
 
-function predict_actions(policy::ContinuousActorCriticPolicy, obs::AbstractArray, ps, st; deterministic::Bool = false, rng::AbstractRNG = Random.default_rng())
+function predict_actions(policy::ContinuousActorCriticPolicy{<:Any, <:Any, <:Any, <:Any, <:Any, <:Any, <:Any, <:Any}, obs::AbstractArray, ps, st; deterministic::Bool = false, rng::AbstractRNG = Random.default_rng())
     actor_feats, critic_feats, st = extract_features(policy, obs, ps, st)
     action_means, st = get_actions_from_features(policy, actor_feats, ps, st)
     log_std = ps.log_std
@@ -664,12 +676,12 @@ function predict_actions(policy::DiscreteActorCriticPolicy, obs::AbstractArray, 
     return actions, st
 end
 
-function evaluate_actions(policy::ContinuousActorCriticPolicy, obs::AbstractArray{T}, actions::AbstractArray{T}, ps, st) where {T <: Real}
+function evaluate_actions(policy::ContinuousActorCriticPolicy{<:Any, <:Any, <:Any, <:Any, <:Any, <:Any, <:Any, <:Any}, obs::AbstractArray{T}, actions::AbstractArray{T}, ps, st) where {T <: Real}
     actor_feats, critic_feats, st = extract_features(policy, obs, ps, st)
     new_action_means, st = get_actions_from_features(policy, actor_feats, ps, st)
     values, st = get_values_from_features(policy, critic_feats, ps, st)
     distributions = get_distributions(policy, new_action_means, ps.log_std)
-    actions_vec = collect(eachslice(actions, dims = ndims(actions)))::Vector{<:AbstractArray{T, ndims(actions) - 1}}
+    actions_vec = collect.(eachslice(actions, dims = ndims(actions)))::Vector{Array{T, ndims(actions) - 1}}
     log_probs = logpdf.(distributions, actions_vec)
     entropies = entropy.(distributions)
     return evaluate_actions_returns(policy, values, log_probs, entropies, st)
@@ -699,7 +711,7 @@ function predict_values(policy::AbstractActorCriticPolicy, obs::AbstractArray, p
     return vec(values), st
 end
 
-function predict_values(policy::ContinuousActorCriticPolicy{<:Any, <:Any, N, QCritic}, obs::AbstractArray, actions::AbstractArray, ps, st) where {N <: AbstractNoise}
+function predict_values(policy::ContinuousActorCriticPolicy{<:Any, <:Any, N, QCritic, <:Any, <:Any, <:Any, <:Any}, obs::AbstractArray, actions::AbstractArray, ps, st) where {N <: AbstractNoise}
     actor_feats, critic_feats, st = extract_features(policy, obs, ps, st)
     values, st = get_values_from_features(policy, critic_feats, actions, ps, st)
     return values, st #dont return vec(values) as this is a matrix

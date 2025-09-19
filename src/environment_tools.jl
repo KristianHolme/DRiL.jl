@@ -564,6 +564,7 @@ function observe(env::NormalizeWrapperEnv{E, T}) where {E, T}
         obs_batch = batch(obs, observation_space(env))
         update!(env.obs_rms, obs_batch)
     end
+    #FIXME: type instability here?
     normalize_obs!.(obs, Ref(env))
     return obs
 end
