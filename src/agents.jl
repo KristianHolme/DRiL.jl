@@ -33,14 +33,14 @@ Agent for Actor-Critic algorithms
         2: progress bar and stats
         
 """
-mutable struct ActorCriticAgent <: AbstractAgent
-    policy::AbstractActorCriticPolicy
+mutable struct ActorCriticAgent{P <: AbstractActorCriticPolicy, R <: AbstractRNG} <: AbstractAgent
+    policy::P
     train_state::Lux.Training.TrainState
     optimizer_type::Type{<:Optimisers.AbstractRule}
     stats_window::Int
     logger::Union{Nothing, TensorBoardLogger.TBLogger}
     verbose::Int
-    rng::AbstractRNG
+    rng::R
     stats::AgentStats
 end
 
@@ -73,6 +73,7 @@ function get_action_and_values(agent::ActorCriticAgent, observations::AbstractVe
     st = train_state.states
     # Convert observations vector to batched matrix for policy
     batched_obs = batch(observations, observation_space(policy))
+    #FIXME: type instability here, is policy not known??
     actions, values, logprobs, st = policy(batched_obs, ps, st)
     @reset train_state.states = st
     agent.train_state = train_state
