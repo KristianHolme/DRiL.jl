@@ -581,7 +581,6 @@ end
 
 function get_actions_from_features(policy::AbstractActorCriticPolicy, feats::AbstractArray, ps, st)
     # Use function barrier to isolate type instability
-    #TODO: runtime dispatch
     actions, actor_st = _apply_actor_head(policy.actor_head, feats, ps.actor_head, st.actor_head)
     st = merge(st, (; actor_head = actor_st))
     return actions, st
@@ -618,8 +617,8 @@ end
 function get_distributions(policy::ContinuousActorCriticPolicy{<:Any, <:Any, StateDependentNoise, VCritic, <:Any, <:Any, <:Any, <:Any}, action_means::AbstractArray{T}, log_std::AbstractArray{T}) where {T <: Real}
     batch_dim = ndims(action_means)
     @assert size(log_std) == size(action_means) "log_std and action_means have different shapes"
-    action_means_vec = collect.(eachslice(action_means, dims = batch_dim))::Vector{Array{T, ndims(action_means) - 1}}
-    log_std_vec = collect.(eachslice(log_std, dims = batch_dim))::Vector{Array{T, ndims(log_std) - 1}}
+    action_means_vec = collect(eachslice(action_means, dims = batch_dim)) #::Vector{Array{T, ndims(action_means) - 1}}
+    log_std_vec = collect(eachslice(log_std, dims = batch_dim)) #::Vector{Array{T, ndims(log_std) - 1}}
     return DiagGaussian.(action_means_vec, log_std_vec)
 end
 
@@ -628,15 +627,15 @@ function get_distributions(policy::ContinuousActorCriticPolicy{<:Any, <:Any, Sta
     batch_dim = ndims(action_means)
     #FIXME: runtime dispatch here in SquashedDiagGaussian
     #TODO: is collect needed here?
-    action_means_vec = collect(eachslice(action_means, dims = batch_dim))::Vector{<:AbstractArray{T, batch_dim - 1}}
+    action_means_vec = collect(eachslice(action_means, dims = batch_dim)) #::Vector{<:AbstractArray{T, batch_dim - 1}}
     return SquashedDiagGaussian.(action_means_vec, Ref(log_std))
 end
 
 function get_distributions(policy::ContinuousActorCriticPolicy{<:Any, <:Any, StateDependentNoise, QCritic, <:Any, <:Any, <:Any, <:Any}, action_means::AbstractArray{T}, log_std::AbstractArray{T}) where {T <: Real}
     batch_dim = ndims(action_means)
     @assert size(log_std) == size(action_means) "log_std and action_means have different shapes"
-    action_means_vec = collect(eachslice(action_means, dims = batch_dim))::Vector{<:AbstractArray{T, ndims(action_means) - 1}}
-    log_std_vec = collect(eachslice(log_std, dims = batch_dim))::Vector{<:AbstractArray{T, ndims(log_std) - 1}}
+    action_means_vec = collect(eachslice(action_means, dims = batch_dim)) #::Vector{<:AbstractArray{T, ndims(action_means) - 1}}
+    log_std_vec = collect(eachslice(log_std, dims = batch_dim)) #::Vector{<:AbstractArray{T, ndims(log_std) - 1}}
     return SquashedDiagGaussian.(action_means_vec, log_std_vec)
 end
 
@@ -647,7 +646,7 @@ function get_distributions(policy::DiscreteActorCriticPolicy, action_logits::Abs
     probs = Lux.softmax(action_logits)
     batch_dim = ndims(action_logits)
     start = action_space(policy).start
-    probs_vec = collect(eachslice(probs, dims = batch_dim))::Vector{<:AbstractArray{T, ndims(probs) - 1}}
+    probs_vec = collect(eachslice(probs, dims = batch_dim)) #::Vector{<:AbstractArray{T, ndims(probs) - 1}}
     return Categorical.(probs_vec, start)
 end
 
@@ -678,12 +677,12 @@ end
 
 function evaluate_actions(policy::ContinuousActorCriticPolicy{<:Any, <:Any, <:Any, <:Any, <:Any, <:Any, <:Any, <:Any}, obs::AbstractArray{T}, actions::AbstractArray{T}, ps, st) where {T <: Real}
     actor_feats, critic_feats, st = extract_features(policy, obs, ps, st)
-    new_action_means, st = get_actions_from_features(policy, actor_feats, ps, st)
-    values, st = get_values_from_features(policy, critic_feats, ps, st)
-    distributions = get_distributions(policy, new_action_means, ps.log_std)
-    actions_vec = collect.(eachslice(actions, dims = ndims(actions)))::Vector{Array{T, ndims(actions) - 1}}
+    new_action_means, st = get_actions_from_features(policy, actor_feats, ps, st) #runtime dispatch
+    values, st = get_values_from_features(policy, critic_feats, ps, st) #runtime dispatch
+    distributions = get_distributions(policy, new_action_means, ps.log_std) #runtime dispatch
+    actions_vec = collect(eachslice(actions, dims = ndims(actions))) #runtime dispatch
     log_probs = logpdf.(distributions, actions_vec)
-    entropies = entropy.(distributions)
+    entropies = entropy.(distributions) #runtime dispatch
     return evaluate_actions_returns(policy, values, log_probs, entropies, st)
 end
 
