@@ -285,7 +285,7 @@ end
 function (alg::PPO{T})(policy::AbstractActorCriticPolicy, ps, st, batch_data) where {T}
     observations = batch_data[1]
     actions = batch_data[2]
-    advantages = batch_data[3]
+    advantages::Vector{T} = batch_data[3]
     returns = batch_data[4]
     old_logprobs = batch_data[5]
     old_values = batch_data[6]
@@ -293,7 +293,7 @@ function (alg::PPO{T})(policy::AbstractActorCriticPolicy, ps, st, batch_data) wh
     advantages = @ignore_derivatives alg.normalize_advantage ? normalize(advantages) : advantages
 
     values, log_probs, entropy, st = evaluate_actions(policy, observations, actions, ps, st)
-    values = !isnothing(alg.clip_range_vf) ? clip_range(old_values, values, alg.clip_range_vf) : values
+    values = !isnothing(alg.clip_range_vf) ? clip_range(old_values, values, alg.clip_range_vf::T) : values
 
     r = exp.(log_probs - old_logprobs)
     ratio_clipped = clamp.(r, 1 - alg.clip_range, 1 + alg.clip_range)
@@ -303,15 +303,14 @@ function (alg::PPO{T})(policy::AbstractActorCriticPolicy, ps, st, batch_data) wh
     v_loss = mean((values .- returns) .^ 2)
     loss = p_loss + alg.ent_coef * ent_loss + alg.vf_coef * v_loss
 
-    stats = Dict()
-    @ignore_derivatives begin
+    stats = @ignore_derivatives begin
         # Calculate statistics
         clip_fraction = mean(r .!= ratio_clipped)
         #approx kl div
         log_ratio = log_probs - old_logprobs
         approx_kl_div = mean(exp.(log_ratio) .- 1 .- log_ratio)
 
-        stats = Dict(
+        Dict{String, Any}(
             "policy_loss" => p_loss,
             "value_loss" => v_loss,
             "entropy_loss" => ent_loss,
