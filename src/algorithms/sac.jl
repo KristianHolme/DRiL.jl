@@ -79,7 +79,6 @@ function sac_critic_loss(
         alg::SAC, policy::ContinuousActorCriticPolicy{<:Any, <:Any, <:Any, QCritic}, ps, st, data;
         rng::AbstractRNG = Random.default_rng()
     )
-    #TODO: add types here??
     obs, actions, rewards, terminated, _, next_obs = data.observations, data.actions, data.rewards, data.terminated, data.truncated, data.next_observations
     gamma = alg.gamma
     ent_coef = data.log_ent_coef[1] |> exp
@@ -126,7 +125,7 @@ function (alg::SAC)(::ContinuousActorCriticPolicy, ps, st, batch_data)
 end
 
 # SACAgent and related helper functions moved from agents.jl
-mutable struct SACAgent <: AbstractAgent
+mutable struct SACAgent{R <: AbstractRNG} <: AbstractAgent
     policy::ContinuousActorCriticPolicy
     train_state::Lux.Training.TrainState
     Q_target_parameters::ComponentArray
@@ -136,7 +135,7 @@ mutable struct SACAgent <: AbstractAgent
     stats_window::Int
     logger::Union{Nothing, TensorBoardLogger.TBLogger}
     verbose::Int
-    rng::AbstractRNG
+    rng::R
     stats::AgentStats
 end
 

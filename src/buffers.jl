@@ -229,7 +229,7 @@ Base.length(traj::OffPolicyTrajectory) = length(traj.rewards)
 
 
 """
-    ReplayBuffer{T,O,A}
+    ReplayBuffer{T,O,OBS,AC}
 
 A circular buffer for storing multiple trajectories of off-policy experience data, used for replay-based learning algorithms.
 
@@ -238,32 +238,32 @@ A circular buffer for storing multiple trajectories of off-policy experience dat
 - If `truncated = true`, then there should be a `truncated_observation`  
 - If `terminated = false` and `truncated = false`, then we stopped in the middle of an episode, so there should be a `truncated_observation`
 """
-struct ReplayBuffer{T, O, A}
-    observation_space::AbstractSpace
+struct ReplayBuffer{T, O, OBS, AC}
+    observation_space::O
     action_space::Box
-    observations::CircularBuffer{O}
-    actions::CircularBuffer{A}
+    observations::CircularBuffer{OBS}
+    actions::CircularBuffer{AC}
     rewards::CircularBuffer{T}
     terminated::CircularBuffer{Bool}
     truncated::CircularBuffer{Bool}
-    truncated_observations::CircularBuffer{Union{Nothing, O}}
+    truncated_observations::CircularBuffer{Union{Nothing, OBS}}
 end
-function ReplayBuffer(observation_space::AbstractSpace, action_space::Box, capacity::Int)
-    O = typeof(rand(observation_space))
-    A = typeof(rand(action_space))
+function ReplayBuffer(observation_space::O, action_space::Box, capacity::Int) where {O}
+    OBS = typeof(rand(observation_space))
+    AC = typeof(rand(action_space))
     obs_scalar_type = eltype(observation_space)
     action_scalar_type = eltype(action_space)
     @assert obs_scalar_type == action_scalar_type "Observation and action types must be the same"
     T = obs_scalar_type
-    return ReplayBuffer{T, O, A}(
+    return ReplayBuffer{T, O, OBS, AC}(
         observation_space,
         action_space,
-        CircularBuffer{O}(capacity),
-        CircularBuffer{A}(capacity),
+        CircularBuffer{OBS}(capacity),
+        CircularBuffer{AC}(capacity),
         CircularBuffer{T}(capacity),
         CircularBuffer{Bool}(capacity),
         CircularBuffer{Bool}(capacity),
-        CircularBuffer{Union{Nothing, O}}(capacity)
+        CircularBuffer{Union{Nothing, OBS}}(capacity)
     )
 end
 
@@ -341,14 +341,14 @@ function Base.push!(buffer::ReplayBuffer, traj::OffPolicyTrajectory)
     vec_truncated = fill(false, length(traj.observations))
     vec_truncated[end] = traj.truncated
     push!(buffer.truncated, vec_truncated...)
-    O = typeof(traj.observations[1])
-    vec_truncated_obs = Vector{Union{Nothing, O}}(nothing, length(traj.observations))
+    OBS = typeof(traj.observations[1])
+    vec_truncated_obs = Vector{Union{Nothing, OBS}}(nothing, length(traj.observations))
     vec_truncated_obs[end] = traj.truncated_observation
     push!(buffer.truncated_observations, vec_truncated_obs...)
     return nothing
 end
 
-function get_data_loader(buffer::ReplayBuffer{T, O, A}, batch_size::Int, batches::Int, shuffle::Bool, parallel::Bool, rng::AbstractRNG) where {T, O, A}
+function get_data_loader(buffer::ReplayBuffer{T, O, OBS, AC}, batch_size::Int, batches::Int, shuffle::Bool, parallel::Bool, rng::AbstractRNG) where {T, O, OBS, AC}
     buffer_size = length(buffer)
     samples = batch_size * batches
     sample_inds = sample(rng, 1:buffer_size, samples, replace = true)
@@ -360,7 +360,7 @@ function get_data_loader(buffer::ReplayBuffer{T, O, A}, batch_size::Int, batches
     truncated_sample = buffer.truncated[sample_inds]
     truncated_obs_sample = buffer.truncated_observations[sample_inds]
 
-    next_obs_sample = Vector{O}(undef, samples)
+    next_obs_sample = Vector{OBS}(undef, samples)
     for i in 1:samples
         if !terminated_sample[i]
             next_obs = if isnothing(truncated_obs_sample[i])
