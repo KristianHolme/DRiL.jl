@@ -8,7 +8,9 @@ using DataStructures
 using LinearAlgebra
 using Logging
 using Lux
+using LoopVectorization
 using MLUtils
+using Octavian
 using Optimisers
 using ProgressMeter
 using Reexport

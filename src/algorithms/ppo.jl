@@ -282,6 +282,23 @@ function clip_range(old_values::Vector{T}, values::Vector{T}, clip_range::T) whe
     return old_values .+ clamp(values .- old_values, -clip_range, clip_range)
 end
 
+
+#TODO: vectorize this?
+function normalize!(values::Vector{T}) where {T}
+    mean_values = mean(values)
+    std_values = std(values)
+    epsilon = T(1.0e-8)
+    values .= (values .- mean_values) ./ (std_values + epsilon)
+    return nothing
+end
+
+function maybe_normalize!(advantages::Vector{T}, alg::PPO{T}) where {T}
+    if alg.normalize_advantage
+        normalize!(advantages)
+    end
+    return nothing
+end
+
 function (alg::PPO{T})(policy::AbstractActorCriticPolicy, ps, st, batch_data) where {T}
     observations = batch_data[1]
     actions = batch_data[2]
@@ -290,7 +307,9 @@ function (alg::PPO{T})(policy::AbstractActorCriticPolicy, ps, st, batch_data) wh
     old_logprobs = batch_data[5]
     old_values = batch_data[6]
 
-    advantages = @ignore_derivatives alg.normalize_advantage ? normalize(advantages) : advantages
+    # advantages = @ignore_derivatives alg.normalize_advantage ? normalize(advantages) : advantages
+    #TODO: do we need to ignore derivatives here?
+    @ignore_derivatives maybe_normalize!(advantages, alg)
 
     values, log_probs, entropy, st = evaluate_actions(policy, observations, actions, ps, st)
     values = !isnothing(alg.clip_range_vf) ? clip_range(old_values, values, alg.clip_range_vf::T) : values
