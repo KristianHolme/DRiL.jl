@@ -581,7 +581,7 @@ end
 
 function get_actions_from_features(policy::AbstractActorCriticPolicy, feats::AbstractArray, ps, st)
     # Use function barrier to isolate type instability
-    actions, actor_st = _apply_actor_head(policy.actor_head, feats, ps.actor_head, st.actor_head)
+    actions, actor_st = _apply_actor_head(policy.actor_head, copy(feats), ps.actor_head, st.actor_head)
     st = merge(st, (; actor_head = actor_st))
     return actions, st
 end
