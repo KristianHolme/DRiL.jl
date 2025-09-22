@@ -418,9 +418,9 @@ function learn!(
 
     # Main training loop
     training_iteration = 0
-    iterations = div(max_steps - adjusted_total_start_steps, alg.train_freq) + 1
+    iterations = div(max_steps - adjusted_total_start_steps * n_envs, alg.train_freq * n_envs) + 1
 
-    total_steps = n_steps * n_envs + alg.train_freq * (iterations - 1)
+    total_steps = n_steps * n_envs + alg.train_freq * n_envs * (iterations - 1)
 
     progress_meter = Progress(
         total_steps, desc = "Training...",
