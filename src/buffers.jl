@@ -72,8 +72,8 @@ total_reward(trajectory::Trajectory) = sum(trajectory.rewards)
 
 
 function collect_trajectories(
-        agent::ActorCriticAgent, env::AbstractParallelEnv, alg::AbstractAlgorithm, n_steps::Int,
-        progress_meter::Union{Progress, Nothing} = nothing; callbacks::Union{Vector{<:AbstractCallback}, Nothing} = nothing
+        agent::ActorCriticAgent, env::AbstractParallelEnv, alg::AbstractAlgorithm, n_steps::Int;
+        callbacks::Union{Vector{<:AbstractCallback}, Nothing} = nothing
     )
     # reset!(env)
     trajectories = Trajectory[]
@@ -124,7 +124,6 @@ function collect_trajectories(
                 current_trajectories[j] = Trajectory(obs_space, act_space)
             end
         end
-        !isnothing(progress_meter) && next!(progress_meter, step = number_of_envs(env))
     end
     return trajectories, true
 end
@@ -133,8 +132,7 @@ function collect_rollout!(
         rollout_buffer::RolloutBuffer,
         agent::ActorCriticAgent,
         alg::OnPolicyAlgorithm,
-        env::AbstractEnv,
-        progress_meter::Union{Progress, Nothing} = nothing;
+        env::AbstractEnv;
         callbacks::Union{Vector{<:AbstractCallback}, Nothing} = nothing
     )
     # reset!(env) #we dont reset the, we continue from where we left off
@@ -145,7 +143,7 @@ function collect_rollout!(
     reset!(rollout_buffer)
 
     t_start = time()
-    trajectories, success = collect_trajectories(agent, env, alg, rollout_buffer.n_steps, progress_meter; callbacks = callbacks)
+    trajectories, success = collect_trajectories(agent, env, alg, rollout_buffer.n_steps; callbacks = callbacks)
     t_collect = time() - t_start
     total_steps = sum(length.(trajectories))
     fps = total_steps / t_collect

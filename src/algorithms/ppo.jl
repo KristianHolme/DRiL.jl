@@ -109,7 +109,7 @@ function learn!(agent::ActorCriticAgent, env::AbstractParallelEnv, alg::PPO{T}, 
                 return nothing
             end
         end
-        fps, success = collect_rollout!(roll_buffer, agent, alg, env, progress_meter; callbacks = callbacks)
+        fps, success = collect_rollout!(roll_buffer, agent, alg, env; callbacks = callbacks)
         if !success
             @warn "Training stopped due to callback failure"
             return nothing
@@ -207,8 +207,10 @@ function learn!(agent::ActorCriticAgent, env::AbstractParallelEnv, alg::PPO{T}, 
         push!(total_losses, mean(losses))
         push!(total_grad_norms, mean(grad_norms))
         if agent.verbose > 1
-            ProgressMeter.update!(
-                progress_meter; showvalues = [
+            ProgressMeter.next!(
+                progress_meter;
+                step = n_steps * n_envs,
+                showvalues = [
                     ("explained_variance", explained_variance),
                     ("entropy_loss", total_entropy_losses[i]),
                     ("policy_loss", total_policy_losses[i]),
@@ -221,6 +223,8 @@ function learn!(agent::ActorCriticAgent, env::AbstractParallelEnv, alg::PPO{T}, 
                     ("learning_rate", learning_rate),
                 ]
             )
+        elseif agent.verbose > 0
+            ProgressMeter.next!(progress_meter, step = n_steps * n_envs)
         end
         if !isnothing(agent.logger)
             logger = agent.logger::TensorBoardLogger.TBLogger #to satisfy JET
