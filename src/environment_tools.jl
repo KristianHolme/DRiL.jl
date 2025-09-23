@@ -227,6 +227,10 @@ function act!(env::MultiAgentParallelEnv{E}, actions::AbstractVector) where {E <
 
     @threads for i in eachindex(env.envs)
         rewards, terminateds, truncateds, infos = act!(env.envs[i], action_chunks[i])
+        @assert length(rewards) == length(chunk_indices[i]) "length of rewards: $(length(rewards)) != length of chunk indices: $(length(chunk_indices[i]))"
+        @assert length(terminateds) == length(chunk_indices[i]) "length of terminateds: $(length(terminateds)) != length of chunk indices: $(length(chunk_indices[i]))"
+        @assert length(truncateds) == length(chunk_indices[i]) "length of truncateds: $(length(truncateds)) != length of chunk indices: $(length(chunk_indices[i]))"
+        @assert length(infos) == length(chunk_indices[i]) "length of infos: $(length(infos)) != length of chunk indices: $(length(chunk_indices[i]))"
         stacked_rewards[chunk_indices[i]] .= rewards
         stacked_terminated[chunk_indices[i]] .= terminateds
         stacked_truncated[chunk_indices[i]] .= truncateds
