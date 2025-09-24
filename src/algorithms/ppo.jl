@@ -226,6 +226,7 @@ function learn!(agent::ActorCriticAgent, env::AbstractParallelEnv, alg::PPO{T}, 
         elseif agent.verbose > 0
             ProgressMeter.next!(progress_meter, step = n_steps * n_envs)
         end
+
         if !isnothing(agent.logger)
             logger = agent.logger::TensorBoardLogger.TBLogger #to satisfy JET
             log_value(logger, "train/entropy_loss", total_entropy_losses[i])
