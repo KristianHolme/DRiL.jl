@@ -725,14 +725,14 @@ function load_normalization_stats!(env::NormalizeWrapperEnv{E, T}, filepath::Str
 end
 
 #syncs the eval env stats to be same as training env
-function sync_normalization_stats!(eval_env::NormalizeWrapperEnv, train_env::NormalizeWrapperEnv)
+function sync_normalization_stats!(eval_env::NormalizeWrapperEnv{E1, T}, train_env::NormalizeWrapperEnv{E2, T}) where {E1, E2, T}
     eval_env.obs_rms.mean .= train_env.obs_rms.mean
     eval_env.obs_rms.var .= train_env.obs_rms.var
     eval_env.obs_rms.count = train_env.obs_rms.count
     eval_env.ret_rms.mean .= train_env.ret_rms.mean
     eval_env.ret_rms.var .= train_env.ret_rms.var
     eval_env.ret_rms.count = train_env.ret_rms.count
-    eval_env.returns .= train_env.returns
+    eval_env.returns .= zero(T) #reset returns. We allow n_envs to be different for the two envs, so we dont sync the current returns #reset returns. We allow n_envs to be different for the two envs, so we dont sync the current returns
     return nothing
 end
 
