@@ -18,6 +18,7 @@ using Random
 using Statistics
 using StatsBase: sample
 using TensorBoardLogger
+using TimerOutputs
 using FileIO
 using JLD2
 
