@@ -14,12 +14,13 @@ DRiL.jl is a prototype DRL package, aiming to be fast, flexible, and easy to use
   
 - **Modern Architecture**: Built on [Lux.jl](https://github.com/LuxDL/Lux.jl) for neural networks with automatic differentiation support
 - **Flexible Environments**: Comprehensive environment interface supporting both discrete and continuous action spaces
-- **Rich Logging**: TensorBoard integration for training monitoring
+- **Rich Logging**: TensorBoard integration for training monitoring, and timer output ([TimerOutputs.jl](https://github.com/KristofferC/TimerOutputs.jl)) for performance analysis
 - **Parallelization**: Built-in support for parallel environment execution
 
 ## Implemented Algorithms
 
 - PPO (Proximal Policy Optimization)
+- SAC (Soft Actor-Critic)
 
 ## Core Components
 The DRiL.jl package is built around the following core components: **Environments**, **Policies**, **Agents**, and **Algorithms**.
@@ -59,7 +60,7 @@ agent = ActorCriticAgent(
     batch_size=64,       # Minibatch size
     epochs=10,          # Optimization epochs per update
     learning_rate=3f-4, # Learning rate
-    verbose=2          # Enable progress bars and stats
+    verbose=2          # Enable progress bars, stats and timer output
 )
 
 # Configure PPO algorithm
@@ -74,7 +75,7 @@ ppo = PPO(
 
 # Train the agent
 max_steps = 100_000
-learn_stats = learn!(agent, parallel_env, ppo; max_steps)
+learn_stats, to = learn!(agent, parallel_env, ppo; max_steps)
 
 # Evaluate the trained agent
 eval_env = CartPoleEnv(max_steps=500)
@@ -82,6 +83,9 @@ eval_stats = evaluate_agent(agent, eval_env, n_episodes=10, deterministic=true)
 
 println("Average episodic return: $(mean(eval_stats.episodic_returns))")
 println("Average episode length: $(mean(eval_stats.episodic_lengths))")
+
+# Print timer output
+print_timer(to)
 ```
 
 ## Advanced Usage

@@ -395,6 +395,7 @@ function learn!(
         callbacks::Union{Vector{<:AbstractCallback}, Nothing} = nothing,
         ad_type::Lux.Training.AbstractADType = AutoZygote()
     )
+    to = TimerOutput()
     n_envs = number_of_envs(env)
     policy = agent.policy
     train_state = agent.train_state
@@ -433,24 +434,28 @@ function learn!(
 
     # Callbacks: training start
     if !isnothing(callbacks)
-        if !all(c -> on_training_start(c, Base.@locals), callbacks)
-            @warn "Training stopped due to callback failure"
-            return agent, replay_buffer, training_stats
-        end
-    end
-    for training_iteration in 1:iterations  # Adjust this termination condition as needed
-        # @info "Training iteration $training_iteration, collecting rollout ($n_steps steps)"
-
-        # Callbacks: rollout start
-        if !isnothing(callbacks)
-            if !all(c -> on_rollout_start(c, Base.@locals), callbacks)
+        @timeit to "callback: training_start" begin
+            if !all(c -> on_training_start(c, Base.@locals), callbacks)
                 @warn "Training stopped due to callback failure"
                 return agent, replay_buffer, training_stats
             end
         end
+    end
+    @timeit to "training_loop" for training_iteration in 1:iterations  # Adjust this termination condition as needed
+        # @info "Training iteration $training_iteration, collecting rollout ($n_steps steps)"
+
+        # Callbacks: rollout start
+        if !isnothing(callbacks)
+            @timeit to "callback: rollout_start" begin
+                if !all(c -> on_rollout_start(c, Base.@locals), callbacks)
+                    @warn "Training stopped due to callback failure"
+                    return agent, replay_buffer, training_stats
+                end
+            end
+        end
 
         # Collect experience
-        fps, success = collect_rollout!(
+        fps, success = @timeit to "collect_rollout" collect_rollout!(
             replay_buffer, agent, alg, env, n_steps, progress_meter; callbacks,
             use_random_actions = training_iteration == 1 && alg.start_steps > 0
         )
@@ -461,9 +466,11 @@ function learn!(
 
         # Callbacks: rollout end
         if !isnothing(callbacks)
-            if !all(c -> on_rollout_end(c, Base.@locals), callbacks)
-                @warn "Training stopped due to callback failure"
-                return agent, replay_buffer, training_stats
+            @timeit to "callback: rollout_end" begin
+                if !all(c -> on_rollout_end(c, Base.@locals), callbacks)
+                    @warn "Training stopped due to callback failure"
+                    return agent, replay_buffer, training_stats
+                end
             end
         end
         #set steps to train_freq after first (potentially larger) rollout
@@ -475,7 +482,7 @@ function learn!(
         n_updates = get_gradient_steps(alg, alg.train_freq, n_envs)
         data_loader = get_data_loader(replay_buffer, alg.batch_size, n_updates, true, true, agent.rng)
 
-        for (i, batch_data) in enumerate(data_loader)
+        @timeit to "gradient_updates" for (i, batch_data) in enumerate(data_loader)
             # @info "Training iteration $training_iteration, batch $i, batch_size: $(size(batch_data.observations))"
             # Update entropy coefficient if using automatic entropy tuning
             if update_entropy_coef
@@ -489,14 +496,14 @@ function learn!(
                     target_st = agent.Q_target_states,
                 )
                 #TODO: use single_train_step! instead??
-                ent_grad, ent_loss, _, ent_train_state = Lux.Training.compute_gradients(
+                ent_grad, ent_loss, _, ent_train_state = @timeit to "compute_gradients: entropy" Lux.Training.compute_gradients(
                     ad_type,
                     (model, ps, st, data) -> sac_ent_coef_loss(alg, policy, ps, st, data; rng = agent.rng),
                     ent_data,
                     ent_train_state
                 )
 
-                ent_train_state = Lux.Training.apply_gradients!(ent_train_state, ent_grad)
+                ent_train_state = @timeit to "apply_gradients: entropy" Lux.Training.apply_gradients!(ent_train_state, ent_grad)
                 push!(training_stats.entropy_losses, ent_loss)
                 agent.ent_train_state = ent_train_state
             end
@@ -516,13 +523,13 @@ function learn!(
                 target_st = agent.Q_target_states,
             )
             #TODO: are these closures bad for performance/type stability?
-            critic_grad, critic_loss, critic_stats, train_state = Lux.Training.compute_gradients(
+            critic_grad, critic_loss, critic_stats, train_state = @timeit to "compute_gradients: critic" Lux.Training.compute_gradients(
                 ad_type,
                 (model, ps, st, data) -> sac_critic_loss(alg, policy, ps, st, data; rng = agent.rng),
                 critic_data,
                 train_state
             )
-            train_state = Lux.Training.apply_gradients(train_state, critic_grad)
+            train_state = @timeit to "apply_gradients: critic" Lux.Training.apply_gradients(train_state, critic_grad)
             push!(training_stats.critic_losses, critic_loss)
 
             # Record Q-value statistics
@@ -539,15 +546,15 @@ function learn!(
                 log_ent_coef = agent.ent_train_state.parameters,
             )
 
-            actor_loss_grad, actor_loss, _, train_state = Lux.Training.compute_gradients(
+            actor_loss_grad, actor_loss, _, train_state = @timeit to "compute_gradients: actor" Lux.Training.compute_gradients(
                 ad_type,
                 (model, ps, st, data) -> sac_actor_loss(alg, policy, ps, st, data; rng = agent.rng),
                 actor_data,
                 train_state
             )
-            zero_critic_grads!(actor_loss_grad, policy)
+            @timeit to "zero_critic_grads" zero_critic_grads!(actor_loss_grad, policy)
             @assert norm(actor_loss_grad.critic_head) < 1.0e-10 "Critic head gradient is not zero"
-            train_state = Lux.Training.apply_gradients(train_state, actor_loss_grad)
+            train_state = @timeit to "apply_gradients: actor" Lux.Training.apply_gradients(train_state, actor_loss_grad)
             push!(training_stats.actor_losses, actor_loss)
 
 
@@ -578,14 +585,19 @@ function learn!(
 
     # Callbacks: training end
     if !isnothing(callbacks)
-        if !all(c -> on_training_end(c, Base.@locals), callbacks)
-            @warn "Training stopped due to callback failure"
-            return agent, replay_buffer, training_stats
+        @timeit to "callback: training_end" begin
+            if !all(c -> on_training_end(c, Base.@locals), callbacks)
+                @warn "Training stopped due to callback failure"
+                return agent, replay_buffer, training_stats, to
+            end
         end
     end
 
     # Return training statistics
-    return agent, replay_buffer, training_stats
+    if agent.verbose ≥ 2
+        print_timer(to)
+    end
+    return agent, replay_buffer, training_stats, to
 end
 
 function process_action(action, action_space::Box{T}, ::SAC) where {T}

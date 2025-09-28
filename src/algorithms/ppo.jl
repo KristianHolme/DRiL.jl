@@ -60,6 +60,8 @@ end
 #TODO make parameters n_steps, batch_size, epochs, max_steps kwargs, default to values from agent
 #TODO refactor, separate out learnig loop and logging
 function learn!(agent::ActorCriticAgent, env::AbstractParallelEnv, alg::PPO{T}, max_steps::Int; ad_type::Lux.Training.AbstractADType = AutoZygote(), callbacks::Union{Vector{<:AbstractCallback}, Nothing} = nothing) where {T}
+    to = TimerOutput()
+    setup_section = begin_timed_section!(to, "setup")
     n_steps = alg.n_steps
     n_envs = number_of_envs(env)
     roll_buffer = RolloutBuffer(
@@ -90,32 +92,38 @@ function learn!(agent::ActorCriticAgent, env::AbstractParallelEnv, alg::PPO{T}, 
     total_explained_variances = Float32[]
     total_fps = Float32[]
     total_grad_norms = Float32[]
+    end_timed_section!(to, setup_section)
 
     if !isnothing(callbacks)
-        if !all(c -> on_training_start(c, Base.@locals), callbacks)
-            @warn "Training stopped due to callback failure"
-            return nothing
+        @timeit to "callback: training_start" begin
+            if !all(c -> on_training_start(c, Base.@locals), callbacks)
+                @warn "Training stopped due to callback failure"
+                return nothing
+            end
         end
     end
 
-    for i in 1:iterations
+    @timeit to "training_loop" for i in 1:iterations
         learning_rate = alg.learning_rate
         Optimisers.adjust!(agent.train_state, learning_rate)
         push!(learning_rates, learning_rate)
 
         if !isnothing(callbacks)
-            if !all(c -> on_rollout_start(c, Base.@locals), callbacks)
-                @warn "Training stopped due to callback failure"
-                return nothing
+            @timeit to "callback: rollout_start" begin
+                if !all(c -> on_rollout_start(c, Base.@locals), callbacks)
+                    @warn "Training stopped due to callback failure"
+                    return nothing
+                end
             end
         end
-        fps, success = collect_rollout!(roll_buffer, agent, alg, env; callbacks = callbacks)
+        fps, success = @timeit to "collect_rollout" collect_rollout!(roll_buffer, agent, alg, env; callbacks = callbacks)
         if !success
             @warn "Training stopped due to callback failure"
             return nothing
         end
         push!(total_fps, fps)
         add_step!(agent, n_steps * n_envs)
+
         if !isnothing(agent.logger)
             logger = agent.logger::TensorBoardLogger.TBLogger
             set_step!(logger, steps_taken(agent))
@@ -124,9 +132,11 @@ function learn!(agent::ActorCriticAgent, env::AbstractParallelEnv, alg::PPO{T}, 
         end
 
         if !isnothing(callbacks)
-            if !all(c -> on_rollout_end(c, Base.@locals), callbacks)
-                @warn "Training stopped due to callback failure"
-                return nothing
+            @timeit to "callback: rollout_end" begin
+                if !all(c -> on_rollout_end(c, Base.@locals), callbacks)
+                    @warn "Training stopped due to callback failure"
+                    return nothing
+                end
             end
         end
 
@@ -147,9 +157,9 @@ function learn!(agent::ActorCriticAgent, env::AbstractParallelEnv, alg::PPO{T}, 
         approx_kl_divs = Float32[]
         clip_fractions = Float32[]
         grad_norms = Float32[]
-        for epoch in 1:alg.epochs
-            for (i_batch, batch_data) in enumerate(data_loader)
-                grads, loss_val, stats, train_state = Lux.Training.compute_gradients(ad_type, alg, batch_data, train_state)
+        @timeit to "epoch loop" for epoch in 1:alg.epochs
+            @timeit to "batch loop" for (i_batch, batch_data) in enumerate(data_loader)
+                grads, loss_val, stats, train_state = @timeit to "compute_gradients" Lux.Training.compute_gradients(ad_type, alg, batch_data, train_state)
 
                 if epoch == 1 && i_batch == 1
                     mean_ratio = stats["ratio"]
@@ -181,7 +191,8 @@ function learn!(agent::ActorCriticAgent, env::AbstractParallelEnv, alg::PPO{T}, 
                     continue_training = false
                     break
                 end
-                Lux.Training.apply_gradients!(train_state, grads)
+                @timeit to "apply_gradients" Lux.Training.apply_gradients!(train_state, grads)
+
                 add_gradient_update!(agent)
                 push!(entropy, stats["entropy"])
                 push!(entropy_losses, stats["entropy_loss"])
@@ -228,18 +239,20 @@ function learn!(agent::ActorCriticAgent, env::AbstractParallelEnv, alg::PPO{T}, 
         end
 
         if !isnothing(agent.logger)
-            logger = agent.logger::TensorBoardLogger.TBLogger #to satisfy JET
-            log_value(logger, "train/entropy_loss", total_entropy_losses[i])
-            log_value(logger, "train/explained_variance", explained_variance)
-            log_value(logger, "train/policy_loss", total_policy_losses[i])
-            log_value(logger, "train/value_loss", total_value_losses[i])
-            log_value(logger, "train/approx_kl_div", total_approx_kl_divs[i])
-            log_value(logger, "train/clip_fraction", total_clip_fractions[i])
-            log_value(logger, "train/loss", total_losses[i])
-            log_value(logger, "train/grad_norm", total_grad_norms[i])
-            log_value(logger, "train/learning_rate", learning_rate)
-            if haskey(train_state.parameters, :log_std)
-                log_value(logger, "train/std", mean(exp.(train_state.parameters[:log_std])))
+            @timeit to "logging" begin
+                logger = agent.logger::TensorBoardLogger.TBLogger #to satisfy JET
+                log_value(logger, "train/entropy_loss", total_entropy_losses[i])
+                log_value(logger, "train/explained_variance", explained_variance)
+                log_value(logger, "train/policy_loss", total_policy_losses[i])
+                log_value(logger, "train/value_loss", total_value_losses[i])
+                log_value(logger, "train/approx_kl_div", total_approx_kl_divs[i])
+                log_value(logger, "train/clip_fraction", total_clip_fractions[i])
+                log_value(logger, "train/loss", total_losses[i])
+                log_value(logger, "train/grad_norm", total_grad_norms[i])
+                log_value(logger, "train/learning_rate", learning_rate)
+                if haskey(train_state.parameters, :log_std)
+                    log_value(logger, "train/std", mean(exp.(train_state.parameters[:log_std])))
+                end
             end
         end
     end
@@ -258,12 +271,17 @@ function learn!(agent::ActorCriticAgent, env::AbstractParallelEnv, alg::PPO{T}, 
         "learning_rates" => learning_rates
     )
     if !isnothing(callbacks)
-        if !all(c -> on_training_end(c, Base.@locals), callbacks)
-            @warn "Training stopped due to callback failure"
-            return nothing
+        @timeit to "callback: training_end" begin
+            if !all(c -> on_training_end(c, Base.@locals), callbacks)
+                @warn "Training stopped due to callback failure"
+                return nothing
+            end
         end
     end
-    return learn_stats
+    if agent.verbose ≥ 2
+        print_timer(to)
+    end
+    return learn_stats, to
 end
 
 function normalize(advantages::Vector{T}) where {T}
