@@ -239,20 +239,18 @@ function learn!(agent::ActorCriticAgent, env::AbstractParallelEnv, alg::PPO{T}, 
         end
 
         if !isnothing(agent.logger)
-            @timeit to "logging" begin
-                logger = agent.logger::TensorBoardLogger.TBLogger #to satisfy JET
-                log_value(logger, "train/entropy_loss", total_entropy_losses[i])
-                log_value(logger, "train/explained_variance", explained_variance)
-                log_value(logger, "train/policy_loss", total_policy_losses[i])
-                log_value(logger, "train/value_loss", total_value_losses[i])
-                log_value(logger, "train/approx_kl_div", total_approx_kl_divs[i])
-                log_value(logger, "train/clip_fraction", total_clip_fractions[i])
-                log_value(logger, "train/loss", total_losses[i])
-                log_value(logger, "train/grad_norm", total_grad_norms[i])
-                log_value(logger, "train/learning_rate", learning_rate)
-                if haskey(train_state.parameters, :log_std)
-                    log_value(logger, "train/std", mean(exp.(train_state.parameters[:log_std])))
-                end
+            logger = agent.logger::TensorBoardLogger.TBLogger #to satisfy JET
+            log_value(logger, "train/entropy_loss", total_entropy_losses[i])
+            log_value(logger, "train/explained_variance", explained_variance)
+            log_value(logger, "train/policy_loss", total_policy_losses[i])
+            log_value(logger, "train/value_loss", total_value_losses[i])
+            log_value(logger, "train/approx_kl_div", total_approx_kl_divs[i])
+            log_value(logger, "train/clip_fraction", total_clip_fractions[i])
+            log_value(logger, "train/loss", total_losses[i])
+            log_value(logger, "train/grad_norm", total_grad_norms[i])
+            log_value(logger, "train/learning_rate", learning_rate)
+            if haskey(train_state.parameters, :log_std)
+                log_value(logger, "train/std", mean(exp.(train_state.parameters[:log_std])))
             end
         end
     end
