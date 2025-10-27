@@ -57,7 +57,13 @@ export learn!, PPO, load_policy_params_and_state!
 include("callbacks.jl")
 export AbstractCallback, on_training_start, on_training_end, on_rollout_start, on_rollout_end, on_step
 
-include("environment_tools.jl")
+include("environment_wrappers/scalingWrapperEnv.jl")
+include("environment_wrappers/normalizeWrapperEnv.jl")
+include("environment_wrappers/multithreadedParallelEnv.jl")
+include("environment_wrappers/broadcastedParallelEnv.jl")
+include("environment_wrappers/multiAgentParallelEnv.jl")
+include("environment_wrappers/monitorWrapperEnv.jl")
+include("environment_wrappers/wrapper_utils.jl")
 export MultiThreadedParallelEnv, BroadcastedParallelEnv, ScalingWrapperEnv, NormalizeWrapperEnv, RunningMeanStd
 export save_normalization_stats, load_normalization_stats!, set_training, is_training
 export get_original_obs, get_original_rewards, normalize_obs!, normalize_rewards!, unnormalize_obs!, unnormalize_rewards!
