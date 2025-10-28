@@ -20,18 +20,13 @@ function ActorCriticAgent(
         optimizer_type::Type{<:Optimisers.AbstractRule} = Optimisers.Adam,
         stats_window::Int = 100, #TODO not used
         verbose::Int = 1,
-        log_dir::Union{Nothing, String} = nothing,
+        logger = NoTrainingLogger(),
         rng::AbstractRNG = Random.default_rng()
     )
 
     optimizer = make_optimizer(optimizer_type, alg)
     ps, st = Lux.setup(rng, policy)
     # @show ps.log_std
-    if !isnothing(log_dir)
-        logger = TBLogger(log_dir, tb_increment)
-    else
-        logger = nothing
-    end
     train_state = Lux.Training.TrainState(policy, ps, st, optimizer)
     return ActorCriticAgent(
         policy, train_state, optimizer_type, stats_window,
@@ -124,12 +119,9 @@ function learn!(agent::ActorCriticAgent, env::AbstractParallelEnv, alg::PPO{T}, 
         push!(total_fps, fps)
         add_step!(agent, n_steps * n_envs)
 
-        if !isnothing(agent.logger)
-            logger = agent.logger::TensorBoardLogger.TBLogger
-            set_step!(logger, steps_taken(agent))
-            log_value(logger, "env/fps", fps)
-            log_stats(env, logger)
-        end
+        increment_step!(agent.logger, n_steps * n_envs)
+        log_scalar!(agent.logger, "env/fps", fps)
+        log_stats(env, agent.logger)
 
         if !isnothing(callbacks)
             @timeit to "callback: rollout_end" begin
@@ -238,20 +230,17 @@ function learn!(agent::ActorCriticAgent, env::AbstractParallelEnv, alg::PPO{T}, 
             ProgressMeter.next!(progress_meter, step = n_steps * n_envs)
         end
 
-        if !isnothing(agent.logger)
-            logger = agent.logger::TensorBoardLogger.TBLogger #to satisfy JET
-            log_value(logger, "train/entropy_loss", total_entropy_losses[i])
-            log_value(logger, "train/explained_variance", explained_variance)
-            log_value(logger, "train/policy_loss", total_policy_losses[i])
-            log_value(logger, "train/value_loss", total_value_losses[i])
-            log_value(logger, "train/approx_kl_div", total_approx_kl_divs[i])
-            log_value(logger, "train/clip_fraction", total_clip_fractions[i])
-            log_value(logger, "train/loss", total_losses[i])
-            log_value(logger, "train/grad_norm", total_grad_norms[i])
-            log_value(logger, "train/learning_rate", learning_rate)
-            if haskey(train_state.parameters, :log_std)
-                log_value(logger, "train/std", mean(exp.(train_state.parameters[:log_std])))
-            end
+        log_scalar!(agent.logger, "train/entropy_loss", total_entropy_losses[i])
+        log_scalar!(agent.logger, "train/explained_variance", explained_variance)
+        log_scalar!(agent.logger, "train/policy_loss", total_policy_losses[i])
+        log_scalar!(agent.logger, "train/value_loss", total_value_losses[i])
+        log_scalar!(agent.logger, "train/approx_kl_div", total_approx_kl_divs[i])
+        log_scalar!(agent.logger, "train/clip_fraction", total_clip_fractions[i])
+        log_scalar!(agent.logger, "train/loss", total_losses[i])
+        log_scalar!(agent.logger, "train/grad_norm", total_grad_norms[i])
+        log_scalar!(agent.logger, "train/learning_rate", learning_rate)
+        if haskey(train_state.parameters, :log_std)
+            log_scalar!(agent.logger, "train/std", mean(exp.(train_state.parameters[:log_std])))
         end
     end
     agent.train_state = train_state

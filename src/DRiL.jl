@@ -17,7 +17,6 @@ using Reexport
 using Random
 using Statistics
 using StatsBase: sample
-using TensorBoardLogger
 using TimerOutputs
 using FileIO
 using JLD2
@@ -30,7 +29,7 @@ export AbstractEnv, AbstractParallelEnv, AbstractAgent, AbstractBuffer, Abstract
 export AbstractEntropyTarget, FixedEntropyTarget, AutoEntropyTarget
 export AbstractEntropyCoefficient, FixedEntropyCoefficient, AutoEntropyCoefficient
 export reset!, act!, observe, terminated, truncated, action_space, observation_space, get_info, number_of_envs
-
+export AbstractTrainingLogger, set_step!, increment_step!, log_scalar!, log_dict!, flush!, close!
 
 include("spaces.jl")
 export AbstractSpace, Box, Discrete
@@ -74,8 +73,11 @@ export MultiAgentParallelEnv
 include("utils.jl")
 export collect_trajectory
 
-include("logging.jl")
-export get_hparams
+
+# New logging interface and no-op logger; concrete backends provided via package extensions
+include("logging/logging_utils.jl")
+include("logging/no_training_logger.jl")
+export get_hparams, NoTrainingLogger
 
 include("env_checker.jl")
 export check_env

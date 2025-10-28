@@ -33,12 +33,12 @@ Agent for Actor-Critic algorithms
         2: progress bar and stats
         
 """
-mutable struct ActorCriticAgent{P <: AbstractActorCriticPolicy, R <: AbstractRNG} <: AbstractAgent
+mutable struct ActorCriticAgent{P <: AbstractActorCriticPolicy, R <: AbstractRNG, L <: AbstractTrainingLogger} <: AbstractAgent
     policy::P
     train_state::Lux.Training.TrainState
     optimizer_type::Type{<:Optimisers.AbstractRule}
     stats_window::Int
-    logger::Union{Nothing, TensorBoardLogger.TBLogger}
+    logger::L
     verbose::Int
     rng::R
     stats::AgentStats

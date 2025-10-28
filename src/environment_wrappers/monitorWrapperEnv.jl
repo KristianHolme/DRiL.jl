@@ -61,15 +61,15 @@ end
 
 unwrap(env::MonitorWrapperEnv) = env.env
 
-function log_stats(env::MonitorWrapperEnv{E, T}, logger::TensorBoardLogger.TBLogger) where {E, T}
+function log_stats(env::MonitorWrapperEnv{E, T}, logger::AbstractTrainingLogger) where {E, T}
     if length(env.episode_stats.episode_returns) > 0
-        log_value(logger, "env/ep_rew_mean", mean(env.episode_stats.episode_returns))
-        log_value(logger, "env/ep_len_mean", mean(env.episode_stats.episode_lengths))
+        log_scalar!(logger, "env/ep_rew_mean", mean(env.episode_stats.episode_returns))
+        log_scalar!(logger, "env/ep_len_mean", mean(env.episode_stats.episode_lengths))
     end
     return nothing
 end
 
-function log_stats(env::AbstractParallelEnvWrapper, logger::AbstractLogger)
+function log_stats(env::AbstractParallelEnvWrapper, logger::AbstractTrainingLogger)
     return log_stats(unwrap(env), logger)
 end
 

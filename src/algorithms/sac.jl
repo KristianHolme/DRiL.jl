@@ -125,15 +125,15 @@ function (alg::SAC)(::ContinuousActorCriticPolicy, ps, st, batch_data)
 end
 
 # SACAgent and related helper functions moved from agents.jl
-mutable struct SACAgent{R <: AbstractRNG} <: AbstractAgent
-    policy::ContinuousActorCriticPolicy
+mutable struct SACAgent{P <: ContinuousActorCriticPolicy, R <: AbstractRNG, L <: AbstractTrainingLogger} <: AbstractAgent
+    policy::P
     train_state::Lux.Training.TrainState
     Q_target_parameters::ComponentArray
     Q_target_states::NamedTuple
     ent_train_state::Lux.Training.TrainState
     optimizer_type::Type{<:Optimisers.AbstractRule}
     stats_window::Int
-    logger::Union{Nothing, TensorBoardLogger.TBLogger}
+    logger::L
     verbose::Int
     rng::R
     stats::AgentStats
@@ -143,17 +143,13 @@ function SACAgent(
         policy::ContinuousActorCriticPolicy,
         alg::SAC;
         optimizer_type::Type{<:Optimisers.AbstractRule} = Optimisers.Adam,
-        log_dir::Union{Nothing, String} = nothing,
+        logger = NoTrainingLogger(),
         stats_window::Int = 100,
         rng::AbstractRNG = Random.default_rng(),
         verbose::Int = 1
     )
     ps, st = Lux.setup(rng, policy)
-    if !isnothing(log_dir)
-        logger = TBLogger(log_dir)
-    else
-        logger = nothing
-    end
+    # logger is provided by caller
     optimizer = make_optimizer(optimizer_type, alg)
     train_state = Lux.Training.TrainState(policy, ps, st, optimizer)
     Q_target_parameters = copy_critic_parameters(policy, ps)
@@ -305,10 +301,7 @@ function collect_rollout!(
     actions = [traj.actions for traj in trajectories]
     stacked_actions = reduce(hcat, stack.(actions))
     mean_abs_action = mean(abs, stacked_actions)
-    if !isnothing(agent.logger)
-        logger = agent.logger::TensorBoardLogger.TBLogger
-        log_value(logger, "train/mean_abs_action", mean_abs_action)
-    end
+    log_scalar!(agent.logger, "train/mean_abs_action", mean_abs_action)
 
     for traj in trajectories
         push!(buffer, traj)
@@ -334,44 +327,41 @@ function SACTrainingStats{T}() where {T <: AbstractFloat}
 end
 
 function log_sac_training!(agent::SACAgent, stats::SACTrainingStats, step::Int, env::AbstractParallelEnv)
-    if !isnothing(agent.logger)
-        logger = agent.logger::TensorBoardLogger.TBLogger
-        set_step!(logger, step)
-        if !isempty(stats.actor_losses)
-            log_value(logger, "train/actor_loss", stats.actor_losses[end])
-        end
-        if !isempty(stats.critic_losses)
-            log_value(logger, "train/critic_loss", stats.critic_losses[end])
-        end
-        if !isempty(stats.entropy_losses)
-            log_value(logger, "train/entropy_loss", stats.entropy_losses[end])
-        end
-        if !isempty(stats.entropy_coefficients)
-            log_value(logger, "train/entropy_coefficient", stats.entropy_coefficients[end])
-        end
-        if !isempty(stats.q_values)
-            log_value(logger, "train/q_values", stats.q_values[end])
-        end
-        if !isempty(stats.learning_rates)
-            log_value(logger, "train/learning_rate", stats.learning_rates[end])
-        end
-        if !isempty(stats.grad_norms)
-            log_value(logger, "train/grad_norm", stats.grad_norms[end])
-        end
-        if !isempty(stats.fps)
-            log_value(logger, "env/fps", stats.fps[end])
-        end
-        log_value(logger, "train/total_steps", steps_taken(agent))
-
-        # Log mean std (exp of log_std) if present, consistent with PPO logging
-        if haskey(agent.train_state.parameters, :log_std)
-            mean_std = Statistics.mean(exp.(agent.train_state.parameters[:log_std]))
-            log_value(logger, "train/std", mean_std)
-        end
-
-        # Log episode statistics
-        log_stats(env, logger)
+    set_step!(agent.logger, step)
+    if !isempty(stats.actor_losses)
+        log_scalar!(agent.logger, "train/actor_loss", stats.actor_losses[end])
     end
+    if !isempty(stats.critic_losses)
+        log_scalar!(agent.logger, "train/critic_loss", stats.critic_losses[end])
+    end
+    if !isempty(stats.entropy_losses)
+        log_scalar!(agent.logger, "train/entropy_loss", stats.entropy_losses[end])
+    end
+    if !isempty(stats.entropy_coefficients)
+        log_scalar!(agent.logger, "train/entropy_coefficient", stats.entropy_coefficients[end])
+    end
+    if !isempty(stats.q_values)
+        log_scalar!(agent.logger, "train/q_values", stats.q_values[end])
+    end
+    if !isempty(stats.learning_rates)
+        log_scalar!(agent.logger, "train/learning_rate", stats.learning_rates[end])
+    end
+    if !isempty(stats.grad_norms)
+        log_scalar!(agent.logger, "train/grad_norm", stats.grad_norms[end])
+    end
+    if !isempty(stats.fps)
+        log_scalar!(agent.logger, "env/fps", stats.fps[end])
+    end
+    log_scalar!(agent.logger, "train/total_steps", steps_taken(agent))
+
+    # Log mean std (exp of log_std) if present, consistent with PPO logging
+    if haskey(agent.train_state.parameters, :log_std)
+        mean_std = Statistics.mean(exp.(agent.train_state.parameters[:log_std]))
+        log_scalar!(agent.logger, "train/std", mean_std)
+    end
+
+    # Log episode statistics
+    log_stats(env, agent.logger)
     return nothing
 end
 
@@ -476,6 +466,7 @@ function learn!(
         #set steps to train_freq after first (potentially larger) rollout
         push!(training_stats.fps, fps)
         add_step!(agent, n_steps * n_envs)
+        increment_step!(agent.logger, n_steps * n_envs)
         n_steps = alg.train_freq
 
         # Perform gradient updates
