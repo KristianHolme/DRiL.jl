@@ -2,7 +2,7 @@ module DRiL_WandbExt
 
 using DRiL
 using Wandb
-import DRiL: AbstractTrainingLogger, set_step!, increment_step!, log_scalar!, log_dict!, write_hparams!, flush!, close!
+import DRiL: AbstractTrainingLogger, set_step!, increment_step!, log_scalar!, log_dict!, log_hparams!, flush!, close!
 
 mutable struct WandbBackend <: AbstractTrainingLogger
     wb::Wandb.WandbLogger
@@ -28,7 +28,7 @@ function DRiL.log_dict!(lg::WandbBackend, kv::AbstractDict{<:AbstractString, <:A
     return nothing
 end
 
-function DRiL.write_hparams!(lg::WandbBackend, hparams::AbstractDict{<:AbstractString, <:Any}, metrics::AbstractVector{<:AbstractString})
+function DRiL.log_hparams!(lg::WandbBackend, hparams::AbstractDict{<:AbstractString, <:Any}, metrics::AbstractVector{<:AbstractString})
     # Wandb hyperparameter logging using update_config! as per Wandb.jl API
     config_dict = Dict{String, Any}()
     for (k, v) in hparams

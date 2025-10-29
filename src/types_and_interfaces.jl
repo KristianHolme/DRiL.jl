@@ -195,11 +195,11 @@ Log multiple metrics at once from a string-keyed dictionary.
 function log_dict! end
 
 """
-    write_hparams!(logger::AbstractTrainingLogger, hparams::AbstractDict{<:AbstractString,<:Any}, metrics::AbstractVector{<:AbstractString})
+    log_hparams!(logger::AbstractTrainingLogger, hparams::AbstractDict{<:AbstractString,<:Any}, metrics::AbstractVector{<:AbstractString})
 
 Write hyperparameters and associate them with specified metrics for hyperparameter tuning.
 """
-function write_hparams! end
+function log_hparams! end
 
 """
     flush!(logger::AbstractTrainingLogger)

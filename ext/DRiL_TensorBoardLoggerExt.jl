@@ -2,7 +2,7 @@ module DRiL_TensorBoardLoggerExt
 
 using DRiL
 using TensorBoardLogger
-import DRiL: AbstractTrainingLogger, set_step!, increment_step!, log_scalar!, log_dict!, write_hparams!, flush!, close!
+import DRiL: AbstractTrainingLogger, set_step!, increment_step!, log_scalar!, log_dict!, log_hparams!, flush!, close!
 
 mutable struct TBLoggerBackend <: AbstractTrainingLogger
     tb::TensorBoardLogger.TBLogger
@@ -33,7 +33,7 @@ function DRiL.log_dict!(lg::TBLoggerBackend, kv::AbstractDict{<:AbstractString, 
     return nothing
 end
 
-function DRiL.write_hparams!(lg::TBLoggerBackend, hparams::AbstractDict{<:AbstractString, <:Any}, metrics::AbstractVector{<:AbstractString})
+function DRiL.log_hparams!(lg::TBLoggerBackend, hparams::AbstractDict{<:AbstractString, <:Any}, metrics::AbstractVector{<:AbstractString})
     # TensorBoard hparam logging using write_hparams! as per TensorBoardLogger.jl API
     hparams_dict = Dict(string(k) => v for (k, v) in hparams)
     TensorBoardLogger.write_hparams!(lg.tb, hparams_dict, String.(metrics))

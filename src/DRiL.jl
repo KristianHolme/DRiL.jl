@@ -29,7 +29,7 @@ export AbstractEnv, AbstractParallelEnv, AbstractAgent, AbstractBuffer, Abstract
 export AbstractEntropyTarget, FixedEntropyTarget, AutoEntropyTarget
 export AbstractEntropyCoefficient, FixedEntropyCoefficient, AutoEntropyCoefficient
 export reset!, act!, observe, terminated, truncated, action_space, observation_space, get_info, number_of_envs
-export AbstractTrainingLogger, set_step!, increment_step!, log_scalar!, log_dict!, flush!, close!
+export AbstractTrainingLogger, set_step!, increment_step!, log_scalar!, log_dict!, flush!, close!, log_hparams!
 
 include("spaces.jl")
 export AbstractSpace, Box, Discrete
