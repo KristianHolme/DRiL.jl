@@ -221,92 +221,11 @@ function predict_actions(
     return actions
 end
 
-function collect_trajectories(
-        agent::SACAgent, alg::SAC, env::AbstractParallelEnv, n_steps::Int,
-        progress_meter::Union{Progress, Nothing} = nothing;
-        callbacks::Union{Vector{<:AbstractCallback}, Nothing} = nothing,
-        use_random_actions::Bool = false
-    )
+# collect_trajectories and collect_rollout! are now in buffers/off_policy_collection.jl
 
-    trajectories = OffPolicyTrajectory[]
-    obs_space = observation_space(env)
-    act_space = action_space(env)
-    n_envs = number_of_envs(env)
-    current_trajectories = [OffPolicyTrajectory(obs_space, act_space) for _ in 1:n_envs]
-    new_obs = observe(env)
-    for i in 1:n_steps
-        if !isnothing(callbacks)
-            if !all(c -> on_step(c, Base.@locals), callbacks)
-                @warn "Collecting trajectories stopped due to callback failure"
-                return trajectories, false
-            end
-        end
-        observations = new_obs
-        if use_random_actions
-            @assert observations isa AbstractVector
-            actions = rand(agent.rng, act_space, length(observations))
-            processed_actions = actions  # already in env space
-        else
-            actions = predict_actions(agent, observations; raw = true)
-            processed_actions = process_action.(actions, Ref(act_space), Ref(alg))
-        end
-        rewards, terminateds, truncateds, infos = act!(env, processed_actions)
-        new_obs = observe(env)
-        for j in 1:n_envs
-            push!(current_trajectories[j].observations, observations[j])
-            push!(current_trajectories[j].actions, actions[j]) #store unprocessed actions
-            push!(current_trajectories[j].rewards, rewards[j])
-            if terminateds[j] || truncateds[j] || i == n_steps
-                current_trajectories[j].terminated = terminateds[j]
-                current_trajectories[j].truncated = truncateds[j]
-
-                # Handle bootstrapping for truncated episodes
-                if truncateds[j] && haskey(infos[j], "terminal_observation")
-                    last_observation = infos[j]["terminal_observation"]
-                    current_trajectories[j].truncated_observation = last_observation
-                end
-
-                # Handle bootstrapping for rollout-limited trajectories (neither terminated nor truncated)
-                # We need to bootstrap with the value of the current observation
-                if !terminateds[j] && !truncateds[j] && i == n_steps
-                    # Get the next observation after last step (which is the current state)
-                    next_obs = new_obs[j]
-                    current_trajectories[j].truncated_observation = next_obs
-                end
-
-                push!(trajectories, current_trajectories[j])
-                current_trajectories[j] = OffPolicyTrajectory(obs_space, act_space)
-            end
-        end
-        !isnothing(progress_meter) && next!(progress_meter, step = number_of_envs(env))
-    end
-    return trajectories, true
-end
-
-function collect_rollout!(
-        buffer::ReplayBuffer, agent::SACAgent, alg::SAC, env::AbstractParallelEnv,
-        n_steps::Int, progress_meter::Union{Progress, Nothing} = nothing; kwargs...
-    )
-    t_start = time()
-    trajectories, success = collect_trajectories(agent, alg, env, n_steps, progress_meter; kwargs...)
-    t_collect = time() - t_start
-    total_steps = sum(length.(trajectories))
-    fps = total_steps / t_collect
-    if !success
-        @warn "Collecting trajectories stopped due to callback failure"
-        return fps, false
-    end
-
-    #log mean absolute action
-    actions = [traj.actions for traj in trajectories]
-    stacked_actions = reduce(hcat, stack.(actions))
-    mean_abs_action = mean(abs, stacked_actions)
-    log_scalar!(agent.logger, "train/mean_abs_action", mean_abs_action)
-
-    for traj in trajectories
-        push!(buffer, traj)
-    end
-    return fps, true
+# SACAgent supports raw actions for off-policy collection
+function predict_actions_raw(agent::SACAgent, observations::AbstractVector)
+    return predict_actions(agent, observations; raw = true)
 end
 
 # Clean logging structure for SAC
