@@ -2,7 +2,7 @@ module DRiL_WandbExt
 
 using DRiL
 using Wandb
-import DRiL: AbstractTrainingLogger, set_step!, increment_step!, log_scalar!, log_dict!, flush!, close!
+import DRiL: AbstractTrainingLogger, set_step!, increment_step!, log_scalar!, log_dict!, write_hparams!, flush!, close!
 
 mutable struct WandbBackend <: AbstractTrainingLogger
     wb::Wandb.WandbLogger
@@ -25,6 +25,17 @@ function DRiL.log_dict!(lg::WandbBackend, kv::AbstractDict{<:AbstractString, <:A
         d[string(k)] = v
     end
     Wandb.log(lg.wb, d)
+    return nothing
+end
+
+function DRiL.write_hparams!(lg::WandbBackend, hparams::AbstractDict{<:AbstractString, <:Any}, metrics::AbstractVector{<:AbstractString})
+    # Wandb hyperparameter logging using update_config! as per Wandb.jl API
+    config_dict = Dict{String, Any}()
+    for (k, v) in hparams
+        config_dict[string(k)] = v
+    end
+    # Wandb doesn't require explicit metric association like TensorBoard
+    Wandb.update_config!(lg.wb, config_dict)
     return nothing
 end
 
