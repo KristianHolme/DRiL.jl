@@ -23,8 +23,8 @@ DRiL.jl is a prototype DRL package, aiming to be fast, flexible, and easy to use
 - SAC (Soft Actor-Critic)
 
 ## Core Components
-The DRiL.jl package is built around the following core components: **Environments**, **Policies**, **Agents**, and **Algorithms**.
-The environment is the system we are interested in controlling, the policy is the neural network(s) that we use to control it, the agent manages the training of the policy, and the algorithm influences the many aspects of the training process, most notably the loss function.
+The DRiL.jl package is built around the following core components: **Environments**, **Models**, **Agents**, and **Algorithms**.
+The environment is the system we are interested in controlling, the model is the (actor–critic) neural network(s) used for control, the agent manages training, and the algorithm specifies the training procedure and loss.
 
 ## Installation
 
@@ -40,44 +40,37 @@ Here's a complete example training a PPO agent on the CartPole environment:
 ```julia
 using DRiL
 using Pkg
-Pkg.add("https://github.com/KristianHolme/ClassicControlEnvironments.jl")
+Pkg.add(url="https://github.com/KristianHolme/ClassicControlEnvironments.jl")
 using ClassicControlEnvironments
 using Random
 
-# Wrap environment for parallel execution (using 4 parallel environments)
+## Environment
 parallel_env = MultiThreadedParallelEnv([CartPoleEnv() for _ in 1:4])
 
-# Create a discrete actor-critic policy
-policy = DiscreteActorCriticPolicy(
-    observation_space(env), 
-    action_space(env)
+## Actor-Critic Layer (training-time)
+model = ActorCriticLayer(
+    observation_space(parallel_env), 
+    action_space(parallel_env)
 )
 
-# Create an agent with the policy
-agent = ActorCriticAgent(
-    policy,
-    n_steps=2048,        # Steps per rollout
-    batch_size=64,       # Minibatch size
-    epochs=10,          # Optimization epochs per update
-    learning_rate=3f-4, # Learning rate
-    verbose=2          # Enable progress bars, stats and timer output
-)
-
-# Configure PPO algorithm
+## Algorithm
 ppo = PPO(
-    gamma=0.99f0,         # Discount factor
-    gae_lambda=0.95f0,    # GAE parameter
-    clip_range=0.2f0,     # PPO clipping parameter
-    ent_coef=0.01f0,      # Entropy bonus coefficient
-    vf_coef=0.5f0,        # Value function loss coefficient
+    gamma=0.99f0,
+    gae_lambda=0.95f0,
+    clip_range=0.2f0,
+    ent_coef=0.01f0,
+    vf_coef=0.5f0,
     normalize_advantage=true
 )
 
-# Train the agent
-max_steps = 100_000
-learn_stats, to = learn!(agent, parallel_env, ppo; max_steps)
+## Agent (simple unified constructor)
+agent = Agent(model, ppo; verbose=2)
 
-# Evaluate the trained agent
+## Train
+max_steps = 100_000
+learn_stats, to = learn!(agent, parallel_env; max_steps)
+
+## Evaluate the trained agent
 eval_env = CartPoleEnv(max_steps=500)
 eval_stats = evaluate_agent(agent, eval_env, n_episodes=10, deterministic=true)
 
@@ -122,14 +115,26 @@ env = MonitorWrapperEnv(env)
 env = ScalingWrapperEnv(env)
 ```
 
-### Custom Network Architectures
+### Custom Layer Architectures
 
 ```julia
-# Custom policy with different hidden dimensions
-policy = DiscreteActorCriticPolicy(
+model = ActorCriticLayer(
     obs_space,
-    act_space, 
+    act_space,
     hidden_dims=[128, 128, 64],  # Larger network
     activation=relu,              # Different activation
 )
 ```
+
+### Deployment (lightweight policy)
+
+```julia
+# Extract a deployment-time policy (actor-only)
+dp = extract_policy(agent)
+
+# Predict env-ready actions
+env_actions = predict(dp, batch_of_obs; deterministic=true)
+```
+
+Notes:
+- Action conversion (policy-space → env-space) is handled automatically via algorithm-selected adapters (no user code required).

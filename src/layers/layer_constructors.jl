@@ -1,6 +1,6 @@
-# Policy constructor functions
+# Actor-critic layer constructor functions
 
-function ContinuousActorCriticPolicy(
+function ContinuousActorCriticLayer(
         observation_space::Union{Discrete, Box{T}},
         action_space::Box{T};
         log_std_init = T(0),
@@ -30,7 +30,7 @@ function ContinuousActorCriticPolicy(
     # Choose feature sharing type based on boolean flag
     F = shared_features ? SharedFeatures : SeparateFeatures
 
-    return ContinuousActorCriticPolicy{
+    return ContinuousActorCriticLayer{
         typeof(observation_space),
         typeof(action_space),
         StateIndependantNoise,
@@ -50,7 +50,7 @@ function ContinuousActorCriticPolicy(
     )
 end
 
-function DiscreteActorCriticPolicy(
+function DiscreteActorCriticLayer(
         observation_space::Union{Discrete, Box},
         action_space::Discrete; hidden_dims = [64, 64], activation = tanh,
         shared_features::Bool = true
@@ -75,7 +75,7 @@ function DiscreteActorCriticPolicy(
     # Choose feature sharing type based on boolean flag
     F = shared_features ? SharedFeatures : SeparateFeatures
 
-    return DiscreteActorCriticPolicy{
+    return DiscreteActorCriticLayer{
         typeof(observation_space),
         typeof(action_space),
         F,
@@ -89,9 +89,8 @@ function DiscreteActorCriticPolicy(
 end
 
 
-# Convenience constructors that maintain the old interface
-ActorCriticPolicy(observation_space::Union{Discrete, Box}, action_space::Box; kwargs...) =
-    ContinuousActorCriticPolicy(observation_space, action_space; kwargs...)
-ActorCriticPolicy(observation_space::Union{Discrete, Box}, action_space::Discrete; kwargs...) =
-    DiscreteActorCriticPolicy(observation_space, action_space; kwargs...)
-
+# Unified constructor name
+ActorCriticLayer(observation_space::Union{Discrete, Box}, action_space::Box; kwargs...) =
+    ContinuousActorCriticLayer(observation_space, action_space; kwargs...)
+ActorCriticLayer(observation_space::Union{Discrete, Box}, action_space::Discrete; kwargs...) =
+    DiscreteActorCriticLayer(observation_space, action_space; kwargs...)

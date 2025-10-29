@@ -35,12 +35,14 @@ Agent for Actor-Critic algorithms
         2: progress bar and stats
         
 """
-mutable struct ActorCriticAgent{P <: AbstractActorCriticPolicy, R <: AbstractRNG, L <: AbstractTrainingLogger} <: AbstractAgent
-    policy::P
+mutable struct ActorCriticAgent{L <: AbstractActorCriticLayer, R <: AbstractRNG, LG <: AbstractTrainingLogger, A <: AbstractAlgorithm, AD <: AbstractActionAdapter} <: AbstractAgent
+    layer::L
+    algorithm::A
+    action_adapter::AD
     train_state::Lux.Training.TrainState
     optimizer_type::Type{<:Optimisers.AbstractRule}
     stats_window::Int
-    logger::L
+    logger::LG
     verbose::Int
     rng::R
     stats::AgentStats
@@ -50,4 +52,3 @@ add_step!(agent::ActorCriticAgent, steps::Int = 1) = add_step!(agent.stats, step
 add_gradient_update!(agent::ActorCriticAgent, updates::Int = 1) = add_gradient_update!(agent.stats, updates)
 steps_taken(agent::ActorCriticAgent) = steps_taken(agent.stats)
 gradient_updates(agent::ActorCriticAgent) = gradient_updates(agent.stats)
-

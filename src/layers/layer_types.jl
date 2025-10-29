@@ -1,6 +1,6 @@
-# Concrete policy type definitions
+# Concrete actor-critic layer type definitions
 
-struct ContinuousActorCriticPolicy{
+struct ContinuousActorCriticLayer{
         O <: AbstractSpace,
         A <: Box,
         N <: AbstractNoise,
@@ -10,7 +10,7 @@ struct ContinuousActorCriticPolicy{
         AH <: AbstractLuxLayer,
         CH <: AbstractLuxLayer,
         LS,
-    } <: AbstractActorCriticPolicy
+    } <: AbstractActorCriticLayer
     observation_space::O
     action_space::A
     feature_extractor::FE
@@ -19,11 +19,10 @@ struct ContinuousActorCriticPolicy{
     log_std_init::LS
 end
 
-struct DiscreteActorCriticPolicy{O <: AbstractSpace, A <: Discrete, F <: FeatureSharing, FE <: AbstractLuxLayer, AH <: AbstractLuxLayer, CH <: AbstractLuxLayer} <: AbstractActorCriticPolicy
+struct DiscreteActorCriticLayer{O <: AbstractSpace, A <: Discrete, F <: FeatureSharing, FE <: AbstractLuxLayer, AH <: AbstractLuxLayer, CH <: AbstractLuxLayer} <: AbstractActorCriticLayer
     observation_space::O
     action_space::A
     feature_extractor::FE
     actor_head::AH
     critic_head::CH
 end
-

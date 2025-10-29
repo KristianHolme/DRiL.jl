@@ -2,9 +2,9 @@
 
 # Helper function to get raw actions from agent (for off-policy algorithms)
 # Default: agents don't support raw actions
-# Agent-specific implementations (e.g., for SACAgent) should be defined in their respective algorithm files
+# Agent-specific implementations (e.g., for OffPolicyActorCriticAgent) should be defined in their respective algorithm files
 function predict_actions_raw(agent::AbstractAgent, observations::AbstractVector)
-    error("Agent $(typeof(agent)) does not support raw actions. Use an agent type that supports off-policy algorithms (e.g., SACAgent).")
+    error("Agent $(typeof(agent)) does not support raw actions. Use an off-policy actor-critic agent.")
 end
 
 """
@@ -56,7 +56,8 @@ function collect_trajectories(
         else
             # Get raw actions - will dispatch to agent-specific methods that support raw parameter
             actions = predict_actions_raw(agent, observations)
-            processed_actions = process_action.(actions, Ref(act_space), Ref(alg))
+            adapter = agent.action_adapter
+            processed_actions = to_env.(Ref(adapter), actions, Ref(act_space))
         end
         rewards, terminateds, truncateds, infos = act!(env, processed_actions)
         new_obs = observe(env)
@@ -133,4 +134,3 @@ function collect_rollout!(
     end
     return fps, true
 end
-

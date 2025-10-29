@@ -105,13 +105,13 @@ function get_critic_head(
     return get_mlp(latent_dim, 1, hidden_dims, activation, bias_init, hidden_init, output_init)
 end
 
-function zero_critic_grads!(critic_grad::ComponentArray, policy::ContinuousActorCriticPolicy{<:Any, <:Any, <:Any, <:Any, SharedFeatures})
+function zero_critic_grads!(critic_grad::ComponentArray, layer::ContinuousActorCriticLayer{<:Any, <:Any, <:Any, <:Any, SharedFeatures})
     names_to_zero = [:critic_head]
     zero_fields!(critic_grad, names_to_zero)
     return nothing
 end
 
-function zero_critic_grads!(critic_grad::ComponentArray, policy::ContinuousActorCriticPolicy{<:Any, <:Any, <:Any, <:Any, SeparateFeatures})
+function zero_critic_grads!(critic_grad::ComponentArray, layer::ContinuousActorCriticLayer{<:Any, <:Any, <:Any, <:Any, SeparateFeatures})
     names_to_zero = [:critic_head, :critic_feature_extractor]
     zero_fields!(critic_grad, names_to_zero)
     return nothing

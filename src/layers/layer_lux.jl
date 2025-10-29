@@ -1,7 +1,7 @@
-# Lux integration for policies
+# Lux integration for actor-critic layers
 
 #TODO: add ent_coef as parameter for Q-value critics?
-function Lux.initialparameters(rng::AbstractRNG, policy::ContinuousActorCriticPolicy{<:Any, <:Any, <:Any, <:Any, SharedFeatures, <:Any, <:Any, <:Any})
+function Lux.initialparameters(rng::AbstractRNG, policy::ContinuousActorCriticLayer{<:Any, <:Any, <:Any, <:Any, SharedFeatures, <:Any, <:Any, <:Any})
     feats_params = (feature_extractor = Lux.initialparameters(rng, policy.feature_extractor),)
     head_params = (
         actor_head = Lux.initialparameters(rng, policy.actor_head),
@@ -14,7 +14,7 @@ function Lux.initialparameters(rng::AbstractRNG, policy::ContinuousActorCriticPo
     return params
 end
 
-function Lux.initialparameters(rng::AbstractRNG, policy::ContinuousActorCriticPolicy{<:Any, <:Any, <:Any, <:Any, SeparateFeatures, <:Any, <:Any, <:Any})
+function Lux.initialparameters(rng::AbstractRNG, policy::ContinuousActorCriticLayer{<:Any, <:Any, <:Any, <:Any, SeparateFeatures, <:Any, <:Any, <:Any})
     feats_params = (
         actor_feature_extractor = Lux.initialparameters(rng, policy.feature_extractor),
         critic_feature_extractor = Lux.initialparameters(rng, policy.feature_extractor),
@@ -30,7 +30,7 @@ function Lux.initialparameters(rng::AbstractRNG, policy::ContinuousActorCriticPo
     return params
 end
 
-function Lux.initialparameters(rng::AbstractRNG, policy::DiscreteActorCriticPolicy{<:Any, <:Any, SharedFeatures, <:Any, <:Any, <:Any})
+function Lux.initialparameters(rng::AbstractRNG, policy::DiscreteActorCriticLayer{<:Any, <:Any, SharedFeatures, <:Any, <:Any, <:Any})
     feats_params = (feature_extractor = Lux.initialparameters(rng, policy.feature_extractor),)
     head_params = (
         actor_head = Lux.initialparameters(rng, policy.actor_head),
@@ -41,7 +41,7 @@ function Lux.initialparameters(rng::AbstractRNG, policy::DiscreteActorCriticPoli
     return params
 end
 
-function Lux.initialparameters(rng::AbstractRNG, policy::DiscreteActorCriticPolicy{<:Any, <:Any, SeparateFeatures, <:Any, <:Any, <:Any})
+function Lux.initialparameters(rng::AbstractRNG, policy::DiscreteActorCriticLayer{<:Any, <:Any, SeparateFeatures, <:Any, <:Any, <:Any})
     feats_params = (
         actor_feature_extractor = Lux.initialparameters(rng, policy.feature_extractor),
         critic_feature_extractor = Lux.initialparameters(rng, policy.feature_extractor),
@@ -55,7 +55,7 @@ function Lux.initialparameters(rng::AbstractRNG, policy::DiscreteActorCriticPoli
     return params
 end
 
-function Lux.initialstates(rng::AbstractRNG, policy::Union{ContinuousActorCriticPolicy{<:Any, <:Any, <:Any, <:Any, SharedFeatures, <:Any, <:Any, <:Any}, DiscreteActorCriticPolicy{<:Any, <:Any, SharedFeatures, <:Any, <:Any, <:Any}})
+function Lux.initialstates(rng::AbstractRNG, policy::Union{ContinuousActorCriticLayer{<:Any, <:Any, <:Any, <:Any, SharedFeatures, <:Any, <:Any, <:Any}, DiscreteActorCriticLayer{<:Any, <:Any, SharedFeatures, <:Any, <:Any, <:Any}})
     feats_states = (feature_extractor = Lux.initialstates(rng, policy.feature_extractor),)
     head_states = (
         actor_head = Lux.initialstates(rng, policy.actor_head),
@@ -65,7 +65,7 @@ function Lux.initialstates(rng::AbstractRNG, policy::Union{ContinuousActorCritic
     return states
 end
 
-function Lux.initialstates(rng::AbstractRNG, policy::Union{ContinuousActorCriticPolicy{<:Any, <:Any, <:Any, <:Any, SeparateFeatures, <:Any, <:Any, <:Any}, DiscreteActorCriticPolicy{<:Any, <:Any, SeparateFeatures, <:Any, <:Any, <:Any}})
+function Lux.initialstates(rng::AbstractRNG, policy::Union{ContinuousActorCriticLayer{<:Any, <:Any, <:Any, <:Any, SeparateFeatures, <:Any, <:Any, <:Any}, DiscreteActorCriticLayer{<:Any, <:Any, SeparateFeatures, <:Any, <:Any, <:Any}})
     feats_states = (
         actor_feature_extractor = Lux.initialstates(rng, policy.feature_extractor),
         critic_feature_extractor = Lux.initialstates(rng, policy.feature_extractor),
@@ -79,7 +79,7 @@ function Lux.initialstates(rng::AbstractRNG, policy::Union{ContinuousActorCritic
 end
 
 #TODO: add ent_coef as parameter for Q-value critics?
-function Lux.parameterlength(policy::ContinuousActorCriticPolicy{<:Any, <:Any, <:Any, <:Any, SharedFeatures, <:Any, <:Any, <:Any})
+function Lux.parameterlength(policy::ContinuousActorCriticLayer{<:Any, <:Any, <:Any, <:Any, SharedFeatures, <:Any, <:Any, <:Any})
     feats_len = Lux.parameterlength(policy.feature_extractor)
     head_len = Lux.parameterlength(policy.actor_head) +
         Lux.parameterlength(policy.critic_head)
@@ -87,7 +87,7 @@ function Lux.parameterlength(policy::ContinuousActorCriticPolicy{<:Any, <:Any, <
     return total_len
 end
 
-function Lux.parameterlength(policy::ContinuousActorCriticPolicy{<:Any, <:Any, <:Any, <:Any, SeparateFeatures, <:Any, <:Any, <:Any})
+function Lux.parameterlength(policy::ContinuousActorCriticLayer{<:Any, <:Any, <:Any, <:Any, SeparateFeatures, <:Any, <:Any, <:Any})
     feats_len = Lux.parameterlength(policy.feature_extractor) +
         Lux.parameterlength(policy.feature_extractor)
     head_len = Lux.parameterlength(policy.actor_head) +
@@ -96,14 +96,14 @@ function Lux.parameterlength(policy::ContinuousActorCriticPolicy{<:Any, <:Any, <
     return total_len
 end
 
-function Lux.parameterlength(policy::DiscreteActorCriticPolicy{<:Any, <:Any, SharedFeatures, <:Any, <:Any, <:Any})
+function Lux.parameterlength(policy::DiscreteActorCriticLayer{<:Any, <:Any, SharedFeatures, <:Any, <:Any, <:Any})
     feats_len = Lux.parameterlength(policy.feature_extractor)
     head_len = Lux.parameterlength(policy.actor_head) +
         Lux.parameterlength(policy.critic_head)
     return feats_len + head_len
 end
 
-function Lux.parameterlength(policy::DiscreteActorCriticPolicy{<:Any, <:Any, SeparateFeatures, <:Any, <:Any, <:Any})
+function Lux.parameterlength(policy::DiscreteActorCriticLayer{<:Any, <:Any, SeparateFeatures, <:Any, <:Any, <:Any})
     feats_len = Lux.parameterlength(policy.feature_extractor) +
         Lux.parameterlength(policy.feature_extractor)
     head_len = Lux.parameterlength(policy.actor_head) +
@@ -111,18 +111,17 @@ function Lux.parameterlength(policy::DiscreteActorCriticPolicy{<:Any, <:Any, Sep
     return feats_len + head_len
 end
 
-function Lux.statelength(policy::Union{ContinuousActorCriticPolicy{<:Any, <:Any, <:Any, <:Any, SharedFeatures, <:Any, <:Any, <:Any}, DiscreteActorCriticPolicy{<:Any, <:Any, SharedFeatures, <:Any, <:Any, <:Any}})
+function Lux.statelength(policy::Union{ContinuousActorCriticLayer{<:Any, <:Any, <:Any, <:Any, SharedFeatures, <:Any, <:Any, <:Any}, DiscreteActorCriticLayer{<:Any, <:Any, SharedFeatures, <:Any, <:Any, <:Any}})
     feats_len = Lux.statelength(policy.feature_extractor)
     head_len = Lux.statelength(policy.actor_head) +
         Lux.statelength(policy.critic_head)
     return feats_len + head_len
 end
 
-function Lux.statelength(policy::Union{ContinuousActorCriticPolicy{<:Any, <:Any, <:Any, <:Any, SeparateFeatures, <:Any, <:Any, <:Any}, DiscreteActorCriticPolicy{<:Any, <:Any, SeparateFeatures, <:Any, <:Any, <:Any}})
+function Lux.statelength(policy::Union{ContinuousActorCriticLayer{<:Any, <:Any, <:Any, <:Any, SeparateFeatures, <:Any, <:Any, <:Any}, DiscreteActorCriticLayer{<:Any, <:Any, SeparateFeatures, <:Any, <:Any, <:Any}})
     feats_len = Lux.statelength(policy.feature_extractor) +
         Lux.statelength(policy.feature_extractor)
     head_len = Lux.statelength(policy.actor_head) +
         Lux.statelength(policy.critic_head)
     return feats_len + head_len
 end
-

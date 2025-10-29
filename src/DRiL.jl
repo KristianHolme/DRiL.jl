@@ -31,26 +31,39 @@ export AbstractEntropyCoefficient, FixedEntropyCoefficient, AutoEntropyCoefficie
 export reset!, act!, observe, terminated, truncated, action_space, observation_space, get_info, number_of_envs
 export AbstractTrainingLogger, set_step!, increment_step!, log_scalar!, log_dict!, flush!, close!, log_hparams!
 export AbstractCallback, on_training_start, on_training_end, on_rollout_start, on_rollout_end, on_step
-export AbstractPolicy, AbstractActorCriticPolicy, AbstractNoise, CriticType, QCritic, VCritic
+export AbstractActorCriticLayer, AbstractNoise, CriticType, QCritic, VCritic
 export FeatureSharing, SharedFeatures, SeparateFeatures
 export OffPolicyAlgorithm, OnPolicyAlgorithm
 
 include("spaces.jl")
 export AbstractSpace, Box, Discrete
 
-include("policies/policies.jl")
-export ActorCriticPolicy, ContinuousActorCriticPolicy
-export DiscreteActorCriticPolicy, AbstractWeightInitializer
+include("adapters/default_adapters.jl")
+export AbstractActionAdapter, ClampAdapter, TanhScaleAdapter, DiscreteAdapter
+export to_env, from_env
+include("adapters/compat_shims.jl")
+
+include("layers/layers.jl")
+export ActorCriticLayer, ContinuousActorCriticLayer
+export DiscreteActorCriticLayer, AbstractWeightInitializer
 export OrthogonalInitializer, action_log_prob
+include("layers/layer_api.jl")
+export AbstractActorCriticLayer
+include("deployment/deployment_policy.jl")
+export extract_policy, predict
 
 include("agents/agents.jl")
 export ActorCriticAgent, predict_actions, predict_values, steps_taken
+include("agents/agent_factory.jl")
+export Agent
 
 include("buffers/buffers.jl")
 export Trajectory, RolloutBuffer, OffPolicyTrajectory, ReplayBuffer
 
+include("algorithms/traits.jl")
+
 include("algorithms/sac.jl")
-export SAC, SACAgent, SACPolicy
+export SAC, OffPolicyActorCriticAgent, SACPolicy
 
 include("algorithms/ppo.jl")
 export learn!, PPO, load_policy_params_and_state!

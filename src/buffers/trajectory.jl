@@ -39,7 +39,8 @@ function collect_trajectories(
         end
         observations = new_obs
         actions, values, logprobs = get_action_and_values(agent, observations)
-        processed_actions = process_action.(actions, Ref(act_space), Ref(alg))
+        adapter = agent.action_adapter
+        processed_actions = to_env.(Ref(adapter), actions, Ref(act_space))
         rewards, terminateds, truncateds, infos = act!(env, processed_actions)
         new_obs = observe(env)
         for j in 1:n_envs
@@ -99,4 +100,3 @@ function compute_advantages!(advantages::AbstractArray, traj::Trajectory, gamma:
 
     return nothing
 end
-

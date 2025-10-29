@@ -18,14 +18,14 @@ Get actions, values, and log probabilities for a vector of observations.
 """
 function get_action_and_values(agent::ActorCriticAgent, observations::AbstractVector)
     #TODO add !to name?
-    policy = agent.policy
+    layer = agent.layer
     train_state = agent.train_state
     ps = train_state.parameters
     st = train_state.states
     # Convert observations vector to batched matrix for policy
-    batched_obs = batch(observations, observation_space(policy))
+    batched_obs = batch(observations, observation_space(layer))
     #FIXME: type instability here, is policy not known??
-    actions, values, logprobs, st = policy(batched_obs, ps, st)
+    actions, values, logprobs, st = layer(batched_obs, ps, st)
     @reset train_state.states = st
     agent.train_state = train_state
     return actions, values, logprobs
@@ -45,13 +45,13 @@ Predict value estimates for a vector of observations.
 """
 function predict_values(agent::ActorCriticAgent, observations::AbstractVector)
     #TODO add !to name?
-    policy = agent.policy
+    layer = agent.layer
     train_state = agent.train_state
     ps = train_state.parameters
     st = train_state.states
     # Convert observations vector to batched matrix for policy
-    batched_obs = batch(observations, observation_space(policy))
-    values, st = predict_values(policy, batched_obs, ps, st)
+    batched_obs = batch(observations, observation_space(layer))
+    values, st = predict_values(layer, batched_obs, ps, st)
     @reset train_state.states = st
     agent.train_state = train_state
     return values
@@ -74,22 +74,21 @@ Predict actions for a vector of observations, processed for environment use.
 """
 function predict_actions(agent::ActorCriticAgent, observations::AbstractVector; deterministic::Bool = false, rng::AbstractRNG = agent.rng, raw::Bool = false)
     if raw
-        error("ActorCriticAgent does not support raw actions. Use SACAgent for off-policy algorithms that require raw actions.")
+        error("ActorCriticAgent does not support raw actions. Use an off-policy actor-critic agent for raw actions.")
     end
     #TODO add !to name?
-    policy = agent.policy
+    layer = agent.layer
     train_state = agent.train_state
     ps = train_state.parameters
     st = train_state.states
     # Convert observations vector to batched matrix for policy
-    batched_obs = batch(observations, observation_space(policy))
-    actions, st = predict_actions(policy, batched_obs, ps, st; deterministic = deterministic, rng = rng)
+    batched_obs = batch(observations, observation_space(layer))
+    actions, st = predict_actions(layer, batched_obs, ps, st; deterministic = deterministic, rng = rng)
     @reset train_state.states = st
     agent.train_state = train_state
-    # Process actions for environment use (e.g., convert 1-based to 0-based for Discrete)
-    #HACK: incorporate alg into agent?
-    alg = PPO()
-    actions = process_action.(actions, Ref(action_space(policy)), Ref(alg))
+    # Convert policy-space actions to env-space using the agent's adapter
+    adapter = agent.action_adapter
+    actions = to_env.(Ref(adapter), actions, Ref(action_space(layer)))
     return actions
 end
 
@@ -120,4 +119,3 @@ function save_policy_params_and_state(agent::ActorCriticAgent, path::AbstractStr
     )
     return file_path
 end
-

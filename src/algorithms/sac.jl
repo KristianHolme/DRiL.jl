@@ -11,6 +11,12 @@
     target_update_interval::Int = 1 # how often to update the target networks
 end
 
+# Traits and adapter selection
+action_adapter(::SAC) = TanhScaleAdapter()
+has_twin_critics(::SAC) = true
+has_target_networks(::SAC) = true
+has_entropy_tuning(::SAC) = true
+
 # Helper function to calculate target entropy for automatic entropy coefficient
 function get_target_entropy(ent_coef::AutoEntropyCoefficient{T}, action_space) where {T}
     if ent_coef.target isa AutoEntropyTarget
@@ -42,7 +48,7 @@ function SACPolicy(
         shared_features::Bool = false,
         critic_type::CriticType = QCritic()
     ) where {T}
-    return ContinuousActorCriticPolicy(
+    return ContinuousActorCriticLayer(
         observation_space, action_space;
         log_std_init, hidden_dims, activation, shared_features, critic_type
     )
@@ -50,33 +56,33 @@ end
 
 function sac_ent_coef_loss(
         ::SAC,
-        policy::ContinuousActorCriticPolicy{<:Any, <:Any, <:Any, QCritic}, ps, st, data;
+        layer::ContinuousActorCriticLayer{<:Any, <:Any, <:Any, QCritic}, ps, st, data;
         rng::AbstractRNG = Random.default_rng()
     )
     log_ent_coef = ps.log_ent_coef[firstindex(ps.log_ent_coef)]
-    policy_ps = data.policy_ps
-    policy_st = data.policy_st
-    _, log_probs_pi, policy_st = action_log_prob(policy, data.observations, policy_ps, policy_st; rng)
+    layer_ps = data.layer_ps
+    layer_st = data.layer_st
+    _, log_probs_pi, layer_st = action_log_prob(layer, data.observations, layer_ps, layer_st; rng)
     target_entropy = data.target_entropy
     loss = -(log_ent_coef * @ignore_derivatives(log_probs_pi .+ target_entropy |> mean))
     return loss, st, Dict()
 end
 
 function sac_actor_loss(
-        ::SAC, policy::ContinuousActorCriticPolicy{<:Any, <:Any, <:Any, QCritic},
+        ::SAC, layer::ContinuousActorCriticLayer{<:Any, <:Any, <:Any, QCritic},
         ps, st, data; rng::AbstractRNG = Random.default_rng()
     )
     obs = data.observations
     ent_coef = data.log_ent_coef[firstindex(data.log_ent_coef)] |> exp
-    actions_pi, log_probs_pi, st = action_log_prob(policy, obs, ps, st; rng)
-    q_values, st = predict_values(policy, obs, actions_pi, ps, st)
+    actions_pi, log_probs_pi, st = action_log_prob(layer, obs, ps, st; rng)
+    q_values, st = predict_values(layer, obs, actions_pi, ps, st)
     min_q_values = minimum(q_values, dims = 1) |> vec
     loss = mean(ent_coef .* log_probs_pi - min_q_values)
     return loss, st, Dict()
 end
 
 function sac_critic_loss(
-        alg::SAC, policy::ContinuousActorCriticPolicy{<:Any, <:Any, <:Any, QCritic}, ps, st, data;
+        alg::SAC, layer::ContinuousActorCriticLayer{<:Any, <:Any, <:Any, QCritic}, ps, st, data;
         rng::AbstractRNG = Random.default_rng()
     )
     obs, actions, rewards, terminated, _, next_obs = data.observations, data.actions, data.rewards, data.terminated, data.truncated, data.next_observations
@@ -86,18 +92,18 @@ function sac_critic_loss(
     target_st = data.target_st
 
     # Current Q-values
-    current_q_values, new_st = predict_values(policy, obs, actions, ps, st)
+    current_q_values, new_st = predict_values(layer, obs, actions, ps, st)
 
     # Target Q-values (no gradients)
     obs_dims = ndims(obs)
     next_obs = selectdim(next_obs, obs_dims, .!terminated)
     @assert !any(isnan, next_obs) "Next observations contain NaNs"
     target_q_values = @ignore_derivatives begin
-        next_actions, next_log_probs, st = action_log_prob(policy, next_obs, ps, st; rng)
+        next_actions, next_log_probs, st = action_log_prob(layer, next_obs, ps, st; rng)
         #replace critic ps and st with target
         ps_with_target = merge_params(ps, target_ps)
         st_with_target = merge(st, target_st)
-        next_q_vals, _ = predict_values(policy, next_obs, next_actions, ps_with_target, st_with_target)
+        next_q_vals, _ = predict_values(layer, next_obs, next_actions, ps_with_target, st_with_target)
         min_next_q = minimum(next_q_vals, dims = 1) |> vec
 
         # Add entropy term
@@ -118,29 +124,31 @@ function sac_critic_loss(
 end
 
 # Callable functions for SAC algorithm - needed for Lux.Training.compute_gradients
-function (alg::SAC)(::ContinuousActorCriticPolicy, ps, st, batch_data)
+function (alg::SAC)(::ContinuousActorCriticLayer, ps, st, batch_data)
     # This is the combined loss function for all networks
     # In practice, we'll compute separate losses for actor, critic, and entropy coefficient
     error("SAC algorithm object should not be called directly. Use specific loss functions instead.")
 end
 
-# SACAgent and related helper functions moved from agents.jl
-mutable struct SACAgent{P <: ContinuousActorCriticPolicy, R <: AbstractRNG, L <: AbstractTrainingLogger} <: AbstractAgent
-    policy::P
+# Off-policy actor-critic agent (SAC/TD3/DDPG-style)
+mutable struct OffPolicyActorCriticAgent{L <: ContinuousActorCriticLayer, R <: AbstractRNG, LG <: AbstractTrainingLogger, AD <: AbstractActionAdapter} <: AbstractAgent
+    layer::L
+    algorithm::SAC
+    action_adapter::AD
     train_state::Lux.Training.TrainState
     Q_target_parameters::ComponentArray
     Q_target_states::NamedTuple
     ent_train_state::Lux.Training.TrainState
     optimizer_type::Type{<:Optimisers.AbstractRule}
     stats_window::Int
-    logger::L
+    logger::LG
     verbose::Int
     rng::R
     stats::AgentStats
 end
 
-function SACAgent(
-        policy::ContinuousActorCriticPolicy,
+function OffPolicyActorCriticAgent(
+        layer::ContinuousActorCriticLayer,
         alg::SAC;
         optimizer_type::Type{<:Optimisers.AbstractRule} = Optimisers.Adam,
         logger = NoTrainingLogger(),
@@ -148,43 +156,44 @@ function SACAgent(
         rng::AbstractRNG = Random.default_rng(),
         verbose::Int = 1
     )
-    ps, st = Lux.setup(rng, policy)
+    ps, st = Lux.setup(rng, layer)
     # logger is provided by caller
     optimizer = make_optimizer(optimizer_type, alg)
-    train_state = Lux.Training.TrainState(policy, ps, st, optimizer)
-    Q_target_parameters = copy_critic_parameters(policy, ps)
-    Q_target_states = copy_critic_states(policy, st)
+    train_state = Lux.Training.TrainState(layer, ps, st, optimizer)
+    Q_target_parameters = copy_critic_parameters(layer, ps)
+    Q_target_states = copy_critic_states(layer, st)
 
     # Always initialize entropy coefficient train state
     ent_coef_params = init_entropy_coefficient(alg.ent_coef)
     ent_optimizer = make_optimizer(optimizer_type, alg)
-    ent_train_state = Lux.Training.TrainState(policy, ent_coef_params, NamedTuple(), ent_optimizer)
+    ent_train_state = Lux.Training.TrainState(layer, ent_coef_params, NamedTuple(), ent_optimizer)
 
-    return SACAgent(
-        policy, train_state, Q_target_parameters, Q_target_states,
+    adapter = action_adapter(alg)
+    return OffPolicyActorCriticAgent(
+        layer, alg, adapter, train_state, Q_target_parameters, Q_target_states,
         ent_train_state, optimizer_type, stats_window, logger, verbose, rng,
         AgentStats(0, 0)
     )
 end
 
-add_step!(agent::SACAgent, steps::Int = 1) = add_step!(agent.stats, steps)
-add_gradient_update!(agent::SACAgent, updates::Int = 1) = add_gradient_update!(agent.stats, updates)
-steps_taken(agent::SACAgent) = steps_taken(agent.stats)
-gradient_updates(agent::SACAgent) = gradient_updates(agent.stats)
+add_step!(agent::OffPolicyActorCriticAgent, steps::Int = 1) = add_step!(agent.stats, steps)
+add_gradient_update!(agent::OffPolicyActorCriticAgent, updates::Int = 1) = add_gradient_update!(agent.stats, updates)
+steps_taken(agent::OffPolicyActorCriticAgent) = steps_taken(agent.stats)
+gradient_updates(agent::OffPolicyActorCriticAgent) = gradient_updates(agent.stats)
 
-function copy_critic_parameters(policy::ContinuousActorCriticPolicy{<:Any, <:Any, N, QCritic, SharedFeatures}, ps::ComponentArray) where {N <: AbstractNoise}
+function copy_critic_parameters(layer::ContinuousActorCriticLayer{<:Any, <:Any, N, QCritic, SharedFeatures}, ps::ComponentArray) where {N <: AbstractNoise}
     return ComponentArray((feature_extractor = copy(ps.feature_extractor), critic_head = copy(ps.critic_head)))
 end
 
-function copy_critic_parameters(policy::ContinuousActorCriticPolicy{<:Any, <:Any, N, QCritic, SeparateFeatures}, ps::ComponentArray) where {N <: AbstractNoise}
+function copy_critic_parameters(layer::ContinuousActorCriticLayer{<:Any, <:Any, N, QCritic, SeparateFeatures}, ps::ComponentArray) where {N <: AbstractNoise}
     return ComponentArray((critic_feature_extractor = copy(ps.critic_feature_extractor), critic_head = copy(ps.critic_head)))
 end
 
-function copy_critic_states(policy::ContinuousActorCriticPolicy{<:Any, <:Any, N, QCritic, SharedFeatures}, st::NamedTuple) where {N <: AbstractNoise}
+function copy_critic_states(layer::ContinuousActorCriticLayer{<:Any, <:Any, N, QCritic, SharedFeatures}, st::NamedTuple) where {N <: AbstractNoise}
     return (feature_extractor = deepcopy(st.feature_extractor), critic_head = deepcopy(st.critic_head))
 end
 
-function copy_critic_states(policy::ContinuousActorCriticPolicy{<:Any, <:Any, N, QCritic, SeparateFeatures}, st::NamedTuple) where {N <: AbstractNoise}
+function copy_critic_states(layer::ContinuousActorCriticLayer{<:Any, <:Any, N, QCritic, SeparateFeatures}, st::NamedTuple) where {N <: AbstractNoise}
     return (critic_feature_extractor = deepcopy(st.critic_feature_extractor), critic_head = deepcopy(st.critic_head))
 end
 
@@ -196,7 +205,7 @@ function init_entropy_coefficient(entropy_coefficient::AutoEntropyCoefficient)
 end
 
 function predict_actions(
-        agent::SACAgent,
+        agent::OffPolicyActorCriticAgent,
         observations::AbstractVector;
         deterministic::Bool = false,
         rng::AbstractRNG = agent.rng,
@@ -204,27 +213,26 @@ function predict_actions(
     )
     #TODO add !to name?
     train_state = agent.train_state
-    policy = agent.policy
+    layer = agent.layer
     ps = train_state.parameters
     st = train_state.states
-    batched_obs = batch(observations, observation_space(policy))
-    actions, st = predict_actions(policy, batched_obs, ps, st; deterministic, rng)
+    batched_obs = batch(observations, observation_space(layer))
+    actions, st = predict_actions(layer, batched_obs, ps, st; deterministic, rng)
     @reset train_state.states = st
     agent.train_state = train_state
     if raw
         return actions
     else
-        #HACK: incorporate alg into agent?
-        alg = SAC()
-        return process_action.(actions, Ref(action_space(policy)), Ref(alg))
+        adapter = agent.action_adapter
+        return to_env.(Ref(adapter), actions, Ref(action_space(layer)))
     end
     return actions
 end
 
 # collect_trajectories and collect_rollout! are now in buffers/off_policy_collection.jl
 
-# SACAgent supports raw actions for off-policy collection
-function predict_actions_raw(agent::SACAgent, observations::AbstractVector)
+# OffPolicyActorCriticAgent supports raw actions for off-policy collection
+function predict_actions_raw(agent::OffPolicyActorCriticAgent, observations::AbstractVector)
     return predict_actions(agent, observations; raw = true)
 end
 
@@ -245,7 +253,7 @@ function SACTrainingStats{T}() where {T <: AbstractFloat}
     return SACTrainingStats{T}(T[], T[], T[], T[], T[], T[], T[], T[], T[])
 end
 
-function log_sac_training!(agent::SACAgent, stats::SACTrainingStats, step::Int, env::AbstractParallelEnv)
+function log_sac_training!(agent::OffPolicyActorCriticAgent, stats::SACTrainingStats, step::Int, env::AbstractParallelEnv)
     set_step!(agent.logger, step)
     if !isempty(stats.actor_losses)
         log_scalar!(agent.logger, "train/actor_loss", stats.actor_losses[end])
@@ -285,7 +293,7 @@ function log_sac_training!(agent::SACAgent, stats::SACTrainingStats, step::Int, 
 end
 
 function learn!(
-        agent::SACAgent,
+        agent::OffPolicyActorCriticAgent,
         env::AbstractParallelEnv,
         alg::OffPolicyAlgorithm,
         max_steps::Int; kwargs...
@@ -295,7 +303,7 @@ function learn!(
 end
 
 function learn!(
-        agent::SACAgent,
+        agent::OffPolicyActorCriticAgent,
         replay_buffer::ReplayBuffer,
         env::AbstractParallelEnv,
         alg::OffPolicyAlgorithm,
@@ -306,7 +314,7 @@ function learn!(
     )
     to = TimerOutput()
     n_envs = number_of_envs(env)
-    policy = agent.policy
+    layer = agent.layer
     train_state = agent.train_state
 
     # Initialize training statistics
@@ -314,7 +322,7 @@ function learn!(
     training_stats = SACTrainingStats{T}()
 
     # Calculate target entropy for automatic entropy coefficient
-    target_entropy = get_target_entropy(alg.ent_coef, action_space(policy))
+    target_entropy = get_target_entropy(alg.ent_coef, action_space(layer))
 
     # Check if we should update entropy coefficient
     update_entropy_coef = alg.ent_coef isa AutoEntropyCoefficient
@@ -399,8 +407,8 @@ function learn!(
                 ent_train_state = agent.ent_train_state
                 ent_data = (
                     observations = batch_data.observations,
-                    policy_ps = train_state.parameters,
-                    policy_st = train_state.states,
+                    layer_ps = train_state.parameters,
+                    layer_st = train_state.states,
                     target_entropy = target_entropy,
                     target_ps = agent.Q_target_parameters,
                     target_st = agent.Q_target_states,
@@ -408,7 +416,7 @@ function learn!(
                 #TODO: use single_train_step! instead??
                 ent_grad, ent_loss, _, ent_train_state = @timeit to "compute_gradients: entropy" Lux.Training.compute_gradients(
                     ad_type,
-                    (model, ps, st, data) -> sac_ent_coef_loss(alg, policy, ps, st, data; rng = agent.rng),
+                    (model, ps, st, data) -> sac_ent_coef_loss(alg, layer, ps, st, data; rng = agent.rng),
                     ent_data,
                     ent_train_state
                 )
@@ -435,7 +443,7 @@ function learn!(
             #TODO: are these closures bad for performance/type stability?
             critic_grad, critic_loss, critic_stats, train_state = @timeit to "compute_gradients: critic" Lux.Training.compute_gradients(
                 ad_type,
-                (model, ps, st, data) -> sac_critic_loss(alg, policy, ps, st, data; rng = agent.rng),
+                (model, ps, st, data) -> sac_critic_loss(alg, layer, ps, st, data; rng = agent.rng),
                 critic_data,
                 train_state
             )
@@ -458,11 +466,11 @@ function learn!(
 
             actor_loss_grad, actor_loss, _, train_state = @timeit to "compute_gradients: actor" Lux.Training.compute_gradients(
                 ad_type,
-                (model, ps, st, data) -> sac_actor_loss(alg, policy, ps, st, data; rng = agent.rng),
+                (model, ps, st, data) -> sac_actor_loss(alg, layer, ps, st, data; rng = agent.rng),
                 actor_data,
                 train_state
             )
-            @timeit to "zero_critic_grads" zero_critic_grads!(actor_loss_grad, policy)
+            @timeit to "zero_critic_grads" zero_critic_grads!(actor_loss_grad, layer)
             @assert norm(actor_loss_grad.critic_head) < 1.0e-10 "Critic head gradient is not zero"
             train_state = @timeit to "apply_gradients: actor" Lux.Training.apply_gradients(train_state, actor_loss_grad)
             push!(training_stats.actor_losses, actor_loss)
@@ -470,7 +478,7 @@ function learn!(
 
             # Update target networks
             if gradient_updates_performed % alg.target_update_interval == 0
-                agent.Q_target_states = copy_critic_states(policy, train_state.states)
+                agent.Q_target_states = copy_critic_states(layer, train_state.states)
                 polyak_update!(agent.Q_target_parameters, train_state.parameters, alg.tau)
 
             end

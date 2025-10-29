@@ -16,7 +16,7 @@
 end
 
 function ActorCriticAgent(
-        policy::AbstractActorCriticPolicy, alg::PPO;
+        layer::AbstractActorCriticLayer, alg::PPO;
         optimizer_type::Type{<:Optimisers.AbstractRule} = Optimisers.Adam,
         stats_window::Int = 100, #TODO not used
         verbose::Int = 1,
@@ -25,11 +25,12 @@ function ActorCriticAgent(
     )
 
     optimizer = make_optimizer(optimizer_type, alg)
-    ps, st = Lux.setup(rng, policy)
+    ps, st = Lux.setup(rng, layer)
     # @show ps.log_std
-    train_state = Lux.Training.TrainState(policy, ps, st, optimizer)
+    train_state = Lux.Training.TrainState(layer, ps, st, optimizer)
+    adapter = action_adapter(alg)
     return ActorCriticAgent(
-        policy, train_state, optimizer_type, stats_window,
+        layer, alg, adapter, train_state, optimizer_type, stats_window,
         logger, verbose, rng, AgentStats(0, 0)
     )
 end
@@ -38,16 +39,22 @@ function make_optimizer(optimizer_type::Type{<:Optimisers.Adam}, alg::PPO)
     return optimizer_type(eta = alg.learning_rate, epsilon = 1.0f-5)
 end
 
+# Traits and adapter selection
+action_adapter(::PPO) = ClampAdapter()
+has_twin_critics(::PPO) = false
+has_target_networks(::PPO) = false
+has_entropy_tuning(::PPO) = false
+
 function load_policy_params_and_state!(agent::ActorCriticAgent, alg::PPO, path::AbstractString; suffix::String = ".jld2")
     file_path = endswith(path, suffix) ? path : path * suffix
     @info "Loading policy, parameters, and state from $file_path"
     data = load(file_path)
-    new_policy = data["policy"]
+    new_layer = data["policy"]
     new_parameters = data["parameters"]
     new_states = data["states"]
     new_optimizer = make_optimizer(agent.optimizer_type, alg)
-    new_train_state = Lux.Training.TrainState(new_policy, new_parameters, new_states, new_optimizer)
-    agent.policy = new_policy
+    new_train_state = Lux.Training.TrainState(new_layer, new_parameters, new_states, new_optimizer)
+    agent.layer = new_layer
     agent.train_state = new_train_state
     return agent
 end
@@ -309,7 +316,7 @@ function maybe_normalize!(advantages::Vector{T}, alg::PPO{T}) where {T}
     return nothing
 end
 
-function (alg::PPO{T})(policy::AbstractActorCriticPolicy, ps, st, batch_data) where {T}
+function (alg::PPO{T})(policy::AbstractActorCriticLayer, ps, st, batch_data) where {T}
     observations = batch_data[1]
     actions = batch_data[2]
     advantages::Vector{T} = batch_data[3]
