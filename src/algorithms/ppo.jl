@@ -170,7 +170,7 @@ function learn!(agent::ActorCriticAgent, env::AbstractParallelEnv, alg::PPO{T}, 
                 current_grad_norm = norm(grads)
                 # @info "actor grad norm: $(norm(grads.actor_head))"
                 if norm(grads.actor_head) < 1.0e-3
-                    @info "actor grad" grads.actor_head
+                    @info "actor grad norm is less than 1.0e-3, iter $i, epoch $epoch, batch $i_batch, $(norm(grads.actor_head))"
                 end
                 # @info "critic grad norm: $(norm(grads.critic_head))"
                 # @info "log_std grad norm: $(norm(grads.log_std))"
