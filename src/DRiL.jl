@@ -34,6 +34,7 @@ export AbstractCallback, on_training_start, on_training_end, on_rollout_start, o
 export AbstractActorCriticLayer, AbstractNoise, CriticType, QCritic, VCritic
 export FeatureSharing, SharedFeatures, SeparateFeatures
 export OffPolicyAlgorithm, OnPolicyAlgorithm
+export AbstractPolicy
 
 include("spaces.jl")
 export AbstractSpace, Box, Discrete
@@ -48,7 +49,7 @@ export DiscreteActorCriticLayer, AbstractWeightInitializer
 export OrthogonalInitializer, action_log_prob
 export AbstractActorCriticLayer
 include("deployment/deployment_policy.jl")
-export extract_policy, predict
+export extract_policy, DeploymentPolicy
 
 include("agents/agents.jl")
 export predict_actions, predict_values, steps_taken
