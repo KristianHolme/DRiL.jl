@@ -16,7 +16,7 @@
     # Create policy with constant value function
     policy = SharedTestSetup.ConstantValuePolicy(DRiL.observation_space(env), DRiL.action_space(env), constant_value)
     alg = PPO(; gamma, gae_lambda, n_steps = max_steps, batch_size = max_steps, epochs = 1)
-    agent = ActorCriticAgent(policy, alg; verbose = 0)
+    agent = Agent(policy, alg; verbose = 0)
 
     # Collect rollouts
     roll_buffer = RolloutBuffer(DRiL.observation_space(env), DRiL.action_space(env), gae_lambda, gamma, max_steps, 1)
@@ -89,7 +89,7 @@ end
         env = BroadcastedParallelEnv([SharedTestSetup.CustomEnv(max_steps)])
         policy = SharedTestSetup.ConstantValuePolicy(DRiL.observation_space(env), DRiL.action_space(env), constant_value)
         alg = PPO(; gamma, gae_lambda, n_steps = max_steps, batch_size = max_steps, epochs = 1)
-        agent = ActorCriticAgent(policy, alg; verbose = 0)
+        agent = Agent(policy, alg; verbose = 0)
 
         roll_buffer = RolloutBuffer(DRiL.observation_space(env), DRiL.action_space(env), gae_lambda, gamma, max_steps, 1)
         DRiL.collect_rollout!(roll_buffer, agent, alg, env)
@@ -129,7 +129,7 @@ end
     # Create policy with constant value function
     policy = SharedTestSetup.ConstantValuePolicy(DRiL.observation_space(env), DRiL.action_space(env), constant_value)
     alg = PPO(; gamma, gae_lambda, n_steps = max_steps, batch_size = max_steps, epochs = 1)
-    agent = ActorCriticAgent(policy, alg; verbose = 0)
+    agent = Agent(policy, alg; verbose = 0)
 
     # Collect rollouts
     roll_buffer = RolloutBuffer(DRiL.observation_space(env), DRiL.action_space(env), gae_lambda, gamma, max_steps, 1)
@@ -189,7 +189,7 @@ end
     # Create policy with constant value function
     policy = SharedTestSetup.ConstantValuePolicy(DRiL.observation_space(env), DRiL.action_space(env), constant_value)
     alg = PPO(; gamma, gae_lambda, n_steps = n_total_steps, batch_size = n_total_steps, epochs = 1)
-    agent = ActorCriticAgent(policy, alg; verbose = 0)
+    agent = Agent(policy, alg; verbose = 0)
 
     # Collect rollouts
     roll_buffer = RolloutBuffer(DRiL.observation_space(env), DRiL.action_space(env), gae_lambda, gamma, n_total_steps, 1)
@@ -234,7 +234,7 @@ end
     # Create policy with constant value function
     policy = SharedTestSetup.ConstantValuePolicy(DRiL.observation_space(env), DRiL.action_space(env), constant_value)
     alg = PPO(; gamma, gae_lambda, n_steps = max_steps, batch_size = max_steps, epochs = 1)
-    agent = ActorCriticAgent(policy, alg; verbose = 0)
+    agent = Agent(policy, alg; verbose = 0)
 
     # Collect rollouts
     roll_buffer = RolloutBuffer(DRiL.observation_space(env), DRiL.action_space(env), gae_lambda, gamma, max_steps, 1)
@@ -283,7 +283,7 @@ end
     env = BroadcastedParallelEnv([SharedTestSetup.CustomEnv(max_steps)])
     policy = SharedTestSetup.ConstantValuePolicy(DRiL.observation_space(env), DRiL.action_space(env), constant_value)
     alg = PPO(; gamma, gae_lambda, n_steps = max_steps, batch_size = max_steps, epochs = 1)
-    agent = ActorCriticAgent(policy, alg; verbose = 0)
+    agent = Agent(policy, alg; verbose = 0)
 
     roll_buffer = RolloutBuffer(DRiL.observation_space(env), DRiL.action_space(env), gae_lambda, gamma, max_steps, 1)
     DRiL.collect_rollout!(roll_buffer, agent, alg, env)
@@ -312,7 +312,7 @@ end
     # Test zero lambda case (TD(0))
     lambda_zero = 0.0f0
     env_multi = BroadcastedParallelEnv([SharedTestSetup.CustomEnv(3)])  # 3 steps for better testing
-    agent_multi = ActorCriticAgent(policy, alg; verbose = 0)
+    agent_multi = Agent(policy, alg; verbose = 0)
     roll_buffer_td0 = RolloutBuffer(DRiL.observation_space(env_multi), DRiL.action_space(env_multi), lambda_zero, gamma, 3, 1)
     DRiL.collect_rollout!(roll_buffer_td0, agent_multi, alg, env_multi)
 

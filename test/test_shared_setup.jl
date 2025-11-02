@@ -170,7 +170,7 @@
     end
 
     # Custom policy that returns constant values for predictable GAE testing.
-    struct ConstantValuePolicy <: DRiL.AbstractActorCriticPolicy
+    struct ConstantValuePolicy <: DRiL.AbstractActorCriticLayer
         observation_space::Box{Float32}
         action_space::Box{Float32}
         constant_value::Float32

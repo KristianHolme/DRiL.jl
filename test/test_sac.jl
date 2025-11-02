@@ -12,7 +12,7 @@
             obs_space = Box(Float32[-1.0, -1.0], Float32[1.0, 1.0])  # 2D obs
             action_space = Box(Float32[-1.0, -1.0], Float32[1.0, 1.0])  # 2D action
 
-            policy = ContinuousActorCriticPolicy(obs_space, action_space; hidden_dims = [4, 4], critic_type = QCritic())
+            policy = ContinuousActorCriticLayer(obs_space, action_space; hidden_dims = [4, 4], critic_type = QCritic())
             ps = Lux.initialparameters(rng, policy)
             st = Lux.initialstates(rng, policy)
 
@@ -35,7 +35,7 @@
                 obs_space = Box(Float32[-1.0, -1.0], Float32[1.0, 1.0])  # 2D obs
                 action_space = Box(Float32[-1.0, -1.0], Float32[1.0, 1.0])  # 2D action
 
-                policy = ContinuousActorCriticPolicy(obs_space, action_space; hidden_dims = [4, 4], critic_type = QCritic())
+                policy = ContinuousActorCriticLayer(obs_space, action_space; hidden_dims = [4, 4], critic_type = QCritic())
                 ps = Lux.initialparameters(rng, policy)
                 st = Lux.initialstates(rng, policy)
 
@@ -49,7 +49,7 @@
                 obs_space = Box(Float32[-1.0, -1.0], Float32[1.0, 1.0])  # 2D obs
                 action_space = Box(Float32[-1.0, -1.0], Float32[1.0, 1.0])  # 2D action
 
-                policy = ContinuousActorCriticPolicy(obs_space, action_space; hidden_dims = [6, 4], critic_type = QCritic())
+                policy = ContinuousActorCriticLayer(obs_space, action_space; hidden_dims = [6, 4], critic_type = QCritic())
                 ps = Lux.initialparameters(rng, policy)
                 st = Lux.initialstates(rng, policy)
 
@@ -81,7 +81,7 @@
 
                     # Adjust hidden dimensions based on input/output sizes
                     hidden_dim = max(obs_dim, action_dim) * 2
-                    policy = ContinuousActorCriticPolicy(
+                    policy = ContinuousActorCriticLayer(
                         obs_space, action_space;
                         hidden_dims = [hidden_dim, hidden_dim],
                         critic_type = QCritic()
@@ -105,7 +105,7 @@
             obs_space = Box(Float32[-1.0, -1.0], Float32[1.0, 1.0])  # 2D obs
             action_space = Box(Float32[-1.0, -1.0], Float32[1.0, 1.0])  # 2D action
 
-            policy = ContinuousActorCriticPolicy(obs_space, action_space; hidden_dims = [4, 4], critic_type = QCritic())
+            policy = ContinuousActorCriticLayer(obs_space, action_space; hidden_dims = [4, 4], critic_type = QCritic())
             ps = Lux.initialparameters(rng, policy)
             st = Lux.initialstates(rng, policy)
 
@@ -133,7 +133,7 @@
 
             for hidden_dims in hidden_configs
                 @testset "Hidden dims: $(hidden_dims)" begin
-                    policy = ContinuousActorCriticPolicy(
+                    policy = ContinuousActorCriticLayer(
                         obs_space, action_space;
                         hidden_dims = hidden_dims,
                         critic_type = QCritic()
@@ -159,7 +159,7 @@
             obs_space = Box(Float32[-1.0, -1.0], Float32[1.0, 1.0])  # 2D obs from SimpleRewardEnv
             action_space = Box(Float32[-1.0, -1.0], Float32[1.0, 1.0])  # 2D action from SimpleRewardEnv
 
-            policy = ContinuousActorCriticPolicy(obs_space, action_space; hidden_dims = [64, 64], critic_type = QCritic())
+            policy = ContinuousActorCriticLayer(obs_space, action_space; hidden_dims = [64, 64], critic_type = QCritic())
             ps = Lux.initialparameters(rng, policy)
             st = Lux.initialstates(rng, policy)
 
@@ -204,12 +204,12 @@ end
         action_space = DRiL.action_space(env)
 
         # Create SAC agent and algorithm
-        policy = ContinuousActorCriticPolicy(
+        policy = ContinuousActorCriticLayer(
             obs_space, action_space; hidden_dims = [8, 4],
             critic_type = QCritic()
         )
         alg = SAC(; start_steps = 4, batch_size = 4)
-        agent = SACAgent(policy, alg; rng = rng, verbose = 0)
+        agent = Agent(policy, alg; rng = rng, verbose = 0)
 
         # Create replay buffer and collect some rollouts
         replay_buffer = ReplayBuffer(obs_space, action_space, 100)
@@ -228,16 +228,16 @@ end
         # Test entropy coefficient loss with real data
         @testset "Entropy coefficient gradient with real data" begin
             if alg.ent_coef isa AutoEntropyCoefficient
-                ent_train_state = agent.ent_train_state
+                ent_train_state = agent.aux.ent_train_state
                 target_entropy = DRiL.get_target_entropy(alg.ent_coef, action_space)
 
                 ent_data = (
                     observations = batch_data.observations,
-                    policy_ps = agent.train_state.parameters,
-                    policy_st = agent.train_state.states,
+                    layer_ps = agent.train_state.parameters,
+                    layer_st = agent.train_state.states,
                     target_entropy = target_entropy,
-                    target_ps = agent.Q_target_parameters,
-                    target_st = agent.Q_target_states,
+                    target_ps = agent.aux.Q_target_parameters,
+                    target_st = agent.aux.Q_target_states,
                 )
 
                 # Compute gradients exactly like in learn!
@@ -272,9 +272,9 @@ end
                 terminated = batch_data.terminated,
                 truncated = batch_data.truncated,
                 next_observations = batch_data.next_observations,
-                log_ent_coef = agent.ent_train_state.parameters,
-                target_ps = agent.Q_target_parameters,
-                target_st = agent.Q_target_states,
+                log_ent_coef = agent.aux.ent_train_state.parameters,
+                target_ps = agent.aux.Q_target_parameters,
+                target_st = agent.aux.Q_target_states,
             )
 
             # Compute gradients exactly like in learn!
@@ -313,7 +313,7 @@ end
                 terminated = batch_data.terminated,
                 truncated = batch_data.truncated,
                 next_observations = batch_data.next_observations,
-                log_ent_coef = agent.ent_train_state.parameters,
+                log_ent_coef = agent.aux.ent_train_state.parameters,
             )
 
             # Compute gradients exactly like in learn!

@@ -7,9 +7,9 @@ using TestItems
     # Test: logprobs are consistent after rollout
     pend_env() = PendulumEnv()
     env = MultiThreadedParallelEnv([pend_env() for _ in 1:4])
-    policy = ActorCriticPolicy(DRiL.observation_space(env), DRiL.action_space(env))
+    policy = ActorCriticLayer(DRiL.observation_space(env), DRiL.action_space(env))
     alg = PPO(; n_steps = 8, batch_size = 8, epochs = 1)
-    agent = ActorCriticAgent(policy, alg; verbose = 0)
+    agent = Agent(policy, alg; verbose = 0)
     n_steps = alg.n_steps
     n_envs = DRiL.number_of_envs(env)
     roll_buffer = RolloutBuffer(DRiL.observation_space(env), DRiL.action_space(env), alg.gae_lambda, alg.gamma, n_steps, n_envs)
@@ -138,7 +138,7 @@ end
 
     policy = SharedTestSetup.ConstantValuePolicy(env_obs_space, env_act_space, 0.5f0)
     alg = PPO(n_steps = n_steps, batch_size = 16, epochs = 1)
-    agent = ActorCriticAgent(policy, alg; verbose = 0)
+    agent = Agent(policy, alg; verbose = 0)
 
     # Collect rollouts
     DRiL.collect_rollout!(roll_buffer, agent, alg, env)
@@ -170,9 +170,9 @@ end
     # Test: RolloutBuffer works correctly with discrete action spaces
     cartpole_env() = CartPoleEnv()
     env = MultiThreadedParallelEnv([cartpole_env() for _ in 1:4])
-    policy = DiscreteActorCriticPolicy(DRiL.observation_space(env), DRiL.action_space(env))
+    policy = DiscreteActorCriticLayer(DRiL.observation_space(env), DRiL.action_space(env))
     alg = PPO(; n_steps = 8, batch_size = 8, epochs = 1)
-    agent = ActorCriticAgent(policy, alg; verbose = 0)
+    agent = Agent(policy, alg; verbose = 0)
 
     n_steps = alg.n_steps
     n_envs = DRiL.number_of_envs(env)
@@ -222,13 +222,13 @@ end
     alg = PPO(n_steps = 4, batch_size = 4, epochs = 1)
     # Discrete environment (CartPole)
     discrete_env = MultiThreadedParallelEnv([CartPoleEnv() for _ in 1:2])
-    discrete_policy = DiscreteActorCriticPolicy(DRiL.observation_space(discrete_env), DRiL.action_space(discrete_env))
-    discrete_agent = ActorCriticAgent(discrete_policy, alg; verbose = 0)
+    discrete_policy = DiscreteActorCriticLayer(DRiL.observation_space(discrete_env), DRiL.action_space(discrete_env))
+    discrete_agent = Agent(discrete_policy, alg; verbose = 0)
 
     # Continuous environment (Pendulum)
     continuous_env = MultiThreadedParallelEnv([PendulumEnv() for _ in 1:2])
-    continuous_policy = ContinuousActorCriticPolicy(DRiL.observation_space(continuous_env), DRiL.action_space(continuous_env))
-    continuous_agent = ActorCriticAgent(continuous_policy, alg; verbose = 0)
+    continuous_policy = ContinuousActorCriticLayer(DRiL.observation_space(continuous_env), DRiL.action_space(continuous_env))
+    continuous_agent = Agent(continuous_policy, alg; verbose = 0)
 
 
     # Create buffers
@@ -285,9 +285,9 @@ end
         obs_space = DRiL.observation_space(env)
         act_space = DRiL.action_space(env)
         #TODO: use a simpler random agent/policy instead?
-        policy = ActorCriticPolicy(obs_space, act_space)
+        policy = ActorCriticLayer(obs_space, act_space)
         alg = PPO()
-        agent = ActorCriticAgent(policy, alg; verbose = 0)
+        agent = Agent(policy, alg; verbose = 0)
         roll_buffer = RolloutBuffer(obs_space, act_space, alg.gae_lambda, alg.gamma, n_steps, DRiL.number_of_envs(env))
         DRiL.collect_rollout!(roll_buffer, agent, alg, env)
         return roll_buffer
@@ -322,9 +322,9 @@ end
     # Test: RolloutBuffer works correctly with discrete action spaces
     cartpole_env() = CartPoleEnv()
     env = MultiThreadedParallelEnv([cartpole_env() for _ in 1:n_envs])
-    policy = DiscreteActorCriticPolicy(DRiL.observation_space(env), DRiL.action_space(env))
+    policy = DiscreteActorCriticLayer(DRiL.observation_space(env), DRiL.action_space(env))
     alg = PPO(n_steps = n_steps, batch_size = n_steps, epochs = 1)
-    agent = ActorCriticAgent(policy, alg; verbose = 0)
+    agent = Agent(policy, alg; verbose = 0)
     roll_buffer = RolloutBuffer(DRiL.observation_space(env), DRiL.action_space(env), alg.gae_lambda, alg.gamma, n_steps, n_envs)
 
     # Test rollout collection
@@ -352,8 +352,8 @@ end
 
     alg = SAC()
     env = BroadcastedParallelEnv([SharedTestSetup.SimpleRewardEnv(8) for _ in 1:n_envs])
-    policy = ContinuousActorCriticPolicy(DRiL.observation_space(env), DRiL.action_space(env), critic_type = QCritic())
-    agent = SACAgent(policy, alg)
+    policy = ContinuousActorCriticLayer(DRiL.observation_space(env), DRiL.action_space(env), critic_type = QCritic())
+    agent = Agent(policy, alg)
     buffer = ReplayBuffer(DRiL.observation_space(env), DRiL.action_space(env), buffer_capacity)
     @test capacity(buffer) == buffer_capacity
     @test !isfull(buffer)

@@ -4,13 +4,12 @@
     Agent(model, alg; kwargs...)
 
 Create an agent given a model (training-time actor-critic) and an algorithm.
-Dispatches to on- or off-policy agent constructors.
+Per-algorithm constructors must be defined as `Agent(model, ::YourAlg; ...)`.
 """
 function Agent(model, alg::OnPolicyAlgorithm; kwargs...)
-    return ActorCriticAgent(model, alg; kwargs...)
+    error("No Agent constructor found for $(typeof(alg)). Define `Agent(model, ::$(typeof(alg)); ...)` in the algorithm file.")
 end
 
 function Agent(model, alg::OffPolicyAlgorithm; kwargs...)
-    # For now we assume continuous control for off-policy support in DRiL
-    return OffPolicyActorCriticAgent(model, alg; kwargs...)
+    error("No Agent constructor found for $(typeof(alg)). Define `Agent(model, ::$(typeof(alg)); ...)` in the algorithm file.")
 end

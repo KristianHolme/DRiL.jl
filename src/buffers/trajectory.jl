@@ -20,7 +20,7 @@ Base.length(trajectory::Trajectory) = length(trajectory.rewards)
 total_reward(trajectory::Trajectory) = sum(trajectory.rewards)
 
 function collect_trajectories(
-        agent::ActorCriticAgent, env::AbstractParallelEnv, alg::AbstractAlgorithm, n_steps::Int;
+        agent::Agent, env::AbstractParallelEnv, alg::AbstractAlgorithm, n_steps::Int;
         callbacks::Union{Vector{<:AbstractCallback}, Nothing} = nothing
     )
     # reset!(env)

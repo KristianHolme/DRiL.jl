@@ -6,8 +6,8 @@
     env = MonitorWrapperEnv(env)
     env = NormalizeWrapperEnv(env, gamma = alg.gamma)
 
-    policy = ActorCriticPolicy(observation_space(env), action_space(env))
-    agent = ActorCriticAgent(policy, alg; verbose = 0)
+    policy = ActorCriticLayer(observation_space(env), action_space(env))
+    agent = Agent(policy, alg; verbose = 0)
 
     function test_keys(locals::Dict, keys_to_check::Vector{Symbol})
         for key in keys_to_check
@@ -45,7 +45,7 @@
         end
         true
     end
-    learn!(
+    train!(
         agent, env, alg, 3000; callbacks = [
             OnTrainingStartCheckLocalsCallback(),
             OnRolloutStartCheckLocalsCallback(),
@@ -61,8 +61,8 @@ end
         env = MonitorWrapperEnv(env)
         env = NormalizeWrapperEnv(env, gamma = alg.gamma)
 
-        policy = ActorCriticPolicy(observation_space(env), action_space(env))
-        agent = ActorCriticAgent(policy, alg; verbose = 0)
+        policy = ActorCriticLayer(observation_space(env), action_space(env))
+        agent = Agent(policy, alg; verbose = 0)
         return agent, env, alg
     end
 
@@ -72,7 +72,7 @@ end
         return false
     end
     agent, env, alg = setup_agent_env_alg()
-    learn!(
+    train!(
         agent, env, alg, 3000; callbacks = [
             OnTrainingStartStopEarlyCallback(),
         ]
@@ -84,7 +84,7 @@ end
     function DRiL.on_rollout_start(callback::OnRolloutStartStopEarlyCallback, locals::Dict)
         return false
     end
-    learn!(agent, env, alg, 3000; callbacks = [OnRolloutStartStopEarlyCallback()])
+    train!(agent, env, alg, 3000; callbacks = [OnRolloutStartStopEarlyCallback()])
     @test steps_taken(agent) == 0
 
     agent, env, alg = setup_agent_env_alg()
@@ -95,6 +95,6 @@ end
         continue_training = steps_taken(locals[:agent]) < callback.threshold
         return continue_training
     end
-    learn!(agent, env, alg, 3000; callbacks = [OnStepStopEarlyCallback(500)])
+    train!(agent, env, alg, 3000; callbacks = [OnStepStopEarlyCallback(500)])
     @test steps_taken(agent) == 512
 end

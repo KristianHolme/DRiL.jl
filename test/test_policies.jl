@@ -3,7 +3,7 @@ using DRiL
 using TestItems
 
 
-@testitem "DiscreteActorCriticPolicy construction" tags = [:policies, :discrete, :construction] setup = [SharedTestSetup] begin
+@testitem "DiscreteActorCriticLayer construction" tags = [:policies, :discrete, :construction] setup = [SharedTestSetup] begin
     using Random
     using Lux
 
@@ -11,36 +11,36 @@ using TestItems
     obs_space = Box(Float32[-1.0, -1.0], Float32[1.0, 1.0])
     action_space = Discrete(4, 0)  # 0-based (like Gymnasium)
 
-    policy = DiscreteActorCriticPolicy(obs_space, action_space)
+    policy = DiscreteActorCriticLayer(obs_space, action_space)
 
-    @test policy isa DiscreteActorCriticPolicy
+    @test policy isa DiscreteActorCriticLayer
     @test isequal(policy.observation_space, obs_space)
     @test isequal(policy.action_space, action_space)
-    @test typeof(policy) <: DiscreteActorCriticPolicy{<:Any, <:Any, SharedFeatures}
+    @test typeof(policy) <: DiscreteActorCriticLayer{<:Any, <:Any, SharedFeatures}
 
     # Test with custom parameters
-    policy_custom = DiscreteActorCriticPolicy(
+    policy_custom = DiscreteActorCriticLayer(
         obs_space, action_space;
         hidden_dims = [32, 16],
         activation = relu,
         shared_features = false
     )
-    @test typeof(policy_custom) <: DiscreteActorCriticPolicy{<:Any, <:Any, SeparateFeatures}
+    @test typeof(policy_custom) <: DiscreteActorCriticLayer{<:Any, <:Any, SeparateFeatures}
 
     # Test with 1-based action space
     action_space_1 = Discrete(3, 1)  # 1-based
-    policy_1based = DiscreteActorCriticPolicy(obs_space, action_space_1)
+    policy_1based = DiscreteActorCriticLayer(obs_space, action_space_1)
     @test policy_1based.action_space == action_space_1
 end
 
-@testitem "DiscreteActorCriticPolicy parameter initialization" tags = [:policies, :discrete, :parameters] setup = [SharedTestSetup] begin
+@testitem "DiscreteActorCriticLayer parameter initialization" tags = [:policies, :discrete, :parameters] setup = [SharedTestSetup] begin
     using Random
     using Lux
     using ComponentArrays
 
     obs_space = Box(Float32[-1.0, -1.0], Float32[1.0, 1.0])
     action_space = Discrete(5, 0)
-    policy = DiscreteActorCriticPolicy(obs_space, action_space)
+    policy = DiscreteActorCriticLayer(obs_space, action_space)
 
     rng = Random.MersenneTwister(42)
     params = Lux.initialparameters(rng, policy)
@@ -63,13 +63,13 @@ end
     @test haskey(states, :critic_head)
 end
 
-@testitem "DiscreteActorCriticPolicy prediction" tags = [:policies, :discrete, :prediction] setup = [SharedTestSetup] begin
+@testitem "DiscreteActorCriticLayer prediction" tags = [:policies, :discrete, :prediction] setup = [SharedTestSetup] begin
     using Random
     using Lux
 
     obs_space = Box(Float32[-1.0, -1.0], Float32[1.0, 1.0])
     action_space = Discrete(3, 0)  # Actions: 0, 1, 2
-    policy = DiscreteActorCriticPolicy(obs_space, action_space)
+    policy = DiscreteActorCriticLayer(obs_space, action_space)
 
     rng = Random.MersenneTwister(42)
     params = Lux.initialparameters(rng, policy)
@@ -98,12 +98,12 @@ end
     @test all(a -> a isa Integer, batch_actions)
 end
 
-@testitem "DiscreteActorCriticPolicy action evaluation" tags = [:policies, :discrete, :evaluation] setup = [SharedTestSetup] begin
+@testitem "DiscreteActorCriticLayer action evaluation" tags = [:policies, :discrete, :evaluation] setup = [SharedTestSetup] begin
     using Random
     using Lux
     obs_space = Box(Float32[-1.0, -1.0], Float32[1.0, 1.0])
     action_space = Discrete(4, 0)  # Actions: 0, 1, 2, 3
-    policy = DiscreteActorCriticPolicy(obs_space, action_space)
+    policy = DiscreteActorCriticLayer(obs_space, action_space)
 
     rng = Random.MersenneTwister(42)
     params = Lux.initialparameters(rng, policy)
@@ -145,7 +145,7 @@ end
     @test all(eval_batch_log_probs .≈ batch_log_probs)
 end
 
-@testitem "DiscreteActorCriticPolicy indexing consistency" tags = [:policies, :discrete, :indexing] setup = [SharedTestSetup] begin
+@testitem "DiscreteActorCriticLayer indexing consistency" tags = [:policies, :discrete, :indexing] setup = [SharedTestSetup] begin
     using Random
     using Lux
     obs_space = Box(Float32[-1.0, -1.0], Float32[1.0, 1.0])
@@ -158,7 +158,7 @@ end
     ]
 
     for action_space in spaces_to_test
-        policy = DiscreteActorCriticPolicy(obs_space, action_space)
+        policy = DiscreteActorCriticLayer(obs_space, action_space)
 
         rng = Random.MersenneTwister(42)
         params = Lux.initialparameters(rng, policy)
@@ -185,15 +185,15 @@ end
 end
 
 
-@testitem "DiscreteActorCriticPolicy vs ContinuousActorCriticPolicy interface" tags = [:policies, :discrete, :interface] setup = [SharedTestSetup] begin
+@testitem "DiscreteActorCriticLayer vs ContinuousActorCriticLayer interface" tags = [:policies, :discrete, :interface] setup = [SharedTestSetup] begin
     using Random
     using Lux
     obs_space = Box(Float32[-1.0, -1.0], Float32[1.0, 1.0])
     discrete_action_space = Discrete(4, 0)
     continuous_action_space = Box(Float32[-1.0], Float32[1.0])
 
-    discrete_policy = DiscreteActorCriticPolicy(obs_space, discrete_action_space)
-    continuous_policy = ContinuousActorCriticPolicy(obs_space, continuous_action_space)
+    discrete_policy = DiscreteActorCriticLayer(obs_space, discrete_action_space)
+    continuous_policy = ContinuousActorCriticLayer(obs_space, continuous_action_space)
 
     # Test that both policies implement the same interface
     rng = Random.MersenneTwister(42)
@@ -234,13 +234,13 @@ end
     @test length(continuous_eval_log_probs) == 1
 end
 
-@testitem "DiscreteActorCriticPolicy edge cases" tags = [:policies, :discrete, :edge_cases] setup = [SharedTestSetup] begin
+@testitem "DiscreteActorCriticLayer edge cases" tags = [:policies, :discrete, :edge_cases] setup = [SharedTestSetup] begin
     using Random
     using Lux
     # Test single action space
     obs_space = Box(Float32[-1.0], Float32[1.0])
     single_action_space = Discrete(1, 0)  # Only action 0
-    policy = DiscreteActorCriticPolicy(obs_space, single_action_space)
+    policy = DiscreteActorCriticLayer(obs_space, single_action_space)
 
     rng = Random.MersenneTwister(42)
     params = Lux.initialparameters(rng, policy)
@@ -257,7 +257,7 @@ end
 
     # Test large action space
     large_action_space = Discrete(100, 0)
-    large_policy = DiscreteActorCriticPolicy(obs_space, large_action_space)
+    large_policy = DiscreteActorCriticLayer(obs_space, large_action_space)
 
     large_params = Lux.initialparameters(rng, large_policy)
     large_states = Lux.initialstates(rng, large_policy)
@@ -270,7 +270,7 @@ end
 
     # Test negative start action space
     neg_action_space = Discrete(5, -2)  # Actions: -2, -1, 0, 1, 2
-    neg_policy = DiscreteActorCriticPolicy(obs_space, neg_action_space)
+    neg_policy = DiscreteActorCriticLayer(obs_space, neg_action_space)
 
     neg_params = Lux.initialparameters(rng, neg_policy)
     neg_states = Lux.initialstates(rng, neg_policy)
@@ -288,7 +288,7 @@ end
     using Lux
     obs_space = Box(Float32[-1.0, -1.0], Float32[1.0, 1.0])
     action_space = Box(Float32[-1.0], Float32[1.0])
-    policy = ContinuousActorCriticPolicy(
+    policy = ContinuousActorCriticLayer(
         obs_space, action_space, activation = relu,
         critic_type = QCritic(), shared_features = false
     )

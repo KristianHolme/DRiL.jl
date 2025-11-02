@@ -23,8 +23,8 @@ DRiL.jl is a prototype DRL package, aiming to be fast, flexible, and easy to use
 - SAC (Soft Actor-Critic)
 
 ## Core Components
-The DRiL.jl package is built around the following core components: **Environments**, **Models**, **Agents**, and **Algorithms**.
-The environment is the system we are interested in controlling, the model is the (actor–critic) neural network(s) used for control, the agent manages training, and the algorithm specifies the training procedure and loss.
+The DRiL.jl package is built around the following core components: **Environments**, **Layers**, **Agents**, and **Algorithms**.
+The environment is the system we are interested in controlling, the layer is the training-time actor–critic network used for control, the agent manages training, and the algorithm specifies the training procedure and loss.
 
 ## Installation
 
@@ -68,7 +68,7 @@ agent = Agent(model, ppo; verbose=2)
 
 ## Train
 max_steps = 100_000
-learn_stats, to = learn!(agent, parallel_env; max_steps)
+learn_stats, to = train!(agent, parallel_env, ppo, max_steps)
 
 ## Evaluate the trained agent
 eval_env = CartPoleEnv(max_steps=500)

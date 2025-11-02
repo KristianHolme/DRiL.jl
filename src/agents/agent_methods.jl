@@ -3,12 +3,12 @@
 #takes vector of observations
 #TODO: adjust name?
 """
-    get_action_and_values(agent::ActorCriticAgent, observations::AbstractVector) -> (actions, values, logprobs)
+    get_action_and_values(agent::Agent, observations::AbstractVector) -> (actions, values, logprobs)
 
 Get actions, values, and log probabilities for a vector of observations.
 
 # Arguments
-- `agent::ActorCriticAgent`: The agent
+- `agent::Agent`: The agent
 - `observations::AbstractVector`: Vector of observations
 
 # Returns  
@@ -16,7 +16,10 @@ Get actions, values, and log probabilities for a vector of observations.
 - `values`: Vector of value estimates
 - `logprobs`: Vector of log probabilities
 """
-function get_action_and_values(agent::ActorCriticAgent, observations::AbstractVector)
+function get_action_and_values(
+        agent::Agent{<:AbstractActorCriticLayer, ALG, <:AbstractActionAdapter, <:AbstractRNG, <:AbstractTrainingLogger, <:Any},
+        observations::AbstractVector
+    ) where {ALG <: AbstractAlgorithm}
     #TODO add !to name?
     layer = agent.layer
     train_state = agent.train_state
@@ -32,18 +35,21 @@ function get_action_and_values(agent::ActorCriticAgent, observations::AbstractVe
 end
 
 """
-    predict_values(agent::ActorCriticAgent, observations::AbstractVector) -> Vector
+    predict_values(agent::Agent, observations::AbstractVector) -> Vector
 
 Predict value estimates for a vector of observations.
 
 # Arguments
-- `agent::ActorCriticAgent`: The agent
+- `agent::Agent`: The agent
 - `observations::AbstractVector`: Vector of observations
 
 # Returns
 - `Vector`: Value estimates for each observation
 """
-function predict_values(agent::ActorCriticAgent, observations::AbstractVector)
+function predict_values(
+        agent::Agent{<:AbstractActorCriticLayer, ALG, <:AbstractActionAdapter, <:AbstractRNG, <:AbstractTrainingLogger, <:Any},
+        observations::AbstractVector
+    ) where {ALG <: AbstractAlgorithm}
     #TODO add !to name?
     layer = agent.layer
     train_state = agent.train_state
@@ -58,23 +64,29 @@ function predict_values(agent::ActorCriticAgent, observations::AbstractVector)
 end
 
 """
-    predict_actions(agent::ActorCriticAgent, observations::AbstractVector; kwargs...) -> Vector
+    predict_actions(agent::Agent, observations::AbstractVector; kwargs...) -> Vector
 
 Predict actions for a vector of observations, processed for environment use.
 
 # Arguments
-- `agent::ActorCriticAgent`: The agent
+- `agent::Agent`: The agent
 - `observations::AbstractVector`: Vector of observations
 - `deterministic::Bool=false`: Whether to use deterministic actions
 - `rng::AbstractRNG=agent.rng`: Random number generator
-- `raw::Bool=false`: Whether to return raw actions (not processed for environment). Not supported for ActorCriticAgent.
+- `raw::Bool=false`: Whether to return raw actions (not processed for environment). Not supported for generic Agent.
 
 # Returns
 - `Vector`: Actions processed for environment use (e.g., 0-based for Discrete spaces), or raw actions if `raw=true` (if supported)
 """
-function predict_actions(agent::ActorCriticAgent, observations::AbstractVector; deterministic::Bool = false, rng::AbstractRNG = agent.rng, raw::Bool = false)
+function predict_actions(
+        agent::Agent{<:AbstractActorCriticLayer, ALG, <:AbstractActionAdapter, <:AbstractRNG, <:AbstractTrainingLogger, <:Any},
+        observations::AbstractVector;
+        deterministic::Bool = false,
+        rng::AbstractRNG = agent.rng,
+        raw::Bool = false
+    ) where {ALG <: AbstractAlgorithm}
     if raw
-        error("ActorCriticAgent does not support raw actions. Use an off-policy actor-critic agent for raw actions.")
+        error("Agent does not support raw actions. Use an algorithm/agent that supports raw actions.")
     end
     #TODO add !to name?
     layer = agent.layer
@@ -106,13 +118,17 @@ function make_optimizer(optimizer_type::Type{<:Optimisers.AbstractRule}, alg::Ab
 end
 
 
-# Implementation for ActorCriticAgent
-function save_policy_params_and_state(agent::ActorCriticAgent, path::AbstractString; suffix::String = ".jld2")
+# Implementation for unified Agent
+function save_policy_params_and_state(
+        agent::Agent{<:AbstractActorCriticLayer, ALG, <:AbstractActionAdapter, <:AbstractRNG, <:AbstractTrainingLogger, <:Any},
+        path::AbstractString;
+        suffix::String = ".jld2"
+    ) where {ALG <: AbstractAlgorithm}
     file_path = endswith(path, suffix) ? path : path * suffix
     @info "Saving policy, parameters, and state to $file_path"
     save(
         file_path, Dict(
-            "policy" => agent.policy,
+            "layer" => agent.layer,
             "parameters" => agent.train_state.parameters,
             "states" => agent.train_state.states
         )

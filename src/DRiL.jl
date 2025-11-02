@@ -41,19 +41,17 @@ export AbstractSpace, Box, Discrete
 include("adapters/default_adapters.jl")
 export AbstractActionAdapter, ClampAdapter, TanhScaleAdapter, DiscreteAdapter
 export to_env, from_env
-include("adapters/compat_shims.jl")
 
 include("layers/layers.jl")
 export ActorCriticLayer, ContinuousActorCriticLayer
 export DiscreteActorCriticLayer, AbstractWeightInitializer
 export OrthogonalInitializer, action_log_prob
-include("layers/layer_api.jl")
 export AbstractActorCriticLayer
 include("deployment/deployment_policy.jl")
 export extract_policy, predict
 
 include("agents/agents.jl")
-export ActorCriticAgent, predict_actions, predict_values, steps_taken
+export predict_actions, predict_values, steps_taken
 include("agents/agent_factory.jl")
 export Agent
 
@@ -63,10 +61,10 @@ export Trajectory, RolloutBuffer, OffPolicyTrajectory, ReplayBuffer
 include("algorithms/traits.jl")
 
 include("algorithms/sac.jl")
-export SAC, OffPolicyActorCriticAgent, SACPolicy
+export SAC, SACPolicy
 
 include("algorithms/ppo.jl")
-export learn!, PPO, load_policy_params_and_state!
+export train!, PPO, load_policy_params_and_state!
 
 include("callbacks.jl")
 

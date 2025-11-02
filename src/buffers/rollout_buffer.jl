@@ -17,6 +17,21 @@ function RolloutBuffer(observation_space::AbstractSpace, action_space::AbstractS
     return RolloutBuffer{T, obs_eltype, action_eltype}(observations, actions, rewards, advantages, returns, logprobs, values, gae_lambda, gamma, n_steps, n_envs)
 end
 
+"""
+    collect!(rollout_buffer, agent, alg::OnPolicyAlgorithm, env; kwargs...)
+
+Thin wrapper over collect_rollout! for on-policy algorithms.
+"""
+function collect!(
+        rollout_buffer::RolloutBuffer,
+        agent::Agent,
+        alg::OnPolicyAlgorithm,
+        env::AbstractEnv;
+        kwargs...
+    )
+    return collect_rollout!(rollout_buffer, agent, alg, env; kwargs...)
+end
+
 function reset!(rollout_buffer::RolloutBuffer)
     rollout_buffer.observations .= 0
     rollout_buffer.actions .= 0
@@ -30,7 +45,7 @@ end
 
 function collect_rollout!(
         rollout_buffer::RolloutBuffer,
-        agent::ActorCriticAgent,
+        agent::Agent,
         alg::OnPolicyAlgorithm,
         env::AbstractEnv;
         callbacks::Union{Vector{<:AbstractCallback}, Nothing} = nothing

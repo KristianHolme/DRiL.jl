@@ -15,7 +15,7 @@
     learning_rate::T = 3.0f-4
 end
 
-function ActorCriticAgent(
+function Agent(
         layer::AbstractActorCriticLayer, alg::PPO;
         optimizer_type::Type{<:Optimisers.AbstractRule} = Optimisers.Adam,
         stats_window::Int = 100, #TODO not used
@@ -26,12 +26,11 @@ function ActorCriticAgent(
 
     optimizer = make_optimizer(optimizer_type, alg)
     ps, st = Lux.setup(rng, layer)
-    # @show ps.log_std
     train_state = Lux.Training.TrainState(layer, ps, st, optimizer)
-    adapter = action_adapter(alg)
-    return ActorCriticAgent(
+    adapter = action_adapter(alg, action_space(layer))
+    return Agent(
         layer, alg, adapter, train_state, optimizer_type, stats_window,
-        logger, verbose, rng, AgentStats(0, 0)
+        logger, verbose, rng, AgentStats(0, 0), NoAux()
     )
 end
 
@@ -40,16 +39,24 @@ function make_optimizer(optimizer_type::Type{<:Optimisers.Adam}, alg::PPO)
 end
 
 # Traits and adapter selection
-action_adapter(::PPO) = ClampAdapter()
+action_adapter(::PPO, ::Discrete) = DiscreteAdapter()
+action_adapter(::PPO, ::Box) = ClampAdapter()
 has_twin_critics(::PPO) = false
 has_target_networks(::PPO) = false
 has_entropy_tuning(::PPO) = false
+uses_replay(::PPO) = false
+critic_type(::PPO) = VCritic()
 
-function load_policy_params_and_state!(agent::ActorCriticAgent, alg::PPO, path::AbstractString; suffix::String = ".jld2")
+function load_policy_params_and_state!(
+        agent::Agent{<:AbstractActorCriticLayer, <:PPO, <:AbstractActionAdapter, <:AbstractRNG, <:AbstractTrainingLogger, <:Any},
+        alg::PPO,
+        path::AbstractString;
+        suffix::String = ".jld2"
+    )
     file_path = endswith(path, suffix) ? path : path * suffix
     @info "Loading policy, parameters, and state from $file_path"
     data = load(file_path)
-    new_layer = data["policy"]
+    new_layer = data["layer"]
     new_parameters = data["parameters"]
     new_states = data["states"]
     new_optimizer = make_optimizer(agent.optimizer_type, alg)
@@ -61,7 +68,16 @@ end
 
 #TODO make parameters n_steps, batch_size, epochs, max_steps kwargs, default to values from agent
 #TODO refactor, separate out learnig loop and logging
-function learn!(agent::ActorCriticAgent, env::AbstractParallelEnv, alg::PPO{T}, max_steps::Int; ad_type::Lux.Training.AbstractADType = AutoZygote(), callbacks::Union{Vector{<:AbstractCallback}, Nothing} = nothing) where {T}
+
+
+function train!(
+        agent::Agent{<:AbstractActorCriticLayer, <:PPO, <:AbstractActionAdapter, <:AbstractRNG, <:AbstractTrainingLogger, <:Any},
+        env::AbstractParallelEnv,
+        alg::PPO{T},
+        max_steps::Int;
+        ad_type::Lux.Training.AbstractADType = AutoZygote(),
+        callbacks::Union{Vector{<:AbstractCallback}, Nothing} = nothing
+    ) where {T}
     to = TimerOutput()
     setup_section = begin_timed_section!(to, "setup")
     n_steps = alg.n_steps

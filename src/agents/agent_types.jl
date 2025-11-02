@@ -27,17 +27,31 @@ function Random.seed!(agent::AbstractAgent, seed::Integer)
 end
 
 """
-Agent for Actor-Critic algorithms
-
-    verbose: 
-        0: nothing
-        1: progress bar
-        2: progress bar and stats
-        
+Auxiliary state for agents that do not require extra training-time structures.
 """
-mutable struct ActorCriticAgent{L <: AbstractActorCriticLayer, R <: AbstractRNG, LG <: AbstractTrainingLogger, A <: AbstractAlgorithm, AD <: AbstractActionAdapter} <: AbstractAgent
+struct NoAux end
+
+"""
+Auxiliary state for Q-based actor-critic algorithms (e.g., SAC/TD3/DDPG).
+Holds target critic parameters/states and entropy coefficient train state.
+"""
+mutable struct QAux
+    Q_target_parameters::ComponentArray
+    Q_target_states::NamedTuple
+    ent_train_state::Lux.Training.TrainState
+end
+
+"""
+Unified Agent for all algorithms.
+
+verbose:
+    0: nothing
+    1: progress bar
+    2: progress bar and stats
+"""
+mutable struct Agent{L <: AbstractActorCriticLayer, ALG <: AbstractAlgorithm, AD <: AbstractActionAdapter, R <: AbstractRNG, LG <: AbstractTrainingLogger, AUX} <: AbstractAgent
     layer::L
-    algorithm::A
+    algorithm::ALG
     action_adapter::AD
     train_state::Lux.Training.TrainState
     optimizer_type::Type{<:Optimisers.AbstractRule}
@@ -46,9 +60,10 @@ mutable struct ActorCriticAgent{L <: AbstractActorCriticLayer, R <: AbstractRNG,
     verbose::Int
     rng::R
     stats::AgentStats
+    aux::AUX
 end
 
-add_step!(agent::ActorCriticAgent, steps::Int = 1) = add_step!(agent.stats, steps)
-add_gradient_update!(agent::ActorCriticAgent, updates::Int = 1) = add_gradient_update!(agent.stats, updates)
-steps_taken(agent::ActorCriticAgent) = steps_taken(agent.stats)
-gradient_updates(agent::ActorCriticAgent) = gradient_updates(agent.stats)
+add_step!(agent::Agent, steps::Int = 1) = add_step!(agent.stats, steps)
+add_gradient_update!(agent::Agent, updates::Int = 1) = add_gradient_update!(agent.stats, updates)
+steps_taken(agent::Agent) = steps_taken(agent.stats)
+gradient_updates(agent::Agent) = gradient_updates(agent.stats)
