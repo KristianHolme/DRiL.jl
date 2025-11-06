@@ -2,6 +2,7 @@ using TestItems
 
 @testitem "PPO smoke test improves tracking env performance" tags = [:ppo, :integration] setup = [SharedTestSetup] begin
     using Random
+    using Zygote
 
     function make_parallel_env(seed::Int, n_envs::Int)
         envs = [SharedTestSetup.TrackingTargetEnv(16, Random.MersenneTwister(seed + i)) for i in 1:n_envs]
@@ -36,6 +37,7 @@ end
 
 @testitem "PPO agent serialization roundtrip" tags = [:ppo, :serialization] setup = [SharedTestSetup] begin
     using Random
+    using Zygote
 
     function make_parallel_env(seed::Int, n_envs::Int)
         envs = [SharedTestSetup.TrackingTargetEnv(16, Random.MersenneTwister(seed + i)) for i in 1:n_envs]
