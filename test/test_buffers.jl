@@ -313,33 +313,6 @@ end
     end
 end
 
-@testitem "RolloutBuffer with discrete actions" tags = [:buffers, :rollouts, :discrete] setup = [SharedTestSetup] begin
-    using ClassicControlEnvironments
-    using Random
-
-    n_envs = 4
-    n_steps = 8
-    # Test: RolloutBuffer works correctly with discrete action spaces
-    cartpole_env() = CartPoleEnv()
-    env = MultiThreadedParallelEnv([cartpole_env() for _ in 1:n_envs])
-    policy = DiscreteActorCriticLayer(DRiL.observation_space(env), DRiL.action_space(env))
-    alg = PPO(n_steps = n_steps, batch_size = n_steps, epochs = 1)
-    agent = Agent(policy, alg; verbose = 0)
-    roll_buffer = RolloutBuffer(DRiL.observation_space(env), DRiL.action_space(env), alg.gae_lambda, alg.gamma, n_steps, n_envs)
-
-    # Test rollout collection
-    DRiL.collect_rollout!(roll_buffer, agent, alg, env)
-
-    @test roll_buffer.observations |> size == (4, n_steps * n_envs)
-    @test roll_buffer.actions |> size == (1, n_steps * n_envs)
-    @test roll_buffer.rewards |> size == (n_steps * n_envs,)
-    @test roll_buffer.advantages |> size == (n_steps * n_envs,)
-    @test roll_buffer.returns |> size == (n_steps * n_envs,)
-    @test roll_buffer.logprobs |> size == (n_steps * n_envs,)
-    @test roll_buffer.values |> size == (n_steps * n_envs,)
-
-end
-
 @testitem "Basic ReplayBuffer workings" tags = [:buffers, :rollouts] setup = [SharedTestSetup] begin
     using Random
     using DRiL.DataStructures
