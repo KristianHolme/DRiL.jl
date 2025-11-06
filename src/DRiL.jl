@@ -52,7 +52,7 @@ include("deployment/deployment_policy.jl")
 export extract_policy, DeploymentPolicy
 
 include("agents/agents.jl")
-export predict_actions, predict_values, steps_taken
+export predict_actions, predict_values, steps_taken, save_policy_params_and_state, load_policy_params_and_state
 include("agents/agent_factory.jl")
 export Agent
 

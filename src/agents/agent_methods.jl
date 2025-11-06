@@ -130,7 +130,8 @@ function save_policy_params_and_state(
         file_path, Dict(
             "layer" => agent.layer,
             "parameters" => agent.train_state.parameters,
-            "states" => agent.train_state.states
+            "states" => agent.train_state.states,
+            "aux" => agent.aux
         )
     )
     return file_path

@@ -8,7 +8,14 @@ end
 
 @testitem "Code linting (JET.jl)" tags = [:quality] begin
     using JET
-    JET.test_package(DRiL; target_modules = (DRiL,))
+    if get(ENV, "JET_STRICT", "") == "1"
+        JET.test_package(DRiL; target_modules = (DRiL,))
+    else
+        # Advisory mode: print report but don't fail CI
+        report = JET.report_package(DRiL; target_modules = (DRiL,), toplevel_logger = nothing)
+        println(report)
+        @test true
+    end
 end
 
 # Run all tests

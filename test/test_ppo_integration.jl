@@ -24,15 +24,17 @@ using TestItems
     agent = Agent(policy, alg; verbose = 0, rng = Random.MersenneTwister(42), logger = NoTrainingLogger())
 
     baseline_stats = evaluate_agent(agent, baseline_env; n_eval_episodes = 64, deterministic = true, warn = false)
-    @test baseline_stats.mean_reward < 0.6f0
+    baseline_mean_step = baseline_stats.mean_reward / baseline_stats.mean_length
+    @test baseline_mean_step < 0.6f0
 
     max_steps = alg.n_steps * n_envs * 20
     train!(agent, train_env, alg, max_steps)
 
     trained_stats = evaluate_agent(agent, trained_eval_env; n_eval_episodes = 64, deterministic = true, warn = false)
 
-    @test trained_stats.mean_reward > baseline_stats.mean_reward + 0.2f0
-    @test trained_stats.mean_reward > 0.7f0
+    trained_mean_step = trained_stats.mean_reward / trained_stats.mean_length
+    @test trained_mean_step > baseline_mean_step + 0.2f0
+    @test trained_mean_step > 0.7f0
 end
 
 @testitem "PPO agent serialization roundtrip" tags = [:ppo, :serialization] setup = [SharedTestSetup] begin
