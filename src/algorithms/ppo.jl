@@ -28,6 +28,9 @@ function Agent(
     ps, st = Lux.setup(rng, layer)
     train_state = Lux.Training.TrainState(layer, ps, st, optimizer)
     adapter = action_adapter(alg, action_space(layer))
+
+
+    logger = convert(AbstractTrainingLogger, logger)
     return Agent(
         layer, alg, adapter, train_state, optimizer_type, stats_window,
         logger, verbose, rng, AgentStats(0, 0), NoAux()

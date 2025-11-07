@@ -154,6 +154,8 @@ function Agent(
 
     adapter = action_adapter(alg, action_space(layer))
     aux = QAux(Q_target_parameters, Q_target_states, ent_train_state)
+
+    logger = convert(AbstractTrainingLogger, logger)
     return Agent(
         layer, alg, adapter, train_state, optimizer_type, stats_window, logger, verbose, rng,
         AgentStats(0, 0), aux
