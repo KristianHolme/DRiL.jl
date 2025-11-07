@@ -1,5 +1,3 @@
-using TestItems
-
 @testitem "PPO smoke test improves tracking env performance" tags = [:ppo, :integration] setup = [SharedTestSetup] begin
     using Random
     using Zygote
@@ -27,7 +25,7 @@ using TestItems
     baseline_mean_step = baseline_stats.mean_reward / baseline_stats.mean_length
     @test baseline_mean_step < 0.6f0
 
-    max_steps = alg.n_steps * n_envs * 20
+    max_steps = alg.n_steps * n_envs * 30
     train!(agent, train_env, alg, max_steps)
 
     trained_stats = evaluate_agent(agent, trained_eval_env; n_eval_episodes = 64, deterministic = true, warn = false)
