@@ -48,8 +48,6 @@ export ActorCriticLayer, ContinuousActorCriticLayer
 export DiscreteActorCriticLayer, AbstractWeightInitializer
 export OrthogonalInitializer, action_log_prob
 export AbstractActorCriticLayer
-include("deployment/deployment_policy.jl")
-export extract_policy, DeploymentPolicy, NormalizedDeploymentPolicy
 
 include("agents/agents.jl")
 export predict_actions, predict_values, steps_taken, save_policy_params_and_state, load_policy_params_and_state
@@ -81,6 +79,9 @@ export save_normalization_stats, load_normalization_stats!, set_training, is_tra
 export get_original_obs, get_original_rewards, normalize_obs!, normalize_rewards!, unnormalize_obs!, unnormalize_rewards!
 export MonitorWrapperEnv, EpisodeStats, is_wrapper, unwrap, unwrap_all
 export MultiAgentParallelEnv
+
+include("deployment/deployment_policy.jl")
+export extract_policy, DeploymentPolicy, NormalizedDeploymentPolicy
 
 include("utils/utils.jl")
 export collect_trajectory
