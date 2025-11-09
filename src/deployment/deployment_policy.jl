@@ -24,13 +24,19 @@ end
 
 
 function (dp::DeploymentPolicy)(obs; deterministic::Bool = true, rng::AbstractRNG = Random.default_rng())
+    single_obs = false
     if obs in observation_space(dp.layer) #single observation, make into vector
         obs = [obs]
+        single_obs = true
     end
     obs_batch = batch(obs, observation_space(dp.layer))
     actions, _ = predict_actions(dp.layer, obs_batch, dp.params, dp.states; deterministic = deterministic, rng = rng)
     env_actions = to_env.(Ref(dp.adapter), actions, Ref(dp.action_space))
-    return env_actions
+    if single_obs
+        return env_actions[1]
+    else
+        return env_actions
+    end
 end
 
 #TODO: add tests
@@ -50,9 +56,16 @@ function extract_policy(agent, norm_env::NormalizeWrapperEnv)
 end
 
 function (dp::NormalizedDeploymentPolicy)(obs; deterministic::Bool = true, rng::AbstractRNG = Random.default_rng())
+    single_obs = false
     if obs in observation_space(dp.policy.layer) #single observation, make into vector
+        single_obs = true
         obs = [obs]
     end
     normalize_obs!.(obs, Ref(dp.obs_rms), dp.eps, dp.clip_obs)
-    return dp.policy(obs; deterministic = deterministic, rng = rng)
+    actions = dp.policy(obs; deterministic = deterministic, rng = rng)
+    if single_obs
+        return actions[1]
+    else
+        return actions
+    end
 end
