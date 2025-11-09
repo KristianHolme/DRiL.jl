@@ -50,6 +50,9 @@ function extract_policy(agent, norm_env::NormalizeWrapperEnv)
 end
 
 function (dp::NormalizedDeploymentPolicy)(obs; deterministic::Bool = true, rng::AbstractRNG = Random.default_rng())
+    if obs in observation_space(dp.policy.layer) #single observation, make into vector
+        obs = [obs]
+    end
     normalize_obs!.(obs, Ref(dp.obs_rms), dp.eps, dp.clip_obs)
     return dp.policy(obs; deterministic = deterministic, rng = rng)
 end
