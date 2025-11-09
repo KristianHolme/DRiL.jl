@@ -170,15 +170,19 @@ function update_reward_stats!(env::NormalizeWrapperEnv, rewards::Vector{T}) wher
     return update!(env.ret_rms, reshape(env.returns, 1, length(env.returns)))
 end
 
+
+function normalize_obs!(obs, obs_rms::RunningMeanStd, epsilon::T, clip_obs::T) where {T <: AbstractFloat}
+    # Normalize using running statistics
+    @. obs = (obs .- obs_rms.mean) ./ sqrt.(obs_rms.var .+ epsilon)
+    clamp!(obs, -clip_obs, clip_obs)
+    return nothing
+end
+
 function normalize_obs!(obs, env::NormalizeWrapperEnv)
     if !env.norm_obs
         return obs
     end
-
-    # Normalize using running statistics
-    @. obs = (obs .- env.obs_rms.mean) ./ sqrt.(env.obs_rms.var .+ env.epsilon)
-    clamp!(obs, -env.clip_obs, env.clip_obs)
-    return nothing
+    return normalize_obs!(obs, env.obs_rms, env.epsilon, env.clip_obs)
 end
 
 function normalize_rewards!(rewards, env::NormalizeWrapperEnv)
@@ -192,11 +196,16 @@ function normalize_rewards!(rewards, env::NormalizeWrapperEnv)
     return nothing
 end
 
+#TODO: should these methods not return nothing?
+function unnormalize_obs!(obs, obs_rms::RunningMeanStd, epsilon::T) where {T <: AbstractFloat}
+    @. obs = obs .* sqrt.(obs_rms.var .+ epsilon) .+ obs_rms.mean
+    return nothing
+end
 function unnormalize_obs!(obs, env::NormalizeWrapperEnv)
     if !env.norm_obs
         return obs
     end
-    @. obs = obs .* sqrt.(env.obs_rms.var .+ env.epsilon) .+ env.obs_rms.mean
+    unnormalize_obs!(obs, env.obs_rms, env.epsilon)
     return nothing
 end
 
