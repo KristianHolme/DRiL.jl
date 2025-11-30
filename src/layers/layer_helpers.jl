@@ -11,11 +11,13 @@ function (init::OrthogonalInitializer{T})(rng::AbstractRNG, out_dims::Int, in_di
 end
 
 function get_feature_extractor(O::Box)
-    return Lux.FlattenLayer()
+    # return Lux.FlattenLayer()
+    return Lux.NoOpLayer()
 end
 
 function get_feature_extractor(O::Discrete)
-    return Lux.FlattenLayer()
+    # return Lux.FlattenLayer()
+    return Lux.NoOpLayer()
 end
 
 function get_mlp(
@@ -123,4 +125,3 @@ function zero_fields!(a::ComponentArray{T}, names::Vector{Symbol}) where {T <: R
     end
     return nothing
 end
-

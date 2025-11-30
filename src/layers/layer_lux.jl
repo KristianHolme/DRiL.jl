@@ -10,7 +10,7 @@ function Lux.initialparameters(rng::AbstractRNG, policy::ContinuousActorCriticLa
             ones(typeof(policy.log_std_init), size(policy.action_space)),
     )
     params = merge(feats_params, head_params)
-    params = ComponentArray(params)
+    # params = ComponentArray(params)
     return params
 end
 
@@ -26,7 +26,7 @@ function Lux.initialparameters(rng::AbstractRNG, policy::ContinuousActorCriticLa
             ones(typeof(policy.log_std_init), size(policy.action_space)),
     )
     params = merge(feats_params, head_params)
-    params = ComponentArray(params)
+    # params = ComponentArray(params)
     return params
 end
 

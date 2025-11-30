@@ -74,7 +74,8 @@ end
 
 function get_actions_from_features(policy::AbstractActorCriticLayer, feats::AbstractArray, ps, st)
     # Use function barrier to isolate type instability
-    actions, actor_st = policy.actor_head(copy(feats), ps.actor_head, st.actor_head)
+    # temprarily remove copy: enzyme cannot handle it
+    actions, actor_st = policy.actor_head(feats, ps.actor_head, st.actor_head)
     st = merge(st, (; actor_head = actor_st))
     return actions, st
 end

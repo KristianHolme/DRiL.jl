@@ -325,17 +325,17 @@ function normalize!(values::Vector{T}) where {T}
     std_values = std(values)
     epsilon = T(1.0e-8)
     values .= (values .- mean_values) ./ (std_values + epsilon)
-    return nothing
+    return values
 end
 
 function maybe_normalize!(advantages::Vector{T}, alg::PPO{T}) where {T}
     if alg.normalize_advantage
         normalize!(advantages)
     end
-    return nothing
+    return advantages
 end
 
-function (alg::PPO{T})(policy::AbstractActorCriticLayer, ps, st, batch_data) where {T}
+function (alg::PPO{T})(layer::AbstractActorCriticLayer, ps, st, batch_data) where {T}
     observations = batch_data[1]
     actions = batch_data[2]
     advantages::Vector{T} = batch_data[3]
@@ -347,7 +347,7 @@ function (alg::PPO{T})(policy::AbstractActorCriticLayer, ps, st, batch_data) whe
     #TODO: do we need to ignore derivatives here?
     @ignore_derivatives maybe_normalize!(advantages, alg)
 
-    values, log_probs, entropy, st = evaluate_actions(policy, observations, actions, ps, st)
+    values, log_probs, entropy, st = evaluate_actions(layer, observations, actions, ps, st)
     values = !isnothing(alg.clip_range_vf) ? clip_range(old_values, values, alg.clip_range_vf::T) : values
 
     r = exp.(log_probs - old_logprobs)
