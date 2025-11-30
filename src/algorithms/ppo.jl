@@ -76,7 +76,7 @@ end
 function train!(
         agent::Agent{<:AbstractActorCriticLayer, <:PPO, <:AbstractActionAdapter, <:AbstractRNG, <:AbstractTrainingLogger, <:Any},
         env::AbstractParallelEnv,
-        alg::PPO{T},
+        alg::PPO{T}, #TODO remove alg from here, use agent.alg instead
         max_steps::Int;
         ad_type::Lux.Training.AbstractADType = AutoZygote(),
         callbacks::Union{Vector{<:AbstractCallback}, Nothing} = nothing
@@ -91,6 +91,9 @@ function train!(
     )
 
     iterations = max_steps ÷ (n_steps * n_envs)
+    if iterations == 0
+        @warn "max_steps is less than n_steps * n_envs, max_steps: $max_steps, n_steps: $n_steps, n_envs: $n_envs. There will be no training."
+    end
     total_steps = iterations * n_steps * n_envs
 
     agent.verbose > 0 && @info "Training with total_steps: $total_steps, 
