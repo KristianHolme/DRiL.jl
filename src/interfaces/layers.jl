@@ -101,13 +101,22 @@ Sample actions and return their log probabilities from batched observations (for
 """
 function action_log_prob end
 
+abstract type AbstractNoise end
+
+struct StateIndependantNoise <: AbstractNoise end
+struct StateDependentNoise <: AbstractNoise end
+struct NoNoise <: AbstractNoise end
+
 """
-    (layer::AbstractLayer)(obs::AbstractArray, ps, st) -> (actions, values, log_probs, st)
+    AbstractActorCriticLayer <: AbstractLayer
+
+Abstract type for actor-critic layers. Subtypes are callable with signature:
+
+    (layer::AbstractActorCriticLayer)(obs::AbstractArray, ps, st) -> (actions, values, log_probs, st)
 
 Forward pass through layer: get actions, values, and log probabilities from batched observations.
 
 # Arguments
-- `layer::AbstractLayer`: The actor-critic layer
 - `obs::AbstractArray`: Batched observations (each column is one observation)
 - `ps`: Layer parameters
 - `st`: Layer state
@@ -122,14 +131,6 @@ Forward pass through layer: get actions, values, and log probabilities from batc
 - Input observations must be batched (matrix/array format)
 - Output actions are raw layer outputs (e.g., 1-based for Discrete layers)
 """
-function (layer::AbstractLayer) end
-
-abstract type AbstractNoise end
-
-struct StateIndependantNoise <: AbstractNoise end
-struct StateDependentNoise <: AbstractNoise end
-struct NoNoise <: AbstractNoise end
-
 abstract type AbstractActorCriticLayer <: AbstractLayer end
 
 # Abstract types for shared features parameter
