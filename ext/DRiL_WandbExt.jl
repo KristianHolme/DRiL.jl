@@ -11,11 +11,12 @@ end
 
 Base.convert(::Type{AbstractTrainingLogger}, wb::Wandb.WandbLogger) = WandbBackend(wb, 0)
 
-DRiL.set_step!(lg::WandbBackend, s::Integer) = (Δ = s - lg.current_step; lg.current_step = s; Δ != 0 && Wandb.increment_step!(lg.wb, Δ); s)
-DRiL.increment_step!(lg::WandbBackend, Δ::Integer) = (lg.current_step += Δ; Wandb.increment_step!(lg.wb, Δ); lg.current_step)
+# Only track step internally - don't use Wandb.increment_step! since we pass step= explicitly to log()
+DRiL.set_step!(lg::WandbBackend, s::Integer) = (lg.current_step = s)
+DRiL.increment_step!(lg::WandbBackend, Δ::Integer) = (lg.current_step += Δ; lg.current_step)
 
 function DRiL.log_scalar!(lg::WandbBackend, k::AbstractString, v::Real)
-    Wandb.log(lg.wb, Dict(k => v))
+    Wandb.log(lg.wb, Dict(k => v); step = lg.current_step)
     return nothing
 end
 
@@ -24,7 +25,7 @@ function DRiL.log_dict!(lg::WandbBackend, kv::AbstractDict{<:AbstractString, <:A
     for (k, v) in kv
         d[string(k)] = v
     end
-    Wandb.log(lg.wb, d)
+    Wandb.log(lg.wb, d; step = lg.current_step)
     return nothing
 end
 
