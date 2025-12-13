@@ -8,7 +8,7 @@ makedocs(;
     modules = [DRiL],
     warnonly = true,
     format = DocumenterVitepress.MarkdownVitepress(;
-        repo = "https://github.com/KristianHolme/DRiL.jl",
+        repo = "github.com/KristianHolme/DRiL.jl",
         devbranch = "main",
         devurl = "dev",
     ),
@@ -24,8 +24,8 @@ makedocs(;
     ],
 )
 
-deploydocs(;
+DocumenterVitepress.deploydocs(;
     repo = "github.com/KristianHolme/DRiL.jl.git",
-    push_preview = true,
     devbranch = "main",
+    push_preview = true,
 )
