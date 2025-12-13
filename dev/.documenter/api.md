@@ -31,7 +31,7 @@ Subtypes must implement the following methods:
   
 
 
-<Badge type="info" class="source-link" text="source"><a href="https://github.com/KristianHolme/DRiL.jl/blob/a0f45c1bcbe4598a70eb9222cb4542b17cf7c760/src/interfaces/environments.jl#L5-L18" target="_blank" rel="noreferrer">source</a></Badge>
+<Badge type="info" class="source-link" text="source"><a href="https://github.com/KristianHolme/DRiL.jl/blob/da55e64aad5bc8ede59786d4c958ab75770c832b/src/interfaces/environments.jl#L5-L18" target="_blank" rel="noreferrer">source</a></Badge>
 
 </details>
 
@@ -62,7 +62,7 @@ Abstract type for vectorized/parallel environments that manage multiple environm
 Parallel environments automatically reset individual sub-environments when they terminate or truncate. The terminal observation is stored in `infos[i]["terminal_observation"]` before reset.
 
 
-<Badge type="info" class="source-link" text="source"><a href="https://github.com/KristianHolme/DRiL.jl/blob/a0f45c1bcbe4598a70eb9222cb4542b17cf7c760/src/interfaces/environments.jl#L21-L38" target="_blank" rel="noreferrer">source</a></Badge>
+<Badge type="info" class="source-link" text="source"><a href="https://github.com/KristianHolme/DRiL.jl/blob/da55e64aad5bc8ede59786d4c958ab75770c832b/src/interfaces/environments.jl#L21-L38" target="_blank" rel="noreferrer">source</a></Badge>
 
 </details>
 
@@ -87,7 +87,7 @@ Reset the environment to its initial state.
   
 
 
-<Badge type="info" class="source-link" text="source"><a href="https://github.com/KristianHolme/DRiL.jl/blob/a0f45c1bcbe4598a70eb9222cb4542b17cf7c760/src/interfaces/environments.jl#L41-L51" target="_blank" rel="noreferrer">source</a></Badge>
+<Badge type="info" class="source-link" text="source"><a href="https://github.com/KristianHolme/DRiL.jl/blob/da55e64aad5bc8ede59786d4c958ab75770c832b/src/interfaces/environments.jl#L41-L51" target="_blank" rel="noreferrer">source</a></Badge>
 
 </details>
 
@@ -114,7 +114,7 @@ Take an action in the environment and return the reward.
   
 
 
-<Badge type="info" class="source-link" text="source"><a href="https://github.com/KristianHolme/DRiL.jl/blob/a0f45c1bcbe4598a70eb9222cb4542b17cf7c760/src/interfaces/environments.jl#L54-L65" target="_blank" rel="noreferrer">source</a></Badge>
+<Badge type="info" class="source-link" text="source"><a href="https://github.com/KristianHolme/DRiL.jl/blob/da55e64aad5bc8ede59786d4c958ab75770c832b/src/interfaces/environments.jl#L54-L65" target="_blank" rel="noreferrer">source</a></Badge>
 
 </details>
 
@@ -139,7 +139,7 @@ Get the current observation from the environment.
   
 
 
-<Badge type="info" class="source-link" text="source"><a href="https://github.com/KristianHolme/DRiL.jl/blob/a0f45c1bcbe4598a70eb9222cb4542b17cf7c760/src/interfaces/environments.jl#L68-L78" target="_blank" rel="noreferrer">source</a></Badge>
+<Badge type="info" class="source-link" text="source"><a href="https://github.com/KristianHolme/DRiL.jl/blob/da55e64aad5bc8ede59786d4c958ab75770c832b/src/interfaces/environments.jl#L68-L78" target="_blank" rel="noreferrer">source</a></Badge>
 
 </details>
 
@@ -164,7 +164,7 @@ Check if the environment episode has terminated due to reaching a terminal state
   
 
 
-<Badge type="info" class="source-link" text="source"><a href="https://github.com/KristianHolme/DRiL.jl/blob/a0f45c1bcbe4598a70eb9222cb4542b17cf7c760/src/interfaces/environments.jl#L81-L91" target="_blank" rel="noreferrer">source</a></Badge>
+<Badge type="info" class="source-link" text="source"><a href="https://github.com/KristianHolme/DRiL.jl/blob/da55e64aad5bc8ede59786d4c958ab75770c832b/src/interfaces/environments.jl#L81-L91" target="_blank" rel="noreferrer">source</a></Badge>
 
 </details>
 
@@ -189,7 +189,7 @@ Check if the environment episode has been truncated (e.g., time limit reached).
   
 
 
-<Badge type="info" class="source-link" text="source"><a href="https://github.com/KristianHolme/DRiL.jl/blob/a0f45c1bcbe4598a70eb9222cb4542b17cf7c760/src/interfaces/environments.jl#L94-L104" target="_blank" rel="noreferrer">source</a></Badge>
+<Badge type="info" class="source-link" text="source"><a href="https://github.com/KristianHolme/DRiL.jl/blob/da55e64aad5bc8ede59786d4c958ab75770c832b/src/interfaces/environments.jl#L94-L104" target="_blank" rel="noreferrer">source</a></Badge>
 
 </details>
 
@@ -214,7 +214,7 @@ Get the action space specification for the environment.
   
 
 
-<Badge type="info" class="source-link" text="source"><a href="https://github.com/KristianHolme/DRiL.jl/blob/a0f45c1bcbe4598a70eb9222cb4542b17cf7c760/src/interfaces/environments.jl#L107-L117" target="_blank" rel="noreferrer">source</a></Badge>
+<Badge type="info" class="source-link" text="source"><a href="https://github.com/KristianHolme/DRiL.jl/blob/da55e64aad5bc8ede59786d4c958ab75770c832b/src/interfaces/environments.jl#L107-L117" target="_blank" rel="noreferrer">source</a></Badge>
 
 </details>
 
@@ -239,7 +239,7 @@ Get the observation space specification for the environment.
   
 
 
-<Badge type="info" class="source-link" text="source"><a href="https://github.com/KristianHolme/DRiL.jl/blob/a0f45c1bcbe4598a70eb9222cb4542b17cf7c760/src/interfaces/environments.jl#L120-L130" target="_blank" rel="noreferrer">source</a></Badge>
+<Badge type="info" class="source-link" text="source"><a href="https://github.com/KristianHolme/DRiL.jl/blob/da55e64aad5bc8ede59786d4c958ab75770c832b/src/interfaces/environments.jl#L120-L130" target="_blank" rel="noreferrer">source</a></Badge>
 
 </details>
 
@@ -264,7 +264,7 @@ Get additional environment information (metadata, debug info, etc.).
   
 
 
-<Badge type="info" class="source-link" text="source"><a href="https://github.com/KristianHolme/DRiL.jl/blob/a0f45c1bcbe4598a70eb9222cb4542b17cf7c760/src/interfaces/environments.jl#L133-L143" target="_blank" rel="noreferrer">source</a></Badge>
+<Badge type="info" class="source-link" text="source"><a href="https://github.com/KristianHolme/DRiL.jl/blob/da55e64aad5bc8ede59786d4c958ab75770c832b/src/interfaces/environments.jl#L133-L143" target="_blank" rel="noreferrer">source</a></Badge>
 
 </details>
 
@@ -289,7 +289,7 @@ Get the number of parallel environments in a parallel environment wrapper.
   
 
 
-<Badge type="info" class="source-link" text="source"><a href="https://github.com/KristianHolme/DRiL.jl/blob/a0f45c1bcbe4598a70eb9222cb4542b17cf7c760/src/interfaces/environments.jl#L146-L156" target="_blank" rel="noreferrer">source</a></Badge>
+<Badge type="info" class="source-link" text="source"><a href="https://github.com/KristianHolme/DRiL.jl/blob/da55e64aad5bc8ede59786d4c958ab75770c832b/src/interfaces/environments.jl#L146-L156" target="_blank" rel="noreferrer">source</a></Badge>
 
 </details>
 
@@ -308,7 +308,7 @@ AbstractSpace
 Abstract base type for all observation and action spaces in DRiL.jl. Concrete subtypes include `Box` (continuous) and `Discrete` (finite actions).
 
 
-<Badge type="info" class="source-link" text="source"><a href="https://github.com/KristianHolme/DRiL.jl/blob/a0f45c1bcbe4598a70eb9222cb4542b17cf7c760/src/spaces.jl#L1-L6" target="_blank" rel="noreferrer">source</a></Badge>
+<Badge type="info" class="source-link" text="source"><a href="https://github.com/KristianHolme/DRiL.jl/blob/da55e64aad5bc8ede59786d4c958ab75770c832b/src/spaces.jl#L1-L6" target="_blank" rel="noreferrer">source</a></Badge>
 
 </details>
 
@@ -344,7 +344,7 @@ space = Box(-1.0f0, 1.0f0, (4,))
 
 
 
-<Badge type="info" class="source-link" text="source"><a href="https://github.com/KristianHolme/DRiL.jl/blob/a0f45c1bcbe4598a70eb9222cb4542b17cf7c760/src/spaces.jl#L9-L27" target="_blank" rel="noreferrer">source</a></Badge>
+<Badge type="info" class="source-link" text="source"><a href="https://github.com/KristianHolme/DRiL.jl/blob/da55e64aad5bc8ede59786d4c958ab75770c832b/src/spaces.jl#L9-L27" target="_blank" rel="noreferrer">source</a></Badge>
 
 </details>
 
@@ -375,7 +375,7 @@ space = Discrete(4, 0)  # Actions: 0, 1, 2, 3 (Gym convention)
 
 
 
-<Badge type="info" class="source-link" text="source"><a href="https://github.com/KristianHolme/DRiL.jl/blob/a0f45c1bcbe4598a70eb9222cb4542b17cf7c760/src/spaces.jl#L141-L155" target="_blank" rel="noreferrer">source</a></Badge>
+<Badge type="info" class="source-link" text="source"><a href="https://github.com/KristianHolme/DRiL.jl/blob/da55e64aad5bc8ede59786d4c958ab75770c832b/src/spaces.jl#L141-L155" target="_blank" rel="noreferrer">source</a></Badge>
 
 </details>
 
@@ -425,7 +425,7 @@ train!(agent, env, ppo, 100_000)
 
 
 
-<Badge type="info" class="source-link" text="source"><a href="https://github.com/KristianHolme/DRiL.jl/blob/a0f45c1bcbe4598a70eb9222cb4542b17cf7c760/src/algorithms/ppo.jl#L1-L24" target="_blank" rel="noreferrer">source</a></Badge>
+<Badge type="info" class="source-link" text="source"><a href="https://github.com/KristianHolme/DRiL.jl/blob/da55e64aad5bc8ede59786d4c958ab75770c832b/src/algorithms/ppo.jl#L1-L24" target="_blank" rel="noreferrer">source</a></Badge>
 
 </details>
 
@@ -472,7 +472,7 @@ train!(agent, env, sac, 500_000)
 
 
 
-<Badge type="info" class="source-link" text="source"><a href="https://github.com/KristianHolme/DRiL.jl/blob/a0f45c1bcbe4598a70eb9222cb4542b17cf7c760/src/algorithms/sac.jl#L1-L24" target="_blank" rel="noreferrer">source</a></Badge>
+<Badge type="info" class="source-link" text="source"><a href="https://github.com/KristianHolme/DRiL.jl/blob/da55e64aad5bc8ede59786d4c958ab75770c832b/src/algorithms/sac.jl#L1-L24" target="_blank" rel="noreferrer">source</a></Badge>
 
 </details>
 
@@ -494,7 +494,7 @@ Unified Agent for all algorithms.
 verbose:     0: nothing     1: progress bar     2: progress bar and stats
 
 
-<Badge type="info" class="source-link" text="source"><a href="https://github.com/KristianHolme/DRiL.jl/blob/a0f45c1bcbe4598a70eb9222cb4542b17cf7c760/src/agents/agent_types.jl#L44-L51" target="_blank" rel="noreferrer">source</a></Badge>
+<Badge type="info" class="source-link" text="source"><a href="https://github.com/KristianHolme/DRiL.jl/blob/da55e64aad5bc8ede59786d4c958ab75770c832b/src/agents/agent_types.jl#L44-L51" target="_blank" rel="noreferrer">source</a></Badge>
 
 </details>
 
@@ -537,7 +537,7 @@ Predict actions from batched observations.
   
 
 
-<Badge type="info" class="source-link" text="source"><a href="https://github.com/KristianHolme/DRiL.jl/blob/a0f45c1bcbe4598a70eb9222cb4542b17cf7c760/src/interfaces/layers.jl#L11-L31" target="_blank" rel="noreferrer">source</a></Badge>
+<Badge type="info" class="source-link" text="source"><a href="https://github.com/KristianHolme/DRiL.jl/blob/da55e64aad5bc8ede59786d4c958ab75770c832b/src/interfaces/layers.jl#L11-L31" target="_blank" rel="noreferrer">source</a></Badge>
 
 </details>
 
@@ -578,7 +578,7 @@ Predict Q-values from batched observations and actions (for Q-Critic layers).
   
 
 
-<Badge type="info" class="source-link" text="source"><a href="https://github.com/KristianHolme/DRiL.jl/blob/a0f45c1bcbe4598a70eb9222cb4542b17cf7c760/src/interfaces/layers.jl#L35-L54" target="_blank" rel="noreferrer">source</a></Badge>
+<Badge type="info" class="source-link" text="source"><a href="https://github.com/KristianHolme/DRiL.jl/blob/da55e64aad5bc8ede59786d4c958ab75770c832b/src/interfaces/layers.jl#L35-L54" target="_blank" rel="noreferrer">source</a></Badge>
 
 </details>
 
@@ -657,7 +657,7 @@ mean_reward, std_reward = evaluate_agent(agent, env;
 
 
 
-<Badge type="info" class="source-link" text="source"><a href="https://github.com/KristianHolme/DRiL.jl/blob/a0f45c1bcbe4598a70eb9222cb4542b17cf7c760/src/evaluation.jl#L11-L53" target="_blank" rel="noreferrer">source</a></Badge>
+<Badge type="info" class="source-link" text="source"><a href="https://github.com/KristianHolme/DRiL.jl/blob/da55e64aad5bc8ede59786d4c958ab75770c832b/src/evaluation.jl#L11-L53" target="_blank" rel="noreferrer">source</a></Badge>
 
 </details>
 
@@ -716,7 +716,7 @@ A circular buffer for storing multiple trajectories of off-policy experience dat
   
 
 
-<Badge type="info" class="source-link" text="source"><a href="https://github.com/KristianHolme/DRiL.jl/blob/a0f45c1bcbe4598a70eb9222cb4542b17cf7c760/src/buffers/buffer_types.jl#L42-L51" target="_blank" rel="noreferrer">source</a></Badge>
+<Badge type="info" class="source-link" text="source"><a href="https://github.com/KristianHolme/DRiL.jl/blob/da55e64aad5bc8ede59786d4c958ab75770c832b/src/buffers/buffer_types.jl#L42-L51" target="_blank" rel="noreferrer">source</a></Badge>
 
 </details>
 
@@ -767,7 +767,7 @@ extract_policy(agent) -> DeploymentPolicy
 Create a lightweight deployment policy from a trained agent.
 
 
-<Badge type="info" class="source-link" text="source"><a href="https://github.com/KristianHolme/DRiL.jl/blob/a0f45c1bcbe4598a70eb9222cb4542b17cf7c760/src/deployment/deployment_policy.jl#L11-L15" target="_blank" rel="noreferrer">source</a></Badge>
+<Badge type="info" class="source-link" text="source"><a href="https://github.com/KristianHolme/DRiL.jl/blob/da55e64aad5bc8ede59786d4c958ab75770c832b/src/deployment/deployment_policy.jl#L11-L15" target="_blank" rel="noreferrer">source</a></Badge>
 
 </details>
 
@@ -810,7 +810,7 @@ log_scalar!(logger::AbstractTrainingLogger, key::AbstractString, value::Real)
 Log a single scalar metric under `key`.
 
 
-<Badge type="info" class="source-link" text="source"><a href="https://github.com/KristianHolme/DRiL.jl/blob/a0f45c1bcbe4598a70eb9222cb4542b17cf7c760/src/interfaces/logging.jl#L14-L18" target="_blank" rel="noreferrer">source</a></Badge>
+<Badge type="info" class="source-link" text="source"><a href="https://github.com/KristianHolme/DRiL.jl/blob/da55e64aad5bc8ede59786d4c958ab75770c832b/src/interfaces/logging.jl#L14-L18" target="_blank" rel="noreferrer">source</a></Badge>
 
 </details>
 
@@ -827,7 +827,7 @@ log_dict!(logger::AbstractTrainingLogger, kv::AbstractDict{<:AbstractString,<:An
 Log multiple metrics at once from a string-keyed dictionary.
 
 
-<Badge type="info" class="source-link" text="source"><a href="https://github.com/KristianHolme/DRiL.jl/blob/a0f45c1bcbe4598a70eb9222cb4542b17cf7c760/src/interfaces/logging.jl#L21-L25" target="_blank" rel="noreferrer">source</a></Badge>
+<Badge type="info" class="source-link" text="source"><a href="https://github.com/KristianHolme/DRiL.jl/blob/da55e64aad5bc8ede59786d4c958ab75770c832b/src/interfaces/logging.jl#L21-L25" target="_blank" rel="noreferrer">source</a></Badge>
 
 </details>
 
@@ -844,7 +844,7 @@ set_step!(logger::AbstractTrainingLogger, step::Integer)
 Set the global step for subsequent metric logs.
 
 
-<Badge type="info" class="source-link" text="source"><a href="https://github.com/KristianHolme/DRiL.jl/blob/a0f45c1bcbe4598a70eb9222cb4542b17cf7c760/src/interfaces/logging.jl#L6-L10" target="_blank" rel="noreferrer">source</a></Badge>
+<Badge type="info" class="source-link" text="source"><a href="https://github.com/KristianHolme/DRiL.jl/blob/da55e64aad5bc8ede59786d4c958ab75770c832b/src/interfaces/logging.jl#L6-L10" target="_blank" rel="noreferrer">source</a></Badge>
 
 </details>
 
