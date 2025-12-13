@@ -2,4 +2,3 @@
 # Agents
 # ------------------------------------------------------------
 abstract type AbstractAgent end
-

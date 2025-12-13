@@ -19,4 +19,3 @@ function merge_params(a1::ComponentArray, a2::ComponentArray)
     end
     return a3
 end
-

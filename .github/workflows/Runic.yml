@@ -1,0 +1,26 @@
+name: Runic
+on:
+  push:
+    branches:
+      - main
+      - dev
+  pull_request:
+    branches:
+      - main
+      - dev
+
+jobs:
+  runic:
+    name: Runic
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: julia-actions/setup-julia@v2
+        with:
+          version: "1"
+      - uses: julia-actions/cache@v2
+      - name: Install Runic
+        run: julia -e 'using Pkg; Pkg.add("Runic")'
+      - name: Check formatting
+        run: julia -e 'using Runic; exit(Runic.main(["--check", "."]))'
+

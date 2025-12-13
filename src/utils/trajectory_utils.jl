@@ -47,4 +47,3 @@ function collect_trajectory(
     env = set_training(env, original_training)
     return observations, actions, rewards
 end
-

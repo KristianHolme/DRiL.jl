@@ -123,4 +123,3 @@ function zero_fields!(a::ComponentArray{T}, names::Vector{Symbol}) where {T <: R
     end
     return nothing
 end
-

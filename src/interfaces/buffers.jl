@@ -2,4 +2,3 @@
 # Buffers
 # ------------------------------------------------------------
 abstract type AbstractBuffer end
-

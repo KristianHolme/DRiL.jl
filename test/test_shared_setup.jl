@@ -115,62 +115,62 @@
         return [env.current_state]
     end
 
-      # Tracking environment where optimal action matches the observed target value.
-      mutable struct TrackingTargetEnv <: AbstractEnv
-          max_steps::Int
-          current_step::Int
-          observation_space::Box
-          action_space::Box
-          current_obs::Float32
-          _terminated::Bool
-          _truncated::Bool
-          rng::Random.AbstractRNG
-      end
+    # Tracking environment where optimal action matches the observed target value.
+    mutable struct TrackingTargetEnv <: AbstractEnv
+        max_steps::Int
+        current_step::Int
+        observation_space::Box
+        action_space::Box
+        current_obs::Float32
+        _terminated::Bool
+        _truncated::Bool
+        rng::Random.AbstractRNG
+    end
 
-      function TrackingTargetEnv(
-              max_steps::Int = 16,
-              rng::Random.AbstractRNG = Random.Xoshiro()
-          )
-          obs_space = Box(Float32[0.0], Float32[1.0])
-          act_space = Box(Float32[-1.0], Float32[1.0])
-          initial_obs = rand(rng, obs_space)[1]
-          return TrackingTargetEnv(
-              max_steps, 0, obs_space, act_space,
-              Float32(initial_obs), false, false, rng
-          )
-      end
+    function TrackingTargetEnv(
+            max_steps::Int = 16,
+            rng::Random.AbstractRNG = Random.Xoshiro()
+        )
+        obs_space = Box(Float32[0.0], Float32[1.0])
+        act_space = Box(Float32[-1.0], Float32[1.0])
+        initial_obs = rand(rng, obs_space)[1]
+        return TrackingTargetEnv(
+            max_steps, 0, obs_space, act_space,
+            Float32(initial_obs), false, false, rng
+        )
+    end
 
-      DRiL.observation_space(env::TrackingTargetEnv) = env.observation_space
-      DRiL.action_space(env::TrackingTargetEnv) = env.action_space
-      DRiL.terminated(env::TrackingTargetEnv) = env._terminated
-      DRiL.truncated(env::TrackingTargetEnv) = env._truncated
-      DRiL.get_info(::TrackingTargetEnv) = Dict{String, Any}()
+    DRiL.observation_space(env::TrackingTargetEnv) = env.observation_space
+    DRiL.action_space(env::TrackingTargetEnv) = env.action_space
+    DRiL.terminated(env::TrackingTargetEnv) = env._terminated
+    DRiL.truncated(env::TrackingTargetEnv) = env._truncated
+    DRiL.get_info(::TrackingTargetEnv) = Dict{String, Any}()
 
-      function DRiL.reset!(env::TrackingTargetEnv)
-          env.current_step = 0
-          env._terminated = false
-          env._truncated = false
-          env.current_obs = rand(env.rng, env.observation_space)[1]
-          return nothing
-      end
+    function DRiL.reset!(env::TrackingTargetEnv)
+        env.current_step = 0
+        env._terminated = false
+        env._truncated = false
+        env.current_obs = rand(env.rng, env.observation_space)[1]
+        return nothing
+    end
 
-      function DRiL.act!(env::TrackingTargetEnv, action::AbstractArray)
-          env.current_step += 1
-          action_low = env.action_space.low[1]
-          action_high = env.action_space.high[1]
-          action_val = clamp(Float32(action[1]), action_low, action_high)
-          diff = abs(action_val - env.current_obs)
-          reward = clamp(1.0f0 - diff, 0.0f0, 1.0f0)
+    function DRiL.act!(env::TrackingTargetEnv, action::AbstractArray)
+        env.current_step += 1
+        action_low = env.action_space.low[1]
+        action_high = env.action_space.high[1]
+        action_val = clamp(Float32(action[1]), action_low, action_high)
+        diff = abs(action_val - env.current_obs)
+        reward = clamp(1.0f0 - diff, 0.0f0, 1.0f0)
 
-          env._terminated = env.current_step >= env.max_steps
-          env._truncated = false
-          env.current_obs = rand(env.rng, env.observation_space)[1]
-          return reward
-      end
+        env._terminated = env.current_step >= env.max_steps
+        env._truncated = false
+        env.current_obs = rand(env.rng, env.observation_space)[1]
+        return reward
+    end
 
-      function DRiL.observe(env::TrackingTargetEnv)
-          return Float32[env.current_obs]
-      end
+    function DRiL.observe(env::TrackingTargetEnv)
+        return Float32[env.current_obs]
+    end
 
     # Simple environment that gives a reward of 1.0 only at the final timestep of an episode.
     # This allows for analytical computation of GAE values for testing.

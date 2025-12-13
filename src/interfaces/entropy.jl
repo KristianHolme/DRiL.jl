@@ -25,4 +25,3 @@ end
 
 Base.string(e::AutoEntropyCoefficient) = "AutoEntropyCoefficient(target=$(e.target), initial_value=$(e.initial_value))"
 Base.string(e::FixedEntropyCoefficient) = "FixedEntropyCoefficient(coef=$(e.coef))"
-

@@ -155,4 +155,3 @@ function get_data_loader(buffer::ReplayBuffer{T, O, OBS, AC}, batch_size::Int, b
         batchsize = batch_size, shuffle, parallel, rng
     )
 end
-

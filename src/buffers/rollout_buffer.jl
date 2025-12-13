@@ -88,4 +88,3 @@ function collect_rollout!(
     end
     return fps, true
 end
-

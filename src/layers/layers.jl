@@ -6,4 +6,3 @@ include("layer_constructors.jl")
 include("layer_lux.jl")
 include("layer_forward.jl")
 include("layer_methods.jl")
-

@@ -59,4 +59,3 @@ struct ReplayBuffer{T, O, OBS, AC}
     truncated::CircularBuffer{Bool}
     truncated_observations::CircularBuffer{Union{Nothing, OBS}}
 end
-

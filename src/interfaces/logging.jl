@@ -71,4 +71,3 @@ Default implementation does nothing. Environments can override to log custom met
 function log_stats(env::AbstractEnv, logger::AbstractTrainingLogger)
     return nothing
 end
-
