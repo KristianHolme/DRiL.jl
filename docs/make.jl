@@ -25,8 +25,7 @@ makedocs(;
 )
 
 deploydocs(;
-    repo = "github.com/KristianHolme/DRiL.jl",
-    target = "build",
+    repo = "github.com/KristianHolme/DRiL.jl.git",
     push_preview = true,
     devbranch = "main",
 )
