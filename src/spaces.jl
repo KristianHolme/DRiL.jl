@@ -1,5 +1,30 @@
+"""
+    AbstractSpace
+
+Abstract base type for all observation and action spaces in DRiL.jl.
+Concrete subtypes include `Box` (continuous) and `Discrete` (finite actions).
+"""
 abstract type AbstractSpace end
 
+"""
+    Box{T <: Number} <: AbstractSpace
+
+A continuous space with lower and upper bounds per dimension.
+
+# Fields
+- `low::Array{T}`: Lower bounds for each dimension
+- `high::Array{T}`: Upper bounds for each dimension  
+- `shape::Tuple{Vararg{Int}}`: Shape of the space
+
+# Example
+```julia
+# 2D box with different bounds per dimension
+space = Box(Float32[-1, -2], Float32[1, 3])
+
+# Uniform bounds
+space = Box(-1.0f0, 1.0f0, (4,))
+```
+"""
 struct Box{T <: Number} <: AbstractSpace
     low::Array{T}
     high::Array{T}
@@ -113,6 +138,21 @@ function scale_to_space(action, action_space::Box{T}) where {T}
 end
 
 
+"""
+    Discrete{T <: Integer} <: AbstractSpace
+
+A discrete space representing a finite set of actions.
+
+# Fields
+- `n::T`: Number of discrete actions
+- `start::T`: Starting index (default: 1 for Julia convention)
+
+# Example
+```julia
+space = Discrete(4)  # Actions: 1, 2, 3, 4
+space = Discrete(4, 0)  # Actions: 0, 1, 2, 3 (Gym convention)
+```
+"""
 struct Discrete{T <: Integer} <: AbstractSpace
     n::T
     start::T

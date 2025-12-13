@@ -3,3 +3,8 @@ test/Manifest.toml
 logs/
 notes
 .CondaPkg
+
+# Documentation build artifacts
+docs/build/
+docs/node_modules/
+docs/package-lock.json

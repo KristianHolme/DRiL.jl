@@ -1,3 +1,27 @@
+"""
+    PPO{T <: AbstractFloat} <: OnPolicyAlgorithm
+
+Proximal Policy Optimization algorithm.
+
+# Fields
+- `gamma`: Discount factor (default: 0.99)
+- `gae_lambda`: GAE lambda for advantage estimation (default: 0.95)
+- `clip_range`: PPO clipping parameter (default: 0.2)
+- `ent_coef`: Entropy coefficient (default: 0.0)
+- `vf_coef`: Value function coefficient (default: 0.5)
+- `max_grad_norm`: Maximum gradient norm for clipping (default: 0.5)
+- `n_steps`: Steps per rollout before update (default: 2048)
+- `batch_size`: Minibatch size (default: 64)
+- `epochs`: Number of epochs per update (default: 10)
+- `learning_rate`: Optimizer learning rate (default: 3e-4)
+
+# Example
+```julia
+ppo = PPO(gamma=0.99f0, n_steps=2048, epochs=10)
+agent = Agent(model, ppo)
+train!(agent, env, ppo, 100_000)
+```
+"""
 @kwdef struct PPO{T <: AbstractFloat} <: OnPolicyAlgorithm
     gamma::T = 0.99f0
     gae_lambda::T = 0.95f0

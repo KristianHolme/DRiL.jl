@@ -1,7 +1,41 @@
 # ------------------------------------------------------------
 # Environments
 # ------------------------------------------------------------
+
+"""
+    AbstractEnv
+
+Abstract base type for all reinforcement learning environments.
+
+Subtypes must implement the following methods:
+- `reset!(env)` - Reset the environment
+- `act!(env, action)` - Take an action and return the reward
+- `observe(env)` - Get current observation
+- `terminated(env)` - Check if episode terminated
+- `truncated(env)` - Check if episode was truncated
+- `action_space(env)` - Get the action space
+- `observation_space(env)` - Get the observation space
+"""
 abstract type AbstractEnv end
+
+"""
+    AbstractParallelEnv <: AbstractEnv
+
+Abstract type for vectorized/parallel environments that manage multiple environment instances.
+
+# Key Differences from AbstractEnv
+
+| Method | Single Env | Parallel Env |
+|--------|------------|--------------|
+| `observe` | Returns one observation | Returns vector of observations |
+| `act!` | Returns `reward` | Returns `(rewards, terminateds, truncateds, infos)` |
+| `terminated` | Returns `Bool` | Returns `Vector{Bool}` |
+| `truncated` | Returns `Bool` | Returns `Vector{Bool}` |
+
+# Auto-Reset Behavior
+Parallel environments automatically reset individual sub-environments when they terminate or truncate.
+The terminal observation is stored in `infos[i]["terminal_observation"]` before reset.
+"""
 abstract type AbstractParallelEnv <: AbstractEnv end
 
 """
@@ -159,4 +193,3 @@ Unwrap one layer of environment wrapper to access the underlying environment.
 - `AbstractEnv`: The underlying environment (may still be wrapped)
 """
 function unwrap end
-

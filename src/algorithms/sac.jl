@@ -1,3 +1,27 @@
+"""
+    SAC{T <: AbstractFloat, E <: AbstractEntropyCoefficient} <: OffPolicyAlgorithm
+
+Soft Actor-Critic algorithm with automatic entropy tuning.
+
+# Fields
+- `learning_rate`: Optimizer learning rate (default: 3e-4)
+- `buffer_capacity`: Replay buffer size (default: 1M)
+- `start_steps`: Random exploration steps before training (default: 100)
+- `batch_size`: Batch size for updates (default: 256)
+- `tau`: Soft update coefficient for target networks (default: 0.005)
+- `gamma`: Discount factor (default: 0.99)
+- `train_freq`: Steps between gradient updates (default: 1)
+- `gradient_steps`: Gradient steps per update, -1 for auto (default: 1)
+- `ent_coef`: Entropy coefficient (`AutoEntropyCoefficient` or `FixedEntropyCoefficient`)
+
+# Example
+```julia
+sac = SAC(learning_rate=3f-4, buffer_capacity=1_000_000)
+model = SACPolicy(obs_space, act_space)
+agent = Agent(model, sac)
+train!(agent, env, sac, 500_000)
+```
+"""
 @kwdef struct SAC{T <: AbstractFloat, E <: AbstractEntropyCoefficient} <: OffPolicyAlgorithm
     learning_rate::T = 3.0f-4 #learning rate
     buffer_capacity::Int = 1_000_000
