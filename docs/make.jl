@@ -20,6 +20,9 @@ makedocs(;
             "Algorithms" => "guide/algorithms.md",
             "Wrappers" => "guide/wrappers.md",
         ],
+        "Examples" => [
+            "Logging" => "examples/logging.md",
+        ],
         "API Reference" => "api.md",
     ],
 )
