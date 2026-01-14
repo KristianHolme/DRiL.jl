@@ -25,6 +25,12 @@ Log multiple metrics at once from a string-keyed dictionary.
 """
 function log_dict! end
 
+log_dict!(logger::AbstractTrainingLogger, kv::AbstractDict{Symbol, <:Any}) =
+    log_dict!(logger, Dict{String, Any}(string(k) => v for (k, v) in kv))
+
+log_dict!(logger::AbstractTrainingLogger, nt::NamedTuple) =
+    log_dict!(logger, Dict{String, Any}(string(k) => v for (k, v) in pairs(nt)))
+
 """
     log_hparams!(logger::AbstractTrainingLogger, hparams::AbstractDict{<:AbstractString,<:Any}, metrics::AbstractVector{<:AbstractString})
 
