@@ -2,7 +2,7 @@
     lg = NoTrainingLogger()
     set_step!(lg, 10)
     log_scalar!(lg, "a", 1.0)
-    log_dict!(lg, Dict("b" => 2.0))
+    log_metrics!(lg, Dict("b" => 2.0))
     log_hparams!(lg, Dict("lr" => 0.01, "gamma" => 0.99), ["metric1"])
     flush!(lg)
     close!(lg)
@@ -13,7 +13,7 @@ end
     lg = NoTrainingLogger()
     set_step!(lg, 10)
     # Symbol-keyed dict should work
-    log_dict!(lg, Dict(:loss => 0.5, :accuracy => 0.95))
+    log_metrics!(lg, Dict(:loss => 0.5, :accuracy => 0.95))
     @test true
 end
 
@@ -21,11 +21,11 @@ end
     lg = NoTrainingLogger()
     set_step!(lg, 10)
     # Named tuple should work
-    log_dict!(lg, (loss = 0.5, accuracy = 0.95))
+    log_metrics!(lg, (loss = 0.5, accuracy = 0.95))
     @test true
 end
 
-@testitem "log_dict! with symbol keys conversion" begin
+@testitem "log_metrics! with symbol keys conversion" begin
     using DRiL: _to_string_keyed_dict
 
     # Test symbol-keyed dict conversion
@@ -36,7 +36,7 @@ end
     @test string_dict["accuracy"] == 0.95
 end
 
-@testitem "log_dict! with named tuple conversion" begin
+@testitem "log_metrics! with named tuple conversion" begin
     using DRiL: _to_string_keyed_dict
 
     # Test named tuple conversion

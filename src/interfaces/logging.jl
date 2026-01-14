@@ -19,15 +19,15 @@ Log a single scalar metric under `key`.
 function log_scalar! end
 
 """
-    log_dict!(logger::AbstractTrainingLogger, kv::AbstractDict{<:AbstractString,<:Any})
-    log_dict!(logger::AbstractTrainingLogger, kv::AbstractDict{Symbol,<:Any})
-    log_dict!(logger::AbstractTrainingLogger, kv::NamedTuple)
+    log_metrics!(logger::AbstractTrainingLogger, kv::AbstractDict{<:AbstractString,<:Any})
+    log_metrics!(logger::AbstractTrainingLogger, kv::AbstractDict{Symbol,<:Any})
+    log_metrics!(logger::AbstractTrainingLogger, kv::NamedTuple)
 
 Log multiple metrics at once from a dictionary or named tuple.
 Accepts string-keyed dicts, symbol-keyed dicts, or named tuples.
 Symbol keys and named tuple field names are automatically converted to strings.
 """
-function log_dict! end
+function log_metrics! end
 
 # Helper function to convert symbol-keyed dicts to string-keyed dicts
 function _to_string_keyed_dict(kv::AbstractDict{Symbol, T}) where {T}
@@ -40,13 +40,13 @@ function _to_string_keyed_dict(kv::NamedTuple)
 end
 
 # Fallback for symbol-keyed dicts: convert to string-keyed and delegate
-function log_dict!(logger::AbstractTrainingLogger, kv::AbstractDict{Symbol, <:Any})
-    return log_dict!(logger, _to_string_keyed_dict(kv))
+function log_metrics!(logger::AbstractTrainingLogger, kv::AbstractDict{Symbol, <:Any})
+    return log_metrics!(logger, _to_string_keyed_dict(kv))
 end
 
 # Fallback for named tuples: convert to string-keyed dict and delegate
-function log_dict!(logger::AbstractTrainingLogger, kv::NamedTuple)
-    return log_dict!(logger, _to_string_keyed_dict(kv))
+function log_metrics!(logger::AbstractTrainingLogger, kv::NamedTuple)
+    return log_metrics!(logger, _to_string_keyed_dict(kv))
 end
 
 """
