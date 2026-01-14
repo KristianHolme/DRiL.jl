@@ -23,26 +23,46 @@ function log_scalar!(logger::AbstractTrainingLogger, key::Symbol, value::Real)
 end
 
 """
-    log_dict!(logger::AbstractTrainingLogger, kv::AbstractDict{<:AbstractString,<:Any})
+    log_dict!(logger::AbstractTrainingLogger, kv)
 
-Log multiple metrics at once from a string-keyed dictionary.
+Log multiple metrics at once from a key/value payload.
+
+Backends are required to support `AbstractDict{<:AbstractString,<:Any}`.
+The interface additionally normalizes and accepts:
+
+- `AbstractDict{<:Symbol,<:Any}`
+- `NamedTuple`
+- `Base.Pairs` (e.g. the result of `pairs((; a = 1, b = 2))`)
+- `Tuple{Vararg{Pair}}` and `AbstractVector{<:Pair}`
 """
 function log_dict! end
 
-function _stringify_keys(kv::AbstractDict{<:Symbol, <:Any})
+function _string_key_dict_from_pairs(kv_pairs)
     out = Dict{String, Any}()
-    for (k, v) in kv
+    for (k, v) in kv_pairs
         out[string(k)] = v
     end
     return out
 end
 
-function _stringify_keys(nt::NamedTuple)
-    out = Dict{String, Any}()
-    for (k, v) in pairs(nt)
-        out[string(k)] = v
-    end
-    return out
+function _stringify_keys(kv::AbstractDict{<:Symbol, <:Any})
+    return _string_key_dict_from_pairs(kv)
+end
+
+function _stringify_keys(kv::NamedTuple)
+    return _string_key_dict_from_pairs(pairs(kv))
+end
+
+function _stringify_keys(kv::Base.Pairs)
+    return _string_key_dict_from_pairs(kv)
+end
+
+function _stringify_keys(kv::Tuple{Vararg{Pair}})
+    return _string_key_dict_from_pairs(kv)
+end
+
+function _stringify_keys(kv::AbstractVector{<:Pair})
+    return _string_key_dict_from_pairs(kv)
 end
 
 function log_dict!(logger::AbstractTrainingLogger, kv::AbstractDict{<:Symbol, <:Any})
@@ -50,6 +70,18 @@ function log_dict!(logger::AbstractTrainingLogger, kv::AbstractDict{<:Symbol, <:
 end
 
 function log_dict!(logger::AbstractTrainingLogger, kv::NamedTuple)
+    return log_dict!(logger, _stringify_keys(kv))
+end
+
+function log_dict!(logger::AbstractTrainingLogger, kv::Base.Pairs)
+    return log_dict!(logger, _stringify_keys(kv))
+end
+
+function log_dict!(logger::AbstractTrainingLogger, kv::Tuple{Vararg{Pair}})
+    return log_dict!(logger, _stringify_keys(kv))
+end
+
+function log_dict!(logger::AbstractTrainingLogger, kv::AbstractVector{<:Pair})
     return log_dict!(logger, _stringify_keys(kv))
 end
 
