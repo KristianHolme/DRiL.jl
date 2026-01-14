@@ -18,6 +18,10 @@ Log a single scalar metric under `key`.
 """
 function log_scalar! end
 
+function log_scalar!(logger::AbstractTrainingLogger, key::Symbol, value::Real)
+    return log_scalar!(logger, string(key), value)
+end
+
 """
     log_dict!(logger::AbstractTrainingLogger, kv::AbstractDict{<:AbstractString,<:Any})
 
@@ -25,12 +29,52 @@ Log multiple metrics at once from a string-keyed dictionary.
 """
 function log_dict! end
 
+function _stringify_keys(kv::AbstractDict{<:Symbol, <:Any})
+    out = Dict{String, Any}()
+    for (k, v) in kv
+        out[string(k)] = v
+    end
+    return out
+end
+
+function _stringify_keys(nt::NamedTuple)
+    out = Dict{String, Any}()
+    for (k, v) in pairs(nt)
+        out[string(k)] = v
+    end
+    return out
+end
+
+function log_dict!(logger::AbstractTrainingLogger, kv::AbstractDict{<:Symbol, <:Any})
+    return log_dict!(logger, _stringify_keys(kv))
+end
+
+function log_dict!(logger::AbstractTrainingLogger, kv::NamedTuple)
+    return log_dict!(logger, _stringify_keys(kv))
+end
+
 """
     log_hparams!(logger::AbstractTrainingLogger, hparams::AbstractDict{<:AbstractString,<:Any}, metrics::AbstractVector{<:AbstractString})
 
 Write hyperparameters and associate them with specified metrics for hyperparameter tuning.
 """
 function log_hparams! end
+
+function log_hparams!(
+        logger::AbstractTrainingLogger,
+        hparams::AbstractDict{<:Symbol, <:Any},
+        metrics::AbstractVector{<:AbstractString}
+    )
+    return log_hparams!(logger, _stringify_keys(hparams), metrics)
+end
+
+function log_hparams!(
+        logger::AbstractTrainingLogger,
+        hparams::NamedTuple,
+        metrics::AbstractVector{<:AbstractString}
+    )
+    return log_hparams!(logger, _stringify_keys(hparams), metrics)
+end
 
 """
     flush!(logger::AbstractTrainingLogger)
